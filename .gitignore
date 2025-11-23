@@ -1,0 +1,91 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+.venv
+
+# Conda
+.conda/
+conda-meta/
+*.conda
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Electron
+dist/
+out/
+*.log
+.DS_Store
+
+# IDE
+# .vscode/  # Keep .vscode for project settings
+.idea/
+*.swp
+*.swo
+*~
+
+# 编译结果
+*.exe
+*.msi
+*.app
+*.dmg
+*.pkg
+
+# 临时文件
+*.tmp
+*.temp
+*.cache
+Temp/
+tmp/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 参考目录（不纳入git管理）
+ref/
+
+# 配置文件中的敏感信息（如果有）
+*.secret
+*.key
+
+# 日志文件
+*.log
+logs/
+
+# 测试覆盖率
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 其他
+*.bak
+*.backup
+

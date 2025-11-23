@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows自动安装和配置工具</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 自定义标题栏 -->
+        <div class="title-bar">
+            <div class="title-bar-drag-region"></div>
+            <div class="title-bar-actions">
+                <button class="title-bar-action" id="theme-toggle-btn" title="切换主题">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="3" fill="currentColor"/>
+                        <path d="M8 2v2M8 12v2M2 8h2M12 8h2M4.343 4.343l1.414 1.414M10.243 10.243l1.414 1.414M4.343 11.657l1.414-1.414M10.243 5.757l1.414-1.414" stroke="currentColor" stroke-width="1"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="title-bar-controls">
+                <button class="title-bar-button" id="minimize-btn" title="最小化">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                        <rect x="0" y="5" width="12" height="1" fill="currentColor"/>
+                    </svg>
+                </button>
+                <button class="title-bar-button" id="maximize-btn" title="最大化">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                        <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/>
+                    </svg>
+                </button>
+                <button class="title-bar-button close" id="close-btn" title="关闭">
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                        <path d="M1 1 L11 11 M11 1 L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 主菜单 -->
+        <nav class="main-menu">
+            <button class="menu-item active" data-category="iso">
+                <span class="menu-icon">💿</span>
+                <span class="menu-text">镜像</span>
+            </button>
+            <button class="menu-item" data-category="system">
+                <span class="menu-icon">⚙️</span>
+                <span class="menu-text">系统配置</span>
+            </button>
+            <button class="menu-item" data-category="software">
+                <span class="menu-icon">📦</span>
+                <span class="menu-text">软件安装</span>
+            </button>
+        </nav>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 左侧二级菜单 -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-resizer" id="sidebar-resizer"></div>
+                <div class="sidebar-content">
+                    <!-- 镜像功能菜单 -->
+                    <div class="submenu" data-category="iso">
+                        <div class="submenu-item active" data-page="iso-cache">
+                            <span class="submenu-icon">📥</span>
+                            <span class="submenu-text">镜像缓存</span>
+                        </div>
+                        <div class="submenu-item" data-page="iso-config">
+                            <span class="submenu-icon">⚙️</span>
+                            <span class="submenu-text">镜像配置</span>
+                        </div>
+                        <div class="submenu-item" data-page="iso-burn">
+                            <span class="submenu-icon">🔥</span>
+                            <span class="submenu-text">镜像烧录</span>
+                        </div>
+                    </div>
+
+                    <!-- 系统配置功能菜单 -->
+                    <div class="submenu" data-category="system" style="display: none;">
+                        <div class="submenu-item active" data-page="system-migration">
+                            <span class="submenu-icon">📁</span>
+                            <span class="submenu-text">系统迁移</span>
+                        </div>
+                        <div class="submenu-item" data-page="system-activation">
+                            <span class="submenu-icon">🔑</span>
+                            <span class="submenu-text">系统激活</span>
+                        </div>
+                    </div>
+
+                    <!-- 软件安装功能菜单 -->
+                    <div class="submenu" data-category="software" style="display: none;">
+                        <div class="submenu-item active" data-page="software-office">
+                            <span class="submenu-icon">📄</span>
+                            <span class="submenu-text">Office安装</span>
+                        </div>
+                        <div class="submenu-item" data-page="software-packages">
+                            <span class="submenu-icon">📦</span>
+                            <span class="submenu-text">软件包安装</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 右侧工作区 -->
+            <main class="work-area" id="work-area">
+                <!-- 镜像缓存页面 -->
+                <div class="page active" id="page-iso-cache">
+                    <div class="page-header">
+                        <h2>镜像缓存</h2>
+                        <p>下载和管理Windows镜像文件</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>镜像来源</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" name="iso-source" value="download" checked>
+                                        <span>从微软官网/镜像站下载</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" name="iso-source" value="local">
+                                        <span>从本地选择ISO文件</span>
+                                    </label>
+                                </div>
+                                <div id="iso-download-options" class="form-field">
+                                    <label>Windows版本</label>
+                                    <select id="windows-version" class="win11-select">
+                                        <option value="latest">最新版本</option>
+                                        <option value="22H2">Windows 11 22H2</option>
+                                        <option value="23H2">Windows 11 23H2</option>
+                                    </select>
+                                </div>
+                                <div id="iso-local-options" class="form-field" style="display: none;">
+                                    <button id="select-iso-btn" class="win11-button">选择ISO文件</button>
+                                    <span id="selected-iso-path" class="file-path"></span>
+                                </div>
+                                <div class="form-actions">
+                                    <button id="download-iso-btn" class="win11-button primary">开始下载</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 镜像配置页面 -->
+                <div class="page" id="page-iso-config">
+                    <div class="page-header">
+                        <h2>镜像配置</h2>
+                        <p>配置Windows安装选项和autounattend.xml</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>系统配置</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-field">
+                                    <label>用户名</label>
+                                    <input type="text" id="username" class="win11-input" placeholder="输入用户名">
+                                </div>
+                                <div class="form-field">
+                                    <label>密码</label>
+                                    <input type="password" id="password" class="win11-input" placeholder="输入密码">
+                                </div>
+                                <div class="form-field">
+                                    <label>时区</label>
+                                    <select id="timezone" class="win11-select">
+                                        <option value="China Standard Time">中国标准时间</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>可选功能</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="disable-hibernation" class="win11-checkbox">
+                                        <span>关闭休眠</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="kms-activate" class="win11-checkbox">
+                                        <span>KMS激活</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="pause-updates" class="win11-checkbox">
+                                        <span>暂停Windows更新</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="set-power-plan" class="win11-checkbox">
+                                        <span>设置电源计划</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="remove-defaultuser" class="win11-checkbox">
+                                        <span>删除默认用户（defaultuser0）</span>
+                                    </label>
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="remove-quick-access" class="win11-checkbox">
+                                        <span>移除快速访问中文件夹</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="generate-iso-btn" class="win11-button primary">生成自定义ISO</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 镜像烧录页面 -->
+                <div class="page" id="page-iso-burn">
+                    <div class="page-header">
+                        <h2>镜像烧录</h2>
+                        <p>将ISO镜像烧录到USB设备或光盘</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-body">
+                                <p>镜像烧录功能开发中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统迁移页面 -->
+                <div class="page" id="page-system-migration">
+                    <div class="page-header">
+                        <h2>系统迁移</h2>
+                        <p>迁移pagefile.sys和Users文件夹</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>pagefile.sys迁移</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-field">
+                                    <label>目标位置</label>
+                                    <div class="input-group">
+                                        <input type="text" id="pagefile-target" class="win11-input" placeholder="例如: D:\pagefile.sys">
+                                        <button id="migrate-pagefile-btn" class="win11-button primary">开始迁移</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Users文件夹迁移</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-field">
+                                    <label>目标位置</label>
+                                    <div class="input-group">
+                                        <input type="text" id="users-target" class="win11-input" placeholder="例如: D:\Users">
+                                        <button id="migrate-users-btn" class="win11-button primary">开始迁移</button>
+                                    </div>
+                                </div>
+                                <div class="alert warning">
+                                    <strong>警告:</strong> Users文件夹迁移需要重启系统进入WinPE环境，请确保已保存所有工作。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统激活页面 -->
+                <div class="page" id="page-system-activation">
+                    <div class="page-header">
+                        <h2>系统激活</h2>
+                        <p>Windows和Office激活</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>激活方式</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" name="activation-method" value="kms" checked>
+                                        <span>KMS激活</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" name="activation-method" value="tsforge">
+                                        <span>TSforge激活</span>
+                                    </label>
+                                </div>
+                                <div id="kms-options" class="form-fields">
+                                    <div class="form-field">
+                                        <label>KMS服务器</label>
+                                        <input type="text" id="kms-server" class="win11-input" placeholder="例如: kms.03k.org">
+                                    </div>
+                                    <div class="form-field">
+                                        <label>KMS端口</label>
+                                        <input type="text" id="kms-port" class="win11-input" placeholder="例如: 1688">
+                                    </div>
+                                    <div class="form-field">
+                                        <label>KMS密钥</label>
+                                        <input type="text" id="kms-key" class="win11-input" placeholder="输入KMS密钥">
+                                    </div>
+                                </div>
+                                <div class="form-actions">
+                                    <button id="activate-btn" class="win11-button primary">开始激活</button>
+                                </div>
+                                <div id="activation-status" class="status-message"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Office安装页面 -->
+                <div class="page" id="page-software-office">
+                    <div class="page-header">
+                        <h2>Office安装</h2>
+                        <p>安装Microsoft Office系列软件</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Office配置</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-field">
+                                    <label>Office版本</label>
+                                    <select id="office-version" class="win11-select">
+                                        <option value="ProPlus2024Volume_zh-cn">Office 2024 专业增强版</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>安装位置</label>
+                                    <input type="text" id="office-path" class="win11-input" placeholder="默认: C:\Program Files\Microsoft Office">
+                                </div>
+                                <div class="form-actions">
+                                    <button id="install-office-btn" class="win11-button primary">开始安装Office</button>
+                                </div>
+                                <div id="office-progress" class="progress-container" style="display: none;">
+                                    <progress id="office-progress-bar" class="win11-progress" value="0" max="100"></progress>
+                                    <span id="office-progress-text" class="progress-text"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 软件包安装页面 -->
+                <div class="page" id="page-software-packages">
+                    <div class="page-header">
+                        <h2>软件包安装</h2>
+                        <p>基于Winget和pywinauto的软件安装</p>
+                    </div>
+                    <div class="page-content">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>安装方案</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-actions">
+                                    <button id="import-config-btn" class="win11-button">导入配置文件</button>
+                                    <button id="add-software-btn" class="win11-button">添加软件</button>
+                                </div>
+                                <div id="software-list" class="software-list">
+                                    <!-- 软件列表将动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="install-software-btn" class="win11-button primary">开始安装</button>
+                        </div>
+                        <div id="software-progress" class="progress-container" style="display: none;">
+                            <progress id="software-progress-bar" class="win11-progress" value="0" max="100"></progress>
+                            <div id="software-status" class="status-message"></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

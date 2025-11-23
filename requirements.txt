@@ -1,0 +1,13 @@
+# Python依赖包
+
+# ISO镜像处理
+pycdlib>=1.12.0
+
+# HTTP请求
+requests>=2.31.0
+
+# UI自动化
+pywinauto>=0.6.8
+
+# 打包工具
+pyinstaller>=6.0.0

@@ -1,0 +1,548 @@
+/* CSS变量 - 配色方案 */
+:root {
+    /* 深色 */
+    --color-dark: rgb(24, 24, 24);
+    /* 浅色 */
+    --color-light: rgb(243, 243, 243);
+    /* 主题色 - 默认跟随系统，可通过CSS变量覆盖 */
+    --color-accent: rgb(0, 120, 215);
+    
+    /* 从系统获取主题色（如果支持） */
+    @supports (color: accent-color) {
+        --color-accent: accent-color;
+    }
+    
+    /* 当前主题（默认浅色） */
+    --bg-primary: var(--color-light);
+    --bg-secondary: white;
+    --bg-tertiary: rgb(250, 250, 250);
+    --text-primary: rgb(32, 32, 32);
+    --text-secondary: rgb(96, 96, 96);
+    --border-color: rgb(229, 229, 229);
+    --hover-bg: rgb(243, 243, 243);
+    --active-bg: rgb(237, 237, 237);
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+    --bg-primary: var(--color-dark);
+    --bg-secondary: rgb(32, 32, 32);
+    --bg-tertiary: rgb(40, 40, 40);
+    --text-primary: rgb(243, 243, 243);
+    --text-secondary: rgb(200, 200, 200);
+    --border-color: rgb(60, 60, 60);
+    --hover-bg: rgb(40, 40, 40);
+    --active-bg: rgb(50, 50, 50);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    -webkit-app-region: no-drag;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* 自定义标题栏 */
+.title-bar {
+    height: 32px;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    -webkit-app-region: drag;
+    user-select: none;
+}
+
+.title-bar-drag-region {
+    flex: 1;
+    height: 100%;
+}
+
+.title-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    -webkit-app-region: no-drag;
+}
+
+.title-bar-action {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.title-bar-action:hover {
+    background-color: var(--hover-bg);
+}
+
+.title-bar-controls {
+    display: flex;
+    -webkit-app-region: no-drag;
+    height: 100%;
+}
+
+.title-bar-button {
+    width: 46px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.title-bar-button:hover {
+    background-color: var(--hover-bg);
+}
+
+.title-bar-button.close:hover {
+    background-color: rgb(232, 17, 35);
+    color: white;
+}
+
+.title-bar-button svg {
+    pointer-events: none;
+}
+
+/* 主菜单 */
+.main-menu {
+    display: flex;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    height: 48px;
+    padding: 0 16px;
+    gap: 8px;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    font-size: 14px;
+    -webkit-app-region: no-drag;
+}
+
+.menu-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.menu-item.active {
+    background-color: var(--color-accent);
+    color: white;
+}
+
+.menu-icon {
+    font-size: 16px;
+}
+
+/* 主内容区 */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 左侧边栏 */
+.sidebar {
+    width: 240px;
+    min-width: 200px;
+    max-width: 400px;
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    background-color: transparent;
+    z-index: 10;
+    transition: background-color 0.2s;
+}
+
+.sidebar-resizer:hover {
+    background-color: var(--color-accent);
+}
+
+.sidebar-resizer.dragging {
+    background-color: var(--color-accent);
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.submenu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.submenu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.submenu-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.submenu-item.active {
+    background-color: var(--color-accent);
+    color: white;
+}
+
+.submenu-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+/* 右侧工作区 */
+.work-area {
+    flex: 1;
+    overflow-y: auto;
+    background-color: var(--bg-primary);
+    padding: 24px;
+}
+
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+.page-header {
+    margin-bottom: 24px;
+}
+
+.page-header h2 {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.page-header p {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.page-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Windows 11风格卡片 */
+.card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-tertiary);
+}
+
+.card-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.card-body {
+    padding: 20px;
+}
+
+/* Windows 11风格表单控件 */
+.form-field {
+    margin-bottom: 20px;
+}
+
+.form-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.win11-input,
+.win11-select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.win11-input:focus,
+.win11-select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.2);
+}
+
+.win11-input:hover,
+.win11-select:hover {
+    border-color: rgb(200, 200, 200);
+}
+
+[data-theme="dark"] .win11-input:hover,
+[data-theme="dark"] .win11-select:hover {
+    border-color: rgb(80, 80, 80);
+}
+
+.win11-button {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    font-family: inherit;
+}
+
+.win11-button:hover {
+    background-color: var(--hover-bg);
+}
+
+.win11-button:active {
+    background-color: var(--active-bg);
+}
+
+.win11-button.primary {
+    background-color: var(--color-accent);
+    color: white;
+    border-color: var(--color-accent);
+}
+
+.win11-button.primary:hover {
+    background-color: rgb(0, 103, 192);
+    border-color: rgb(0, 103, 192);
+}
+
+.win11-button.primary:active {
+    background-color: rgb(0, 90, 158);
+}
+
+.win11-checkbox {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+}
+
+.checkbox-label,
+.radio-label {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-bottom: 4px;
+}
+
+.checkbox-label:hover,
+.radio-label:hover {
+    background-color: var(--hover-bg);
+}
+
+.checkbox-group,
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.radio-group input[type="radio"] {
+    margin-right: 8px;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+}
+
+.input-group {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.input-group .win11-input {
+    flex: 1;
+}
+
+.input-group .win11-button {
+    white-space: nowrap;
+}
+
+.form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* 进度条 */
+.win11-progress {
+    width: 100%;
+    height: 4px;
+    border: none;
+    border-radius: 2px;
+    background-color: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+.win11-progress::-webkit-progress-bar {
+    background-color: var(--bg-tertiary);
+}
+
+.win11-progress::-webkit-progress-value {
+    background-color: var(--color-accent);
+    transition: width 0.3s;
+}
+
+.progress-container {
+    margin-top: 16px;
+}
+
+.progress-text {
+    display: block;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* 提示和状态 */
+.alert {
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-top: 16px;
+    font-size: 13px;
+}
+
+.alert.warning {
+    background-color: rgb(255, 244, 206);
+    border: 1px solid rgb(255, 217, 102);
+    color: rgb(107, 78, 0);
+}
+
+[data-theme="dark"] .alert.warning {
+    background-color: rgb(77, 56, 0);
+    border-color: rgb(128, 93, 0);
+    color: rgb(255, 217, 102);
+}
+
+.status-message {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.file-path {
+    display: block;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 6px;
+    border: 2px solid var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 200px;
+        min-width: 180px;
+    }
+}
