@@ -19,73 +19,90 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+.venv
 venv/
 ENV/
 env/
-.venv
 
 # Conda
 .conda/
-conda-meta/
-*.conda
 
 # Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
-yarn.lock
+lerna-debug.log*
+.pnpm-debug.log*
+.npm
+.eslintcache
+.node_repl_history
+*.tgz
+.yarn-integrity
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Electron
-dist/
 out/
+dist/
+dist-electron/
 *.log
-.DS_Store
 
 # IDE
-# .vscode/  # Keep .vscode for project settings
+.vscode/
 .idea/
 *.swp
 *.swo
 *~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
 
-# 编译结果
+# Build outputs
 *.exe
 *.msi
-*.app
 *.dmg
 *.pkg
+*.deb
+*.rpm
+*.AppImage
 
-# 临时文件
+# Temporary files
 *.tmp
 *.temp
 *.cache
 Temp/
-tmp/
+temp/
+.cache/
 
-# 系统文件
+# OS
 Thumbs.db
 .DS_Store
 desktop.ini
 
-# 参考目录（不纳入git管理）
+# Project specific
 ref/
+*.iso
+*.wim
+*.sdi
+*.xml
+!src/shared/winpe/*.wim
+!src/shared/winpe/*.sdi
 
-# 配置文件中的敏感信息（如果有）
-*.secret
-*.key
-
-# 日志文件
-*.log
+# Logs
 logs/
-
-# 测试覆盖率
-.coverage
-htmlcov/
-.pytest_cache/
-
-# 其他
-*.bak
-*.backup
+*.log
 

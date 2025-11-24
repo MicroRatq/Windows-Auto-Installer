@@ -1,0 +1,12 @@
+name: win-auto-installer
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - pycdlib>=1.14.0
+    - requests>=2.31.0
+    - pywinauto>=0.6.8; sys_platform == 'win32'
+
