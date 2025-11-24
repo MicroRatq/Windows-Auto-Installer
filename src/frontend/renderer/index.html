@@ -1,34 +1,90 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Windows自动安装器</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      overflow: hidden;
-      background-color: rgb(24, 24, 24);
-      color: rgb(243, 243, 243);
-    }
-    
-    #app {
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-  </style>
+  <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/main.js"></script>
-</body>
-</html>
 
+<body>
+  <div class="app-container">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <div class="main-menu-spacer"></div>
+        <fluent-listbox id="main-menu" class="main-menu">
+          <fluent-option value="iso">镜像</fluent-option>
+          <fluent-option value="system">系统配置</fluent-option>
+          <fluent-option value="software">软件安装</fluent-option>
+        </fluent-listbox>
+      </div>
+      <div class="top-bar-center">
+        <fluent-text-field class="search-bar" placeholder="搜索..." appearance="outline"></fluent-text-field>
+      </div>
+      <div class="top-bar-right">
+        <fluent-button appearance="stealth" id="theme-toggle" title="切换主题">
+          🌓
+        </fluent-button>
+        <fluent-button appearance="stealth" id="window-minimize" title="最小化">
+          −
+        </fluent-button>
+        <fluent-button appearance="stealth" id="window-maximize" title="最大化">
+          □
+        </fluent-button>
+        <fluent-button appearance="stealth" class="close-button" id="window-close" title="关闭">
+          ×
+        </fluent-button>
+      </div>
+    </div>
+
+    <div class="content-area">
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-resizer" id="sidebar-resizer"></div>
+        <div class="sidebar-content">
+          <fluent-listbox id="sub-menu" class="sub-menu">
+            <!-- 动态生成 -->
+          </fluent-listbox>
+          <div class="sidebar-footer">
+            <fluent-button appearance="stealth" class="settings-button" id="settings-button">
+              ⚙️ 设置
+            </fluent-button>
+          </div>
+        </div>
+      </div>
+
+      <div class="workspace">
+        <div class="workspace-content">
+          <h2 id="workspace-title">镜像缓存</h2>
+          <!-- 镜像相关 -->
+          <div id="workspace-iso-cache" class="workspace-panel active">
+            <p>镜像缓存功能：下载、列表、删除Windows镜像</p>
+          </div>
+          <div id="workspace-iso-config" class="workspace-panel">
+            <p>镜像配置功能：生成autounattend.xml配置文件</p>
+          </div>
+          <div id="workspace-iso-burn" class="workspace-panel">
+            <p>镜像烧录功能：将配置添加到ISO镜像</p>
+          </div>
+          <!-- 系统配置相关 -->
+          <div id="workspace-migration" class="workspace-panel">
+            <p>系统迁移功能：迁移pagefile.sys和Users文件夹</p>
+          </div>
+          <div id="workspace-activation" class="workspace-panel">
+            <p>系统激活功能：KMS或TSforge激活</p>
+          </div>
+          <!-- 软件安装相关 -->
+          <div id="workspace-office" class="workspace-panel">
+            <p>Office安装功能：使用Office Tool Plus自动安装</p>
+          </div>
+          <div id="workspace-packages" class="workspace-panel">
+            <p>软件包安装功能：使用Winget和pywinauto批量安装</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/main.ts"></script>
+</body>
+
+</html>

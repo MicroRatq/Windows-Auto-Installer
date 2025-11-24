@@ -1,9 +1,62 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 
 let mainWindow = null
 let pythonProcess = null
+const pendingRequests = new Map() // 存储待处理的请求
+
+// 等待Vite服务器就绪
+function waitForViteServer(maxRetries = 30, delay = 1000) {
+  return new Promise((resolve, reject) => {
+    const http = require('http')
+    let retries = 0
+    
+    console.log('[Electron] 等待Vite服务器启动...')
+    
+    function checkServer() {
+      // 尝试访问index.html来确认Vite服务器是否就绪
+      const req = http.get('http://localhost:5173/index.html', (res) => {
+        // 任何响应状态码都表示服务器在运行
+        if (res.statusCode === 200) {
+          console.log('[Electron] ✓ Vite服务器已就绪 (200)')
+          resolve()
+        } else if (res.statusCode === 404) {
+          // 404可能表示服务器在运行但路径不对，也尝试继续
+          console.log('[Electron] ✓ Vite服务器已就绪 (404, 但服务器运行中)')
+          resolve()
+        } else {
+          console.log(`[Electron] Vite服务器响应状态码: ${res.statusCode}, 继续等待...`)
+          retry()
+        }
+      })
+      
+      req.on('error', (err) => {
+        if (retries % 5 === 0) {
+          console.log(`[Electron] 等待Vite服务器... (${retries}/${maxRetries})`)
+        }
+        retry()
+      })
+      
+      req.setTimeout(2000, () => {
+        req.destroy()
+        retry()
+      })
+    }
+    
+    function retry() {
+      retries++
+      if (retries >= maxRetries) {
+        console.error('[Electron] ✗ Vite服务器启动超时')
+        reject(new Error('Vite服务器启动超时，请检查Vite开发服务器是否正在运行'))
+      } else {
+        setTimeout(checkServer, delay)
+      }
+    }
+    
+    checkServer()
+  })
+}
 
 // 启动Python后端
 function startPythonBackend() {
@@ -14,36 +67,82 @@ function startPythonBackend() {
   
   const options = {
     cwd: path.join(__dirname, '../..'),
-    stdio: ['pipe', 'pipe', 'pipe'],
-    shell: true
+    stdio: ['pipe', 'pipe', 'pipe']
   }
   
   if (isDev) {
     // 开发环境：使用conda环境中的python
-    // 在Windows上，需要先激活conda环境再运行python
-    const condaActivate = process.platform === 'win32' 
-      ? `conda activate win-auto-installer && python "${backendPath}"`
-      : `source activate win-auto-installer && python "${backendPath}"`
+    // 在Windows上，尝试找到conda环境中的python.exe
+    const os = require('os')
+    const userHome = os.homedir()
+    let pythonExe
     
-    pythonProcess = spawn(condaActivate, [], options)
+    if (process.platform === 'win32') {
+      // Windows: 尝试多个可能的conda路径
+      const possiblePaths = [
+        path.join(userHome, '.conda', 'envs', 'win-auto-installer', 'python.exe'),
+        path.join(userHome, 'anaconda3', 'envs', 'win-auto-installer', 'python.exe'),
+        path.join(userHome, 'miniconda3', 'envs', 'win-auto-installer', 'python.exe'),
+        path.join('C:', 'Users', process.env.USERNAME, '.conda', 'envs', 'win-auto-installer', 'python.exe'),
+        path.join('C:', 'Users', process.env.USERNAME, 'anaconda3', 'envs', 'win-auto-installer', 'python.exe'),
+        path.join('C:', 'Users', process.env.USERNAME, 'miniconda3', 'envs', 'win-auto-installer', 'python.exe')
+      ]
+      
+      const fs = require('fs')
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          pythonExe = possiblePath
+          break
+        }
+      }
+      
+      // 如果找不到，使用系统PATH中的python（假设已激活conda环境）
+      if (!pythonExe) {
+        pythonExe = 'python'
+      }
+    } else {
+      pythonExe = 'python'
+    }
+    
+    console.log(`[Backend] 使用Python: ${pythonExe}`)
+    console.log(`[Backend] 启动脚本: ${backendPath}`)
+    
+    pythonProcess = spawn(pythonExe, [backendPath], options)
   } else {
     // 生产环境：直接运行exe
     pythonProcess = spawn(backendPath, [], options)
   }
   
   // 处理Python输出
+  let buffer = ''
   pythonProcess.stdout.on('data', (data) => {
-    const message = data.toString().trim()
-    if (message) {
-      try {
-        const json = JSON.parse(message)
-        // 发送到渲染进程
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('backend-response', json)
+    buffer += data.toString()
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || '' // 保留最后一个不完整的行
+    
+    for (const line of lines) {
+      const message = line.trim()
+      if (message) {
+        try {
+          const json = JSON.parse(message)
+          // 处理待处理的请求
+          if (json.id && pendingRequests.has(json.id)) {
+            const pending = pendingRequests.get(json.id)
+            pendingRequests.delete(json.id)
+            if (json.error) {
+              pending.reject(new Error(json.error.message || '后端错误'))
+            } else {
+              pending.resolve(json.result)
+            }
+          }
+          // 也发送到渲染进程（如果需要）
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('backend-response', json)
+          }
+        } catch (e) {
+          // 非JSON输出，可能是日志
+          console.log('[Python]', message)
         }
-      } catch (e) {
-        // 非JSON输出，可能是日志
-        console.log('[Python]', message)
       }
     }
   })
@@ -82,17 +181,151 @@ function createWindow() {
     }
   })
   
+  // 注册窗口键盘事件（在窗口ready后）
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // F12: 切换开发者工具
+    if (input.key === 'F12') {
+      event.preventDefault()
+      console.log('[Electron] F12 pressed, toggling DevTools')
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools()
+      } else {
+        mainWindow.webContents.openDevTools()
+      }
+    }
+    // F5: 刷新页面
+    else if (input.key === 'F5' && !input.control && !input.shift && !input.alt && !input.meta) {
+      event.preventDefault()
+      mainWindow.reload()
+    }
+  })
+  
+  // 也尝试注册全局快捷键（F12可能被系统占用，使用全局快捷键作为备用）
+  // 延迟注册，确保窗口已创建
+  setTimeout(() => {
+    const registered = globalShortcut.register('F12', () => {
+      console.log('[Electron] F12 global shortcut triggered')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools()
+        } else {
+          mainWindow.webContents.openDevTools()
+        }
+      }
+    })
+    
+    if (!registered) {
+      console.log('[Electron] F12 global shortcut registration failed, using before-input-event instead')
+    } else {
+      console.log('[Electron] F12 global shortcut registered successfully')
+    }
+  }, 1000)
+  
+  // 也注册全局快捷键作为备用（F5）
+  globalShortcut.register('F5', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.reload()
+    }
+  })
+  
+  // Ctrl+R: 刷新页面（备用）
+  globalShortcut.register('CommandOrControl+R', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.reload()
+    }
+  })
+  
   // 加载应用
   const isDev = process.env.NODE_ENV === 'development'
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools()
+    // 等待Vite服务器就绪
+    waitForViteServer().then(() => {
+      console.log('[Electron] 加载Vite开发服务器...')
+      // 加载Vite开发服务器（Vite会自动提供index.html）
+      mainWindow.loadURL('http://localhost:5173/')
+      mainWindow.webContents.openDevTools()
+      
+      // 监听页面加载完成
+      mainWindow.webContents.on('did-finish-load', () => {
+        console.log('[Electron] 页面加载完成')
+      })
+      
+      // 监听加载错误
+      mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error('[Electron] 页面加载失败:', errorCode, errorDescription, validatedURL)
+        if (errorCode === -106 || errorCode === -105) {
+          // ERR_INTERNET_DISCONNECTED 或 ERR_NAME_NOT_RESOLVED
+          console.log('[Electron] 连接失败，等待Vite服务器...')
+          setTimeout(() => {
+            mainWindow.reload()
+          }, 2000)
+        } else {
+          // 其他错误，尝试直接加载根路径
+          console.log('[Electron] 尝试加载根路径...')
+          setTimeout(() => {
+            mainWindow.loadURL('http://localhost:5173/')
+          }, 1000)
+        }
+      })
+    }).catch((error) => {
+      console.error('[Electron] Vite服务器启动失败:', error)
+      const errorHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Vite服务器未启动</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              margin: 0;
+              background: #181818;
+              color: #f3f3f3;
+            }
+            .error-box {
+              text-align: center;
+              padding: 20px;
+            }
+            h1 { color: #ff6b6b; }
+            button {
+              margin-top: 20px;
+              padding: 10px 20px;
+              background: #4a90e2;
+              color: white;
+              border: none;
+              border-radius: 4px;
+              cursor: pointer;
+            }
+            button:hover { background: #357abd; }
+          </style>
+        </head>
+        <body>
+          <div class="error-box">
+            <h1>Vite开发服务器未启动</h1>
+            <p>请确保Vite开发服务器正在运行在 http://localhost:5173</p>
+            <p>检查"Vite Dev Server"窗口是否有错误信息</p>
+            <button onclick="location.reload()">重试</button>
+          </div>
+        </body>
+        </html>
+      `
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`)
+    })
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
   
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+  
+  // 窗口关闭时注销快捷键
+  mainWindow.on('close', () => {
+    globalShortcut.unregisterAll()
   })
 }
 
@@ -106,28 +339,23 @@ ipcMain.handle('send-to-backend', async (event, message) => {
     
     // 发送JSON消息到Python
     const jsonMessage = JSON.stringify(message) + '\n'
+    
+    // 存储待处理的请求
+    pendingRequests.set(message.id, { resolve, reject })
+    
+    // 设置超时
+    const timeout = setTimeout(() => {
+      if (pendingRequests.has(message.id)) {
+        pendingRequests.delete(message.id)
+        reject(new Error('后端响应超时'))
+      }
+    }, 30000)
+    
     pythonProcess.stdin.write(jsonMessage, (error) => {
       if (error) {
+        clearTimeout(timeout)
+        pendingRequests.delete(message.id)
         reject(error)
-      } else {
-        // 等待响应（通过backend-response事件）
-        const timeout = setTimeout(() => {
-          reject(new Error('后端响应超时'))
-        }, 30000)
-        
-        const responseHandler = (response) => {
-          if (response.id === message.id) {
-            clearTimeout(timeout)
-            ipcMain.removeListener('backend-response', responseHandler)
-            if (response.error) {
-              reject(new Error(response.error.message || '后端错误'))
-            } else {
-              resolve(response.result)
-            }
-          }
-        }
-        
-        ipcMain.once('backend-response', responseHandler)
       }
     })
   })
@@ -170,6 +398,9 @@ app.whenReady().then(() => {
 
 // 所有窗口关闭时
 app.on('window-all-closed', () => {
+  // 注销所有全局快捷键
+  globalShortcut.unregisterAll()
+  
   if (pythonProcess) {
     pythonProcess.kill()
     pythonProcess = null
@@ -180,6 +411,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  // 注销所有全局快捷键
+  globalShortcut.unregisterAll()
+  
   if (pythonProcess) {
     pythonProcess.kill()
     pythonProcess = null

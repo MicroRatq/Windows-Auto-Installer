@@ -1,50 +1,19 @@
-# Windows自动安装和配置项目
+# Windows自动安装器
 
-基于Electron UI和Python后端的Windows系统自动安装和配置工具。
+Windows系统自动安装和配置工具，基于Electron + Vue前端和Python后端实现。
 
 ## 功能特性
 
-- **ISO镜像自定义和安装**：支持从微软官网/镜像站下载Windows 11镜像，或使用本地ISO文件，自动生成autounattend.xml并集成到ISO中
-- **系统迁移**：支持pagefile.sys和Users文件夹迁移到其他驱动器
+- **ISO镜像自定义和安装**：支持从微软官网及镜像站下载Windows 11镜像，配置autounattend.xml应答文件
+- **系统迁移**：支持pagefile.sys和Users文件夹迁移
 - **Office安装**：通过Office Tool Plus自动安装Office系列软件
 - **系统激活**：支持KMS和TSforge两种激活方式
-- **软件安装**：基于Winget和pywinauto的自动化软件安装，支持多线程并行下载
-
-## 项目结构
-
-```
-Windows-Auto-Installer/
-├── src/                      # 源代码目录
-│   ├── backend/             # Python后端代码
-│   │   ├── main.py          # 主入口
-│   │   ├── ipc_server.py    # IPC通信服务器
-│   │   ├── iso_handler.py   # ISO镜像处理
-│   │   ├── autounattend.py # autounattend.xml生成
-│   │   ├── migration.py     # 系统迁移
-│   │   ├── office_installer.py # Office安装
-│   │   ├── activation.py    # 系统激活
-│   │   └── software_installer.py # 软件安装
-│   ├── main.js              # Electron主进程
-│   ├── preload.js           # IPC桥接
-│   ├── package.json         # Node.js配置
-│   └── renderer/            # 前端UI
-│       ├── index.html
-│       ├── css/
-│       └── js/
-├── scripts/                 # 脚本目录
-│   ├── setup_env.bat        # 环境配置脚本
-│   └── build.bat            # 打包脚本
-├── ref/                     # 参考代码（不纳入git管理）
-├── .gitignore
-├── README.md
-└── requirements.txt         # Python依赖
-```
+- **软件安装**：基于Winget和pywinauto的自动化软件安装
 
 ## 环境要求
 
-- Node.js (最新稳定版)
-- Python 3.9+
-- Conda (Anaconda或Miniconda)
+- Node.js 20 LTS 或更高版本
+- Conda (Anaconda 或 Miniconda)
 - Windows 10/11
 
 ## 快速开始
@@ -53,62 +22,64 @@ Windows-Auto-Installer/
 
 运行环境配置脚本：
 
-```batch
+```bash
 scripts\setup_env.bat
 ```
 
-脚本会自动：
-- 检查Node.js、Python和Conda环境
-- 创建/激活Conda环境
+该脚本会：
+- 检查Node.js和Conda是否安装
+- 创建conda环境（win-auto-installer）
 - 安装Python依赖
 - 安装Node.js依赖
 
 ### 2. 开发模式运行
 
-```batch
-cd src
-npm start
+运行开发脚本：
+
+```bash
+scripts\run_dev.bat
 ```
 
-### 3. 打包应用
+该脚本会：
+- 检查并清理可能占用的端口5173
+- 启动Vite开发服务器（http://localhost:5173）
+- 启动Electron窗口
+- 自动启动Python后端并建立IPC通信
+- 退出时自动清理所有相关进程
 
-```batch
-scripts\build.bat
+**注意**：如果遇到端口被占用的问题，可以手动运行：
+
+```bash
+scripts\cleanup_port.bat
 ```
 
-打包后的应用位于 `dist\` 目录。
+### 3. 测试IPC通信
+
+应用启动后，前端会自动发送ping请求到后端。打开浏览器开发者工具（F12）查看控制台输出，确认前后端通信正常。
+
+## 项目结构
+
+```
+Windows-Auto-Installer/
+├── src/
+│   ├── frontend/          # Electron + Vue前端
+│   │   ├── electron/      # Electron主进程
+│   │   └── renderer/      # Vue渲染进程
+│   ├── backend/           # Python后端
+│   └── shared/            # 共享资源
+├── scripts/               # 脚本目录
+│   ├── setup_env.bat      # 环境配置脚本
+│   └── run_dev.bat        # 开发模式启动脚本
+└── environment.yml        # Conda环境配置
+```
 
 ## 开发说明
 
-### Python后端
-
-后端代码位于 `src/backend/` 目录，使用IPC（标准输入/输出）与Electron前端通信。
-
-### Electron前端
-
-前端代码位于 `src/` 目录，使用Electron框架构建桌面应用。
-
-### IPC通信
-
-前端通过 `preload.js` 暴露的API与后端通信，后端通过JSON格式的stdin/stdout进行消息传递。
-
-## 注意事项
-
-⚠️ **重要警告**：
-- 所有高风险操作（系统更改、软件安装）必须在虚拟机中测试
-- 不要在生产环境直接运行未测试的功能
-- ref目录包含参考代码，不纳入git管理
-
-## 技术栈
-
-- **前端**: Electron
-- **后端**: Python 3.9+
-- **IPC通信**: Electron IPC + Python stdin/stdout
-- **ISO编辑**: pycdlib
-- **UI自动化**: pywinauto
-- **打包工具**: electron-builder + PyInstaller
+- 所有源代码在`src`目录下开发
+- `ref`目录为参考项目，不纳入git管理
+- 高风险操作（系统更改、软件安装）必须在虚拟机中测试
 
 ## 许可证
 
-MIT License
+MIT
 

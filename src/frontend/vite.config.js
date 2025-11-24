@@ -1,12 +1,12 @@
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [vue()],
-  base: './',
+  plugins: [],
+  base: '/',
+  root: path.resolve(__dirname, './renderer'),
   build: {
-    outDir: 'dist',
+    outDir: path.resolve(__dirname, './dist'),
     emptyOutDir: true
   },
   resolve: {
@@ -15,7 +15,10 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173
+    port: 5173,
+    host: 'localhost',
+    strictPort: true,
+    open: false
   }
 })
 

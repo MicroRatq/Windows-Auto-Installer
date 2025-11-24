@@ -1,0 +1,341 @@
+:root {
+  --bg-primary: rgb(24, 24, 24);
+  --bg-secondary: rgba(0, 0, 0, 0.3);
+  --bg-tertiary: rgba(0, 0, 0, 0.8);
+  --text-primary: rgb(243, 243, 243);
+  --text-secondary: rgba(243, 243, 243, 0.7);
+  --border-color: rgba(243, 243, 243, 0.15);
+  --hover-bg: rgba(255, 255, 255, 0.1);
+  --selected-bg: rgba(255, 255, 255, 0.15);
+  --search-bar-bg: var(--bg-tertiary);
+  --search-bar-hover-bg: var(--bg-tertiary);
+  --search-bar-radius: 6px;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: rgb(243, 243, 243);
+  --bg-secondary: rgba(255, 255, 255, 0.8);
+  --bg-tertiary: rgba(255, 255, 255, 0.6);
+  --text-primary: rgb(24, 24, 24);
+  --text-secondary: rgba(24, 24, 24, 0.7);
+  --border-color: rgba(0, 0, 0, 0.1);
+  --hover-bg: rgba(0, 0, 0, 0.05);
+  --selected-bg: rgba(0, 0, 0, 0.04);
+  --search-bar-bg: rgba(235, 235, 235, 1);
+  --search-bar-hover-bg: rgba(230, 230, 230, 1);
+  --search-bar-radius: 6px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.top-bar {
+  height: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: drag;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  -webkit-app-region: no-drag;
+}
+
+.main-menu-spacer {
+  width: 5px;
+  flex-shrink: 0;
+}
+
+.top-bar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.main-menu {
+  display: contents;
+  flex-direction: row;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  min-width: auto;
+}
+
+.main-menu fluent-listbox {
+  display: flex;
+  flex-direction: row;
+  gap: 5px;
+  border: none;
+  background: transparent;
+}
+
+.main-menu fluent-option {
+  padding: 5px 15px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  background-color: transparent;
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
+  border: none;
+  outline: none;
+}
+
+.main-menu fluent-option:hover {
+  background-color: var(--hover-bg);
+}
+
+.main-menu fluent-option[aria-selected="true"] {
+  background-color: var(--selected-bg);
+  /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 500; */
+}
+
+.search-bar {
+  width: 300px;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  -webkit-app-region: no-drag;
+}
+
+.top-bar-right fluent-button {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  border: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.top-bar-right fluent-button::part(control) {
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  border: none;
+}
+
+.top-bar-right fluent-button:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+.top-bar-right fluent-button:hover::part(control) {
+  background-color: var(--hover-bg) !important;
+}
+
+.top-bar-right .close-button {
+  color: var(--text-primary) !important;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.top-bar-right .close-button::part(control) {
+  color: var(--text-primary) !important;
+}
+
+.top-bar-right .close-button:hover {
+  background-color: rgb(220, 41, 39) !important;
+  color: rgb(255, 255, 255) !important;
+}
+
+.top-bar-right .close-button:hover::part(control) {
+  background-color: rgb(220, 41, 39) !important;
+  color: rgb(255, 255, 255) !important;
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.sidebar {
+  position: relative;
+  background-color: var(--bg-tertiary);
+  border-right: 1px solid var(--border-color);
+  min-width: 150px;
+  max-width: 400px;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.2s;
+}
+
+.sidebar-resizer:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-content {
+  padding: 10px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sub-menu {
+  flex: 1;
+  overflow-y: auto;
+  border: none;
+  background: transparent;
+  display: contents;
+}
+
+.sub-menu fluent-option {
+  padding: 10px 15px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  display: flex;
+  width: 100%;
+  background-color: transparent;
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
+  border: none;
+  outline: none;
+}
+
+.sub-menu fluent-option:hover {
+  background-color: var(--hover-bg);
+}
+
+.sub-menu fluent-option[aria-selected="true"] {
+  background-color: var(--selected-bg);
+  /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 500; */
+}
+
+.settings-button {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  transition: border-color 0.3s;
+}
+
+.sidebar-footer fluent-button {
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.sidebar-footer fluent-button::part(control) {
+  background-color: transparent !important;
+  color: var(--text-primary) !important;
+}
+
+.sidebar-footer fluent-button:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+.sidebar-footer fluent-button:hover::part(control) {
+  background-color: var(--hover-bg) !important;
+}
+
+.workspace {
+  flex: 1;
+  overflow: auto;
+  background-color: var(--bg-primary);
+  transition: background-color 0.3s;
+}
+
+.workspace-content {
+  padding: 20px;
+}
+
+.workspace-content h2 {
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  transition: color 0.3s;
+}
+
+.workspace-content p {
+  color: var(--text-secondary);
+  transition: color 0.3s;
+}
+
+.workspace-panel {
+  display: none;
+}
+
+.workspace-panel.active {
+  display: block;
+}
+
+.search-bar {
+  background-color: var(--search-bar-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+  border-radius: var(--search-bar-radius);
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+.search-bar::part(root) {
+  background-color: var(--search-bar-bg) !important;
+  border: none;
+  border-radius: var(--search-bar-radius);
+}
+
+.search-bar::part(control) {
+  background-color: var(--search-bar-bg) !important;
+  color: var(--text-primary) !important;
+  height: calc(100%);
+  border-radius: var(--search-bar-radius);
+}
+
+.search-bar:hover {
+  background-color: var(--search-bar-hover-bg) !important;
+}
+
+.search-bar:hover::part(root) {
+  background-color: var(--search-bar-hover-bg) !important;
+}
+
+.search-bar:hover::part(control) {
+  background-color: var(--search-bar-hover-bg) !important;
+}
