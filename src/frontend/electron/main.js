@@ -11,9 +11,9 @@ function waitForViteServer(maxRetries = 30, delay = 1000) {
   return new Promise((resolve, reject) => {
     const http = require('http')
     let retries = 0
-    
+
     console.log('[Electron] 等待Vite服务器启动...')
-    
+
     function checkServer() {
       // 尝试访问index.html来确认Vite服务器是否就绪
       const req = http.get('http://localhost:5173/index.html', (res) => {
@@ -30,20 +30,20 @@ function waitForViteServer(maxRetries = 30, delay = 1000) {
           retry()
         }
       })
-      
+
       req.on('error', (err) => {
         if (retries % 5 === 0) {
           console.log(`[Electron] 等待Vite服务器... (${retries}/${maxRetries})`)
         }
         retry()
       })
-      
+
       req.setTimeout(2000, () => {
         req.destroy()
         retry()
       })
     }
-    
+
     function retry() {
       retries++
       if (retries >= maxRetries) {
@@ -53,7 +53,7 @@ function waitForViteServer(maxRetries = 30, delay = 1000) {
         setTimeout(checkServer, delay)
       }
     }
-    
+
     checkServer()
   })
 }
@@ -64,19 +64,19 @@ function startPythonBackend() {
   const backendPath = isDev
     ? path.join(__dirname, '../../backend/main.py')
     : path.join(__dirname, '../../backend/main.exe')
-  
+
   const options = {
     cwd: path.join(__dirname, '../..'),
     stdio: ['pipe', 'pipe', 'pipe']
   }
-  
+
   if (isDev) {
     // 开发环境：使用conda环境中的python
     // 在Windows上，尝试找到conda环境中的python.exe
     const os = require('os')
     const userHome = os.homedir()
     let pythonExe
-    
+
     if (process.platform === 'win32') {
       // Windows: 尝试多个可能的conda路径
       const possiblePaths = [
@@ -87,7 +87,7 @@ function startPythonBackend() {
         path.join('C:', 'Users', process.env.USERNAME, 'anaconda3', 'envs', 'win-auto-installer', 'python.exe'),
         path.join('C:', 'Users', process.env.USERNAME, 'miniconda3', 'envs', 'win-auto-installer', 'python.exe')
       ]
-      
+
       const fs = require('fs')
       for (const possiblePath of possiblePaths) {
         if (fs.existsSync(possiblePath)) {
@@ -95,7 +95,7 @@ function startPythonBackend() {
           break
         }
       }
-      
+
       // 如果找不到，使用系统PATH中的python（假设已激活conda环境）
       if (!pythonExe) {
         pythonExe = 'python'
@@ -103,23 +103,23 @@ function startPythonBackend() {
     } else {
       pythonExe = 'python'
     }
-    
+
     console.log(`[Backend] 使用Python: ${pythonExe}`)
     console.log(`[Backend] 启动脚本: ${backendPath}`)
-    
+
     pythonProcess = spawn(pythonExe, [backendPath], options)
   } else {
     // 生产环境：直接运行exe
     pythonProcess = spawn(backendPath, [], options)
   }
-  
+
   // 处理Python输出
   let buffer = ''
   pythonProcess.stdout.on('data', (data) => {
     buffer += data.toString()
     const lines = buffer.split('\n')
     buffer = lines.pop() || '' // 保留最后一个不完整的行
-    
+
     for (const line of lines) {
       const message = line.trim()
       if (message) {
@@ -146,11 +146,11 @@ function startPythonBackend() {
       }
     }
   })
-  
+
   pythonProcess.stderr.on('data', (data) => {
     console.error('[Python Error]', data.toString())
   })
-  
+
   pythonProcess.on('exit', (code) => {
     console.log(`[Python] 进程退出，代码: ${code}`)
     if (code !== 0 && code !== null) {
@@ -170,7 +170,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     minWidth: 1000,
-    minHeight: 600,
+    minHeight: 800, // 增加最小高度，避免二级菜单出现滚动条（顶部栏50px + 折叠按钮43px + 3个菜单组约600px + 设置按钮43px + 边距约50px = 约786px，设置为800px确保安全）
     frame: false,  // 无边框窗口
     titleBarStyle: 'hidden',
     backgroundColor: '#181818',
@@ -180,7 +180,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     }
   })
-  
+
   // 注册窗口键盘事件（在窗口ready后）
   mainWindow.webContents.on('before-input-event', (event, input) => {
     // F12: 切换开发者工具
@@ -199,7 +199,7 @@ function createWindow() {
       mainWindow.reload()
     }
   })
-  
+
   // 也尝试注册全局快捷键（F12可能被系统占用，使用全局快捷键作为备用）
   // 延迟注册，确保窗口已创建
   setTimeout(() => {
@@ -213,28 +213,28 @@ function createWindow() {
         }
       }
     })
-    
+
     if (!registered) {
       console.log('[Electron] F12 global shortcut registration failed, using before-input-event instead')
     } else {
       console.log('[Electron] F12 global shortcut registered successfully')
     }
   }, 1000)
-  
+
   // 也注册全局快捷键作为备用（F5）
   globalShortcut.register('F5', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.reload()
     }
   })
-  
+
   // Ctrl+R: 刷新页面（备用）
   globalShortcut.register('CommandOrControl+R', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.reload()
     }
   })
-  
+
   // 加载应用
   const isDev = process.env.NODE_ENV === 'development'
   if (isDev) {
@@ -244,12 +244,12 @@ function createWindow() {
       // 加载Vite开发服务器（Vite会自动提供index.html）
       mainWindow.loadURL('http://localhost:5173/')
       mainWindow.webContents.openDevTools()
-      
+
       // 监听页面加载完成
       mainWindow.webContents.on('did-finish-load', () => {
         console.log('[Electron] 页面加载完成')
       })
-      
+
       // 监听加载错误
       mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
         console.error('[Electron] 页面加载失败:', errorCode, errorDescription, validatedURL)
@@ -318,11 +318,11 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
-  
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  
+
   // 窗口关闭时注销快捷键
   mainWindow.on('close', () => {
     globalShortcut.unregisterAll()
@@ -336,13 +336,13 @@ ipcMain.handle('send-to-backend', async (event, message) => {
       reject(new Error('Python后端未运行'))
       return
     }
-    
+
     // 发送JSON消息到Python
     const jsonMessage = JSON.stringify(message) + '\n'
-    
+
     // 存储待处理的请求
     pendingRequests.set(message.id, { resolve, reject })
-    
+
     // 设置超时
     const timeout = setTimeout(() => {
       if (pendingRequests.has(message.id)) {
@@ -350,7 +350,7 @@ ipcMain.handle('send-to-backend', async (event, message) => {
         reject(new Error('后端响应超时'))
       }
     }, 30000)
-    
+
     pythonProcess.stdin.write(jsonMessage, (error) => {
       if (error) {
         clearTimeout(timeout)
@@ -388,7 +388,7 @@ ipcMain.handle('window-is-maximized', () => {
 app.whenReady().then(() => {
   createWindow()
   startPythonBackend()
-  
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
@@ -400,7 +400,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // 注销所有全局快捷键
   globalShortcut.unregisterAll()
-  
+
   if (pythonProcess) {
     pythonProcess.kill()
     pythonProcess = null
@@ -413,7 +413,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // 注销所有全局快捷键
   globalShortcut.unregisterAll()
-  
+
   if (pythonProcess) {
     pythonProcess.kill()
     pythonProcess = null

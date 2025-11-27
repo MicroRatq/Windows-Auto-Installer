@@ -6,35 +6,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Windows自动安装器</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
 <body>
   <div class="app-container">
     <div class="top-bar">
-      <div class="top-bar-left">
-        <div class="main-menu-spacer"></div>
-        <fluent-listbox id="main-menu" class="main-menu">
-          <fluent-option value="iso">镜像</fluent-option>
-          <fluent-option value="system">系统配置</fluent-option>
-          <fluent-option value="software">软件安装</fluent-option>
-        </fluent-listbox>
-      </div>
       <div class="top-bar-center">
         <fluent-text-field class="search-bar" placeholder="搜索..." appearance="outline"></fluent-text-field>
       </div>
       <div class="top-bar-right">
-        <fluent-button appearance="stealth" id="theme-toggle" title="切换主题">
+        <button id="theme-toggle" class="top-bar-button" title="切换主题">
           🌓
-        </fluent-button>
-        <fluent-button appearance="stealth" id="window-minimize" title="最小化">
+        </button>
+        <button id="window-minimize" class="top-bar-button" title="最小化">
           −
-        </fluent-button>
-        <fluent-button appearance="stealth" id="window-maximize" title="最大化">
+        </button>
+        <button id="window-maximize" class="top-bar-button" title="最大化">
           □
-        </fluent-button>
-        <fluent-button appearance="stealth" class="close-button" id="window-close" title="关闭">
+        </button>
+        <button class="close-button top-bar-button" id="window-close" title="关闭">
           ×
-        </fluent-button>
+        </button>
       </div>
     </div>
 
@@ -42,13 +35,46 @@
       <div class="sidebar" id="sidebar">
         <div class="sidebar-resizer" id="sidebar-resizer"></div>
         <div class="sidebar-content">
-          <fluent-listbox id="sub-menu" class="sub-menu">
+          <div class="sidebar-header">
+            <button id="collapse-toggle" class="collapse-button" title="折叠/展开">
+              <i data-lucide="menu" id="collapse-icon"></i>
+            </button>
+          </div>
+          <div class="sidebar-menu-groups" id="sidebar-menu-groups">
+            <!-- 镜像菜单组 -->
+            <div class="menu-group">
+              <div class="main-menu-text" data-menu="iso">镜像</div>
+              <fluent-listbox id="sub-menu-iso" class="sub-menu">
+                <!-- 动态生成 -->
+              </fluent-listbox>
+            </div>
+
+            <!-- 系统配置菜单组 -->
+            <div class="menu-group">
+              <div class="main-menu-text" data-menu="system">系统配置</div>
+              <fluent-listbox id="sub-menu-system" class="sub-menu">
+                <!-- 动态生成 -->
+              </fluent-listbox>
+            </div>
+
+            <!-- 软件安装菜单组 -->
+            <div class="menu-group">
+              <div class="main-menu-text" data-menu="software">软件安装</div>
+              <fluent-listbox id="sub-menu-software" class="sub-menu">
+                <!-- 动态生成 -->
+              </fluent-listbox>
+            </div>
+          </div>
+          <!-- 折叠后的图标菜单 -->
+          <fluent-listbox id="icon-menu" class="icon-menu" style="display: none;">
             <!-- 动态生成 -->
           </fluent-listbox>
+
           <div class="sidebar-footer">
-            <fluent-button appearance="stealth" class="settings-button" id="settings-button">
-              ⚙️ 设置
-            </fluent-button>
+            <button class="settings-button" id="settings-button">
+              <i data-lucide="settings" class="settings-icon"></i>
+              <span class="settings-text">设置</span>
+            </button>
           </div>
         </div>
       </div>

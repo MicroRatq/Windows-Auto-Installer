@@ -12,6 +12,9 @@ interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI?: ElectronAPI
+    lucide?: {
+      createIcons: () => void
+    }
   }
 }
 
