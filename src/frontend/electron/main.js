@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron')
+const { app, BrowserWindow, ipcMain, globalShortcut, dialog } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 
@@ -107,10 +107,22 @@ function startPythonBackend() {
     console.log(`[Backend] 使用Python: ${pythonExe}`)
     console.log(`[Backend] 启动脚本: ${backendPath}`)
 
-    pythonProcess = spawn(pythonExe, [backendPath], options)
+    try {
+      pythonProcess = spawn(pythonExe, [backendPath], options)
+    } catch (error) {
+      console.error('[Backend] 启动Python进程失败:', error)
+      pythonProcess = null
+      return
+    }
   } else {
     // 生产环境：直接运行exe
-    pythonProcess = spawn(backendPath, [], options)
+    try {
+      pythonProcess = spawn(backendPath, [], options)
+    } catch (error) {
+      console.error('[Backend] 启动后端进程失败:', error)
+      pythonProcess = null
+      return
+    }
   }
 
   // 处理Python输出
@@ -129,10 +141,17 @@ function startPythonBackend() {
           if (json.id && pendingRequests.has(json.id)) {
             const pending = pendingRequests.get(json.id)
             pendingRequests.delete(json.id)
+            console.log(`[IPC] 收到后端响应 ID=${json.id}:`, JSON.stringify(json))
             if (json.error) {
+              console.log(`[IPC] 后端返回错误:`, json.error)
               pending.reject(new Error(json.error.message || '后端错误'))
             } else {
-              pending.resolve(json.result)
+              console.log(`[IPC] 后端返回结果:`, json.result, '类型:', typeof json.result)
+              // 返回完整的响应对象，而不是只返回 result
+              pending.resolve({
+                result: json.result,
+                error: json.error
+              })
             }
           }
           // 也发送到渲染进程（如果需要）
@@ -153,6 +172,14 @@ function startPythonBackend() {
 
   pythonProcess.on('exit', (code) => {
     console.log(`[Python] 进程退出，代码: ${code}`)
+    // 清理进程引用
+    pythonProcess = null
+    // 拒绝所有待处理的请求
+    for (const [id, pending] of pendingRequests.entries()) {
+      pending.reject(new Error('Python后端进程已退出'))
+    }
+    pendingRequests.clear()
+
     if (code !== 0 && code !== null) {
       // 非正常退出，尝试重启
       setTimeout(() => {
@@ -161,6 +188,17 @@ function startPythonBackend() {
         }
       }, 3000)
     }
+  })
+
+  pythonProcess.on('error', (error) => {
+    console.error('[Python] 进程错误:', error)
+    // 清理进程引用
+    pythonProcess = null
+    // 拒绝所有待处理的请求
+    for (const [id, pending] of pendingRequests.entries()) {
+      pending.reject(new Error(`Python后端启动失败: ${error.message}`))
+    }
+    pendingRequests.clear()
   })
 }
 
@@ -332,8 +370,16 @@ function createWindow() {
 // IPC处理：发送消息到Python后端
 ipcMain.handle('send-to-backend', async (event, message) => {
   return new Promise((resolve, reject) => {
+    // 检查进程是否存在且未终止
     if (!pythonProcess || pythonProcess.killed) {
       reject(new Error('Python后端未运行'))
+      return
+    }
+
+    // 检查 stdin 流是否可用
+    if (!pythonProcess.stdin || pythonProcess.stdin.destroyed || !pythonProcess.stdin.writable) {
+      console.error('[IPC] Python stdin 流不可用')
+      reject(new Error('Python后端连接已断开'))
       return
     }
 
@@ -343,21 +389,19 @@ ipcMain.handle('send-to-backend', async (event, message) => {
     // 存储待处理的请求
     pendingRequests.set(message.id, { resolve, reject })
 
-    // 设置超时
-    const timeout = setTimeout(() => {
-      if (pendingRequests.has(message.id)) {
-        pendingRequests.delete(message.id)
-        reject(new Error('后端响应超时'))
-      }
-    }, 30000)
+    // 超时机制已移除，完全依赖后端超时
 
-    pythonProcess.stdin.write(jsonMessage, (error) => {
-      if (error) {
-        clearTimeout(timeout)
-        pendingRequests.delete(message.id)
-        reject(error)
-      }
-    })
+    try {
+      pythonProcess.stdin.write(jsonMessage, (error) => {
+        if (error) {
+          pendingRequests.delete(message.id)
+          reject(error)
+        }
+      })
+    } catch (error) {
+      pendingRequests.delete(message.id)
+      reject(error)
+    }
   })
 })
 
@@ -382,6 +426,13 @@ ipcMain.handle('window-close', () => {
 
 ipcMain.handle('window-is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false
+})
+
+// 文件对话框
+ipcMain.handle('show-open-dialog', async (event, options) => {
+  if (!mainWindow) return { canceled: true }
+  const result = await dialog.showOpenDialog(mainWindow, options)
+  return result
 })
 
 // 应用准备就绪

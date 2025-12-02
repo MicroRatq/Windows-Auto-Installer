@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
   
   // 平台信息
-  platform: process.platform
+  platform: process.platform,
+  
+  // 文件对话框
+  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options)
 })
 

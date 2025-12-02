@@ -1,0 +1,390 @@
+{
+    "Windows 11": {
+        "25H2": {
+            "Multi Editions": {
+                "ids": [
+                    3262,
+                    3265
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "c1b8492eb947a1565e0a1fc343bc3677dbcf7850f05a81db5cb857622432be5f",
+                    "arm64": "52296a482db343b3f4fe5422a020bb5792fd48f3763fb2ab1c69d4777f4d294c"
+                }
+            },
+            "description": "Windows 11 25H2",
+            "build": "26200.6584"
+        },
+        "24H2": {
+            "Multi Editions": {
+                "ids": [
+                    3113,
+                    3131
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "06a4fe4211d0348b5a771de19a91c40e4805ba82527085a8a143ed82969341bb",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 11 24H2",
+            "build": "26100.1742"
+        },
+        "23H2": {
+            "Multi Editions": {
+                "ids": [
+                    2860
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "7e73adfd22e3f95c6a3ac1795d5f7c43a0ce8fd270587f574212cd98a42e7180",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 11 23H2",
+            "build": "22621.2428"
+        },
+        "22H2": {
+            "Multi Editions": {
+                "ids": [
+                    2616
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 11 22H2",
+            "build": "22621.1702"
+        },
+        "21H2": {
+            "Multi Editions": {
+                "ids": [
+                    2093
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 11 21H2 [已失效]",
+            "build": "22000.194"
+        }
+    },
+    "Windows 10": {
+        "22H2": {
+            "Multi Editions": {
+                "ids": [
+                    2618
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 22H2",
+            "build": "19045.2965"
+        },
+        "21H2": {
+            "Multi Editions": {
+                "ids": [
+                    2069
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 21H2 [已失效]",
+            "build": "22000.194"
+        },
+        "21H1": {
+            "Multi Editions": {
+                "ids": [
+                    2033
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 21H1 [已失效]",
+            "build": "19043.985"
+        },
+        "20H2": {
+            "Multi Editions": {
+                "ids": [
+                    1882
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 20H2 [已失效]",
+            "build": "19042.631"
+        },
+        "20H1": {
+            "Multi Editions": {
+                "ids": [
+                    1626
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 20H1 [已失效]",
+            "build": "19041.264"
+        },
+        "19H2": {
+            "Multi Editions": {
+                "ids": [
+                    1429
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 19H2 [已失效]",
+            "build": "18363.418"
+        },
+        "19H1": {
+            "Multi Editions": {
+                "ids": [
+                    1384,
+                    1214
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 19H1 [已失效]",
+            "build": "18362.356"
+        },
+        "1809": {
+            "Multi Editions": {
+                "ids": [
+                    1203,
+                    1060
+                ],
+                "sha256": {
+                    "zh-cn": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "zh-tw": {
+                        "x64": "",
+                        "arm64": ""
+                    },
+                    "en-us": {
+                        "x64": "",
+                        "arm64": ""
+                    }
+                }
+            },
+            "Consumer Editions": {
+                "sha256": {
+                    "x64": "",
+                    "arm64": ""
+                }
+            },
+            "description": "Windows 10 1809 [已失效]",
+            "build": "17763.379"
+        }
+    },
+    "_note": "此配置文件基于 msdl 项目和 Fido 项目的历史 commit。部分历史版本可能已不再可用。数据来源：https://github.com/pbatard/Fido/commit/e1535ba775c0ea9075acec9bf589e06d2029f1fc",
+    "_how_to_add_more": "要添加更多历史版本，请：1) 从 msdl 项目或其他可靠来源获取 product_edition_id 2) 按照现有格式添加到对应版本下 3) 测试确保 API 仍返回有效下载链接",
+    "_source": "https://raw.githubusercontent.com/gravesoft/msdl/main/data/products.json, https://github.com/pbatard/Fido"
+}

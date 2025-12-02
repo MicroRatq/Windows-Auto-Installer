@@ -3,8 +3,15 @@ import {
   fluentListbox,
   fluentOption,
   fluentTextField,
-  fluentButton
+  fluentButton,
+  fluentSelect,
+  fluentProgress,
+  fluentMenu,
+  fluentMenuItem
 } from '@fluentui/web-components'
+
+// 导入镜像缓存模块
+import { initIsoCache } from './iso-cache'
 
 // 注册 Fluent UI 组件
 provideFluentDesignSystem()
@@ -12,7 +19,11 @@ provideFluentDesignSystem()
     fluentListbox(),
     fluentOption(),
     fluentTextField(),
-    fluentButton()
+    fluentButton(),
+    fluentSelect(),
+    fluentProgress(),
+    fluentMenu(),
+    fluentMenuItem()
   )
 
 // 菜单配置
@@ -535,6 +546,11 @@ function init() {
     }).catch((error: any) => {
       console.error('后端连接失败:', error)
     })
+  }
+
+  // 初始化镜像缓存工作区
+  if (typeof initIsoCache === 'function') {
+    initIsoCache()
   }
 
   console.log('应用初始化完成')

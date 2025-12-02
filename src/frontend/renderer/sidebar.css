@@ -1,0 +1,519 @@
+/* 侧边栏菜单样式 */
+
+.menu-group {
+    margin-bottom: 20px;
+    transition: margin 0s ease;
+}
+
+/* 折叠时减少菜单组间距 */
+.sidebar.collapsed .menu-group {
+    margin-bottom: 0 !important;
+}
+
+.main-menu-text {
+    padding: 10px 15px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    user-select: none;
+    transition: opacity 0s ease, height 0s ease, margin 0s ease, padding 0s ease;
+}
+
+/* 一级菜单文本在折叠时立即消失（无动画） */
+.sidebar.collapsed .main-menu-text {
+    opacity: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+.sidebar {
+    position: relative;
+    background-color: var(--bg-tertiary);
+    border-right: 1px solid var(--border-color);
+    min-width: 150px;
+    max-width: 400px;
+    transition: background-color 0.3s, border-color 0.3s, width 0.3s ease;
+}
+
+.sidebar.collapsed {
+    min-width: 70px !important;
+    /* 增加宽度：43px(高度) + 27px(边距和padding) = 70px，确保图标完整显示 */
+    max-width: 70px !important;
+}
+
+.sidebar-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    background-color: transparent;
+    transition: background-color 0.2s;
+}
+
+.sidebar-resizer:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-content {
+    padding: 10px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: flex-start;
+    padding-left: 0;
+    flex-shrink: 0;
+    /* 防止被压缩 */
+}
+
+.collapse-button {
+    min-width: 30px;
+    width: 30px;
+    height: 39px;
+    /* 与二级菜单option高度一致（39px） */
+    padding: 0;
+    margin-left: 9px;
+    /* 使按钮图标中心与二级菜单图标中心对齐：15px(padding) + 9px(图标中心) - 15px(按钮中心) = 9px */
+    background-color: transparent;
+    color: var(--text-primary);
+    border: none;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    /* 移除所有阴影 */
+    box-shadow: none !important;
+    filter: none !important;
+    outline: none;
+    /* 移除默认按钮样式 */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* 折叠按钮图标与二级菜单图标水平居中对齐 */
+.collapse-button i {
+    position: relative;
+    left: 0;
+    /* 图标在按钮中居中 */
+    width: 18px !important;
+    /* 与菜单图标大小一致，使用!important确保优先级 */
+    height: 18px !important;
+    /* 与菜单图标大小一致，使用!important确保优先级 */
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    transition: transform 0.3s ease;
+    /* 确保图标在折叠和展开状态下缩放比例一致 */
+    transform: scale(1) !important;
+    /* 固定缩放比例，避免不一致，使用!important确保优先级 */
+    display: block;
+    /* 确保图标正确渲染 */
+    flex-shrink: 0;
+    /* 防止图标被压缩 */
+}
+
+/* 确保折叠状态下图标缩放比例一致（折叠状态是合理的比例） */
+.sidebar.collapsed .collapse-button i {
+    transform: scale(1) !important;
+    /* 保持相同的缩放比例 */
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+}
+
+/* 确保展开状态下图标缩放比例与折叠状态一致 */
+.sidebar:not(.collapsed) .collapse-button i {
+    transform: scale(1) !important;
+    /* 保持与折叠状态相同的缩放比例 */
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+}
+
+/* 使用伪元素创建hover背景，避免改变按钮位置和大小 */
+.collapse-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background-color: transparent;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    pointer-events: none;
+    /* 确保伪元素不影响点击 */
+    z-index: -1;
+    /* 确保伪元素在按钮内容下方 */
+}
+
+/* 展开状态下，hover背景与按钮大小一致 */
+.sidebar:not(.collapsed) .collapse-button::before {
+    left: 0;
+    right: 0;
+    /* 与按钮大小一致 */
+}
+
+/* 折叠状态下，hover背景的左右边距与二级菜单折叠状态一致 */
+.sidebar.collapsed .collapse-button::before {
+    left: -9px;
+    /* 向左扩展9px（margin-left的负值），使背景从0px开始 */
+    right: 0;
+    /* 到右侧边缘，与.icon-menu fluent-option的视觉效果一致 */
+}
+
+.collapse-button:hover::before {
+    background-color: var(--hover-bg);
+    /* hover时显示背景 */
+}
+
+/* 确保hover时按钮位置和大小不变 */
+.collapse-button:hover {
+    /* 不改变任何布局属性 */
+    padding: 0;
+    margin-left: 9px;
+    width: 30px;
+    min-width: 30px;
+    /* 保持原有尺寸 */
+}
+
+/* 确保hover时图标位置和大小不变 */
+.collapse-button:hover i {
+    transform: scale(1) !important;
+    /* 保持相同的缩放比例 */
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    position: relative !important;
+    left: 0 !important;
+    /* 保持图标位置不变 */
+}
+
+.collapse-button:active {
+    border-radius: 4px;
+    /* 保留圆角，移除阴影 */
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+.sidebar-menu-groups {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+    transition: opacity 0.3s ease;
+}
+
+/* 折叠时保持菜单组在DOM中但不可见，用于动画 */
+.sidebar.collapsed .sidebar-menu-groups {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+}
+
+.sub-menu {
+    flex: 1;
+    overflow-y: auto;
+    border: none;
+    background: transparent;
+    display: contents;
+}
+
+.sub-menu fluent-option {
+    padding: 15px 15px;
+    /* 增加50%高度：从10px增加到15px */
+    min-height: 39px;
+    /* 再减少10%：从43px减少到39px (43 * 0.9 = 38.7，四舍五入到39px) */
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    width: 100%;
+    background-color: transparent;
+    color: var(--text-primary);
+    transition: background-color 0.2s, color 0.2s;
+    border: none;
+    outline: none;
+    position: relative;
+    opacity: 1;
+}
+
+/* 二级菜单option的文本立即消失，图标有动画 */
+.sub-menu fluent-option .menu-option-content {
+    transition: none;
+    /* 移除wrapper的过渡，让文本立即消失 */
+}
+
+/* 折叠时隐藏二级菜单，使用opacity实现平滑过渡 */
+.sidebar.collapsed .sub-menu fluent-option {
+    opacity: 0;
+    transform: translateX(-10px);
+    pointer-events: none;
+}
+
+.menu-option-content {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* 菜单文本在折叠时立即消失（无动画） */
+.menu-option-content>*:not(.menu-icon) {
+    transition: opacity 0s ease, width 0s ease, max-width 0s ease;
+}
+
+.sidebar.collapsed .menu-option-content>*:not(.menu-icon) {
+    opacity: 0 !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* 菜单图标在折叠时有平滑动画 */
+.menu-icon {
+    width: 18px;
+    /* 增加图标大小 */
+    height: 18px;
+    /* 增加图标大小 */
+    flex-shrink: 0;
+    display: inline-block;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.sidebar.collapsed .menu-icon {
+    transform: translateX(0);
+    /* 图标保持在24px位置（15px padding + 9px图标中心），与折叠按钮和展开状态对齐 */
+}
+
+.icon-menu {
+    flex: 1;
+    overflow-y: auto;
+    border: none;
+    background: transparent;
+    display: contents;
+}
+
+.icon-menu {
+    width: 100%;
+}
+
+.icon-menu fluent-option {
+    padding: 0 0 0 15px;
+    /* 左侧padding与展开状态对齐，图标中心在24px位置 */
+    min-height: 39px;
+    /* 再减少10%：与展开状态一致 (43 * 0.9 = 38.7，四舍五入到39px) */
+    width: 100%;
+    /* 宽度填满容器 */
+    height: 39px;
+    /* 固定高度，再减少10% */
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    /* 左对齐，与展开状态一致，图标中心在24px */
+    background-color: transparent;
+    color: var(--text-primary);
+    transition: background-color 0.2s, color 0.2s, opacity 0.3s ease, transform 0.3s ease;
+    border: none;
+    outline: none;
+    box-sizing: border-box;
+    position: relative;
+    opacity: 0;
+    transform: translateX(10px);
+    pointer-events: none;
+}
+
+/* 折叠时显示图标菜单，使用opacity实现平滑过渡 */
+.sidebar:not(.collapsed) .icon-menu fluent-option {
+    opacity: 0;
+    transform: translateX(10px);
+    pointer-events: none;
+}
+
+.sidebar.collapsed .icon-menu fluent-option {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+/* 折叠状态下移除图标菜单listbox的边框和outline */
+.sidebar.collapsed .icon-menu:focus,
+.sidebar.collapsed .icon-menu:focus-visible,
+.sidebar.collapsed .icon-menu:focus-within {
+    outline: none !important;
+    border: none !important;
+}
+
+.icon-menu fluent-option:hover {
+    background-color: var(--hover-bg);
+}
+
+.icon-menu fluent-option[aria-selected="true"] {
+    background-color: var(--selected-bg);
+}
+
+.sub-menu fluent-option:hover {
+    background-color: var(--hover-bg);
+}
+
+.sub-menu fluent-option[aria-selected="true"] {
+    background-color: var(--selected-bg);
+    /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  font-weight: 500; */
+}
+
+.settings-button {
+    width: 100%;
+    min-height: 39px;
+    /* 与二级菜单option高度一致（39px） */
+    text-align: left;
+    display: flex;
+    flex-direction: row;
+    /* 确保水平排列 */
+    align-items: center;
+    /* 垂直居中对齐 */
+    justify-content: flex-start;
+    gap: 8px;
+    /* 图标和文本之间的间距，与二级菜单一致，确保文本左对齐 */
+    padding: 15px 15px;
+    /* 与二级菜单option的padding一致，确保图标中心在24px位置 */
+    background-color: transparent;
+    color: var(--text-primary);
+    border: none;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s, transform 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: inherit;
+    /* 移除所有阴影 */
+    box-shadow: none !important;
+    filter: none !important;
+    outline: none;
+    /* 移除默认按钮样式 */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+/* 设置图标与折叠图标/二级菜单图标水平中心对齐（24px位置） */
+.settings-icon {
+    width: 18px;
+    /* 与菜单图标大小一致 */
+    height: 18px;
+    /* 与菜单图标大小一致 */
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+    /* 图标中心位置：15px(padding) + 9px(图标中心) = 24px，与折叠按钮和二级菜单图标对齐 */
+    display: inline-block;
+    /* 使用inline-block确保在flex容器中正确显示 */
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    /* 确保图标垂直居中 */
+}
+
+/* 设置文本与设置图标垂直中心对齐 */
+.settings-text {
+    flex: 1;
+    line-height: 18px;
+    /* 与图标高度一致，确保垂直居中 */
+    display: inline-block;
+    /* 使用inline-block确保在flex容器中正确显示 */
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    /* 确保文本垂直居中 */
+}
+
+.settings-button:hover {
+    background-color: var(--hover-bg);
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+.settings-button:active {
+    background-color: var(--hover-bg);
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+.settings-button:focus {
+    outline: none;
+    box-shadow: none !important;
+    filter: none !important;
+}
+
+/* 折叠状态下的设置按钮 */
+.sidebar.collapsed .settings-button {
+    justify-content: flex-start;
+    /* 左对齐，与展开状态一致 */
+    padding: 15px 15px;
+    /* 保持与展开状态一致的padding */
+}
+
+.sidebar.collapsed .settings-text {
+    display: none;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 10px;
+    padding-left: 0;
+    /* 移除左侧padding，确保设置按钮与二级菜单对齐 */
+    padding-right: 0;
+    border-top: 1px solid var(--border-color);
+    transition: border-color 0.3s;
+}
+
+.sidebar-footer fluent-button {
+    background-color: transparent !important;
+    color: var(--text-primary) !important;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.sidebar-footer fluent-button::part(control) {
+    background-color: transparent !important;
+    color: var(--text-primary) !important;
+}
+
+.sidebar-footer fluent-button:hover {
+    background-color: var(--hover-bg) !important;
+}
+
+.sidebar-footer fluent-button:hover::part(control) {
+    background-color: var(--hover-bg) !important;
+}

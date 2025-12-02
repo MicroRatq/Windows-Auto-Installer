@@ -7,6 +7,7 @@ interface ElectronAPI {
   windowClose: () => Promise<void>
   windowIsMaximized: () => Promise<boolean>
   platform: string
+  showOpenDialog: (options: any) => Promise<{ canceled: boolean; filePaths?: string[] }>
 }
 
 declare global {

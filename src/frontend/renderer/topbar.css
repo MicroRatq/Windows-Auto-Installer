@@ -1,0 +1,145 @@
+/* 顶部栏样式 */
+
+.top-bar {
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 10px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: drag;
+  transition: background-color 0.3s, border-color 0.3s;
+  position: relative;
+}
+
+.top-bar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.top-bar-left {
+  position: absolute;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.search-bar {
+  width: 300px;
+}
+
+.top-bar-right {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  -webkit-app-region: no-drag;
+}
+
+.top-bar-right button,
+.top-bar-right .top-bar-button {
+  min-width: 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background-color: transparent;
+  color: var(--text-primary);
+  border: none;
+  border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  /* 移除所有阴影 */
+  box-shadow: none !important;
+  filter: none !important;
+  outline: none;
+  /* 移除默认按钮样式 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.top-bar-right button:hover,
+.top-bar-right .top-bar-button:hover {
+  background-color: var(--hover-bg);
+  border-radius: 4px;
+  /* 保留圆角，移除阴影 */
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.top-bar-right button:active,
+.top-bar-right .top-bar-button:active {
+  border-radius: 4px;
+  /* 保留圆角，移除阴影 */
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.top-bar-right .close-button {
+  color: var(--text-primary);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.top-bar-right .close-button:hover {
+  background-color: rgb(206, 41, 39) !important;
+  color: rgb(255, 255, 255) !important;
+  border-radius: 4px;
+  /* 保留圆角，移除阴影 */
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.top-bar-right .close-button:active {
+  background-color: rgb(206, 41, 39) !important;
+  color: rgb(255, 255, 255) !important;
+  border-radius: 4px;
+  /* 保留圆角，移除阴影 */
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.search-bar {
+  background-color: var(--search-bar-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+  border-radius: var(--search-bar-radius);
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+.search-bar::part(root) {
+  background-color: var(--search-bar-bg) !important;
+  border: none;
+  border-radius: var(--search-bar-radius);
+}
+
+.search-bar::part(control) {
+  background-color: var(--search-bar-bg) !important;
+  color: var(--text-primary) !important;
+  height: calc(100%);
+  border-radius: var(--search-bar-radius);
+}
+
+.search-bar:hover {
+  background-color: var(--search-bar-hover-bg) !important;
+}
+
+.search-bar:hover::part(root) {
+  background-color: var(--search-bar-hover-bg) !important;
+}
+
+.search-bar:hover::part(control) {
+  background-color: var(--search-bar-hover-bg) !important;
+}
+

@@ -76,9 +76,9 @@ if %errorlevel% neq 0 (
     goto :error
 )
 
-echo [INFO] Waiting for Vite server to start (10 seconds)...
+echo [INFO] Waiting for Vite server to start (5 seconds)...
 echo [TIP] If Vite server does not start, check the "Vite Dev Server" window
-timeout /t 10 /nobreak >nul
+timeout /t 5 /nobreak >nul
 
 echo [INFO] Starting Electron...
 call npm run electron:dev

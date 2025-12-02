@@ -1,0 +1,371 @@
+/* 工作区控件全局样式系统 */
+
+/* ========================================
+   工作区控件专用颜色变量
+   ======================================== */
+
+:root {
+    --workspace-button-fill: rgb(55, 55, 55);
+    --workspace-button-stroke: rgb(58, 58, 58);
+    --workspace-select-bg: rgb(43, 43, 43);
+    --workspace-select-option-hover: rgb(56, 56, 56);
+}
+
+:root[data-theme="light"] {
+    --workspace-button-fill: rgb(254, 254, 254);
+    --workspace-button-stroke: rgb(236, 236, 236);
+    --workspace-select-bg: rgb(249, 249, 249);
+    --workspace-select-option-hover: rgb(240, 240, 240);
+}
+
+/* ========================================
+   工作区容器样式
+   ======================================== */
+
+.workspace {
+    flex: 1;
+    overflow: auto;
+    background-color: var(--bg-primary);
+    transition: background-color 0.3s;
+}
+
+.workspace-content {
+    padding: 20px;
+}
+
+.workspace-content h2 {
+    margin-bottom: 10px;
+    color: var(--text-primary);
+    transition: color 0.3s;
+}
+
+.workspace-content p {
+    color: var(--text-secondary);
+    transition: color 0.3s;
+}
+
+.workspace-panel {
+    display: none;
+}
+
+.workspace-panel.active {
+    display: block;
+}
+
+/* ========================================
+   工作区 Fluent UI 组件样式
+   ======================================== */
+
+/* Button 样式 */
+.workspace fluent-button {
+    --neutral-foreground-rest: var(--text-primary);
+    --accent-foreground-rest: var(--text-primary);
+    --neutral-fill-rest: var(--workspace-button-fill);
+    --neutral-fill-hover: var(--workspace-button-fill);
+    --neutral-fill-active: var(--workspace-button-fill);
+    --neutral-stroke-rest: var(--workspace-button-stroke);
+}
+
+.workspace fluent-button::part(control) {
+    background-color: var(--workspace-button-fill);
+    color: var(--text-primary);
+    border-color: var(--workspace-button-stroke);
+}
+
+.workspace fluent-button:hover::part(control) {
+    background-color: var(--workspace-button-fill);
+    border-color: var(--workspace-button-stroke);
+}
+
+/* Select 样式 */
+.workspace fluent-select {
+    --neutral-fill-rest: var(--workspace-select-bg);
+    --neutral-fill-hover: var(--workspace-select-bg);
+    --neutral-foreground-rest: var(--text-primary);
+    --neutral-stroke-rest: var(--border-color);
+    --neutral-layer-1: var(--workspace-select-bg);
+    --neutral-layer-2: var(--workspace-select-bg);
+}
+
+.workspace fluent-select::part(control) {
+    background-color: var(--neutral-fill-rest);
+    color: var(--neutral-foreground-rest);
+    border-color: var(--neutral-stroke-rest);
+    padding-left: 10px;
+}
+
+.workspace fluent-select:hover::part(control) {
+    background-color: var(--neutral-fill-hover);
+}
+
+/* Select 下拉列表样式 */
+.workspace fluent-select::part(listbox) {
+    background-color: var(--workspace-select-bg);
+    border-color: var(--border-color);
+}
+
+/* Option 样式 */
+.workspace fluent-option {
+    padding-left: 10px;
+    color: var(--text-primary);
+    background-color: transparent;
+}
+
+.workspace fluent-option:hover {
+    background-color: var(--workspace-select-option-hover);
+}
+
+.workspace fluent-option[disabled] {
+    font-weight: 600;
+    color: var(--text-primary);
+    opacity: 1;
+    cursor: default;
+    padding-left: 10px;
+}
+
+/* Progress 样式 */
+.workspace fluent-progress {
+    --progress-background: var(--bg-tertiary);
+    --progress-foreground: var(--accent-color, #0078d4);
+}
+
+/* Menu 样式 */
+.workspace fluent-menu {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 150px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    z-index: 1000;
+}
+
+/* Menu Item 样式 */
+.workspace fluent-menu-item {
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.workspace fluent-menu-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.workspace fluent-menu-item i {
+    width: 16px;
+    height: 16px;
+}
+
+/* ========================================
+   工作区通用 Card 样式
+   ======================================== */
+
+/* 区域标题 */
+.workspace .section {
+    margin-top: 30px;
+    margin-bottom: 20px;
+}
+
+.workspace .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 15px;
+}
+
+/* Card 容器 */
+.workspace .card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.workspace .card:hover {
+    background-color: var(--hover-bg);
+}
+
+/* 透明 Card 容器 */
+.workspace .card-transparent {
+    border-color: rgba(0, 123, 255, 0.5);
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.workspace .card-transparent:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* Card 左侧区域 */
+.workspace .card-left {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 12px;
+}
+
+/* Card 图标 */
+.workspace .card-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    color: var(--text-primary);
+}
+
+.workspace .card-icon.small {
+    width: 24px;
+    height: 24px;
+    margin-right: 12px;
+}
+
+/* Card 内容区域 */
+.workspace .card-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Card 标题 */
+.workspace .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    word-break: break-all;
+}
+
+.workspace .card-title.compact {
+    margin-bottom: 4px;
+}
+
+/* Card 描述/元数据 */
+.workspace .card-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.workspace .card-description.compact {
+    line-height: 1.4;
+}
+
+/* Card 右侧区域 */
+.workspace .card-right {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 10px;
+    position: relative;
+}
+
+/* Card 列表容器 */
+.workspace .card-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.workspace .card-list-container.with-divider {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* ========================================
+   工作区辅助组件样式
+   ======================================== */
+
+/* 空状态 */
+.workspace .empty-state {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.workspace .empty-state.compact {
+    padding: 20px;
+    font-size: 13px;
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+}
+
+/* 标签/徽章 */
+.workspace .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    font-size: 11px;
+    vertical-align: middle;
+}
+
+.workspace .badge.warning {
+    color: #ff9800;
+}
+
+.workspace .badge .badge-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.workspace .badge .badge-text {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+/* 状态标签 */
+.workspace .status-badge {
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+/* 进度容器 */
+.workspace .progress-container {
+    margin-top: 10px;
+    width: 100%;
+    max-width: 500px;
+}
+
+.workspace .progress-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* 菜单触发器 */
+.workspace .menu-trigger {
+    padding: 4px 8px;
+    min-width: auto;
+    background-color: transparent;
+    border-color: transparent;
+}
+
+.workspace .menu-trigger::part(control) {
+    background-color: transparent;
+    border-color: transparent;
+}
+
+.workspace .menu-trigger:hover::part(control) {
+    background-color: transparent;
+}
+
+.workspace .card:hover .menu-trigger::part(control) {
+    background-color: transparent;
+}
