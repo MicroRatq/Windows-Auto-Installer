@@ -6,7 +6,7 @@
   justify-content: center;
   align-items: center;
   padding: 0 10px;
-  background-color: var(--bg-secondary);
+  background-color: var(--bg-primary);
   border-bottom: 1px solid var(--border-color);
   -webkit-app-region: drag;
   transition: background-color 0.3s, border-color 0.3s;
@@ -142,4 +142,3 @@
 .search-bar:hover::part(control) {
   background-color: var(--search-bar-hover-bg) !important;
 }
-

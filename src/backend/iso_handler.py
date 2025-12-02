@@ -629,6 +629,435 @@ class ISOHandler:
         
         return self._filter_images(images, filter_options)
     
+    def fetch_download_url(self, source: str, config: Dict[str, str]) -> Dict[str, Any]:
+        """
+        根据配置精确获取下载URL/magnet（不返回列表，只返回第一个匹配的结果）
+        
+        Args:
+            source: 镜像源 ("microsoft" | "msdn")
+            config: 配置参数 {
+                "os": "Windows10" | "Windows11",
+                "version": "25H2" | "24H2" | ...,
+                "language": "zh-CN" | "en-US" | ...,
+                "arch": "x64" | "x86" | "ARM64"
+            }
+        
+        Returns:
+            包含URL信息的字典: {
+                "url": str,
+                "url_type": "http" | "magnet",
+                "name": str,
+                "architecture": str,
+                "language": str,
+                "source_type": str,
+                ...
+            }
+        
+        Raises:
+            ValueError: 如果找不到匹配的URL
+        """
+        if source == "microsoft":
+            return self._fetch_microsoft_url(config)
+        elif source == "msdn":
+            return self._fetch_msdn_url(config)
+        else:
+            raise ValueError(f"不支持的镜像源: {source}")
+    
+    def _fetch_microsoft_url(self, config: Dict[str, str]) -> Dict[str, Any]:
+        """
+        从微软官网精确获取下载URL（复用_list_microsoft_images的核心逻辑）
+        """
+        os_type = config.get("os", "").lower()
+        language = config.get("language", "zh-CN")
+        version = config.get("version", "").lower()
+        arch = config.get("arch", "x64").lower()
+        
+        # 确定下载页面URL
+        if "windows11" in os_type or "win11" in os_type or "w11" in os_type:
+            download_page_url = "https://www.microsoft.com/software-download/windows11"
+            referer_url = "https://www.microsoft.com/software-download/windows11"
+        elif "windows10" in os_type or "win10" in os_type or "w10" in os_type:
+            download_page_url = "https://www.microsoft.com/software-download/windows10"
+            referer_url = "https://www.microsoft.com/software-download/windows10"
+        else:
+            raise ValueError(f"不支持的OS类型: {os_type}")
+        
+        # 从配置文件获取产品版本ID
+        product_edition_ids = self._get_product_edition_ids_from_config(os_type, version)
+        
+        # 微软API配置
+        org_id = "y6jn8c31"
+        profile_id = "606624d44113"
+        timeout = 30
+        
+        # 为每个productEditionId生成sessionId并获取SKU信息
+        session_ids = []
+        sku_data = {}
+        
+        for idx, edition_id in enumerate(product_edition_ids):
+            session_id = str(uuid.uuid4())
+            session_ids.append(session_id)
+            
+            # 步骤1: 白名单sessionId
+            tags_url = f"https://vlscppe.microsoft.com/tags?org_id={org_id}&session_id={session_id}"
+            try:
+                response = requests.get(tags_url, timeout=timeout, allow_redirects=False)
+            except Exception as e:
+                logger.error(f"Failed to whitelist sessionId: {e}")
+                continue
+            
+            # 步骤2: 获取SKU信息
+            sku_url = (
+                f"https://www.microsoft.com/software-download-connector/api/getskuinformationbyproductedition"
+                f"?profile={profile_id}"
+                f"&productEditionId={edition_id}"
+                f"&SKU=undefined"
+                f"&friendlyFileName=undefined"
+                f"&Locale={language}"
+                f"&sessionID={session_id}"
+            )
+            
+            try:
+                session = requests.Session()
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": f"{language},en-US;q=0.9",
+                    "Referer": referer_url,
+                    "Origin": "https://www.microsoft.com"
+                }
+                response = session.get(sku_url, headers=headers, timeout=timeout)
+                response.raise_for_status()
+                
+                try:
+                    sku_info = response.json()
+                except ValueError:
+                    content_type = response.headers.get('Content-Type', '').lower()
+                    if 'html' in content_type:
+                        raise Exception(f"API返回HTML格式: {content_type}")
+                    try:
+                        sku_info = response.json()
+                    except ValueError as e:
+                        raise Exception(f"Failed to parse JSON response: {e}")
+                
+                if sku_info.get("Errors"):
+                    error_msg = sku_info["Errors"][0].get("Value", "Unknown error")
+                    raise Exception(f"Failed to get SKU information: {error_msg}")
+                
+                # 解析SKU信息
+                for sku in sku_info.get("Skus", []):
+                    lang = sku.get("Language", "")
+                    sku_id = sku.get("Id", "")
+                    if not sku_id:
+                        continue
+                    if lang not in sku_data:
+                        sku_data[lang] = {
+                            "DisplayName": sku.get("LocalizedLanguage", lang),
+                            "Data": []
+                        }
+                    sku_data[lang]["Data"].append({
+                        "SessionIndex": idx,
+                        "SkuId": sku_id
+                    })
+            
+            except Exception as e:
+                logger.error(f"Failed to get SKU info (edition_id={edition_id}): {e}")
+                continue
+        
+        if not sku_data:
+            raise ValueError("Failed to get SKU information, please check network connection or try again later")
+        
+        # 语言代码映射
+        api_name_to_code = {
+            "chinese (simplified)": "zh-CN",
+            "chinese (traditional)": "zh-TW",
+            "english": "en-US",
+            "english international": "en-US",
+        }
+        
+        code_to_api_name = {}
+        for api_name, code in api_name_to_code.items():
+            if code not in code_to_api_name:
+                code_to_api_name[code] = []
+            code_to_api_name[code].append(api_name)
+        
+        # 匹配语言
+        target_language = None
+        language_lower = language.lower()
+        
+        for lang in sku_data.keys():
+            if lang.lower() == language_lower:
+                target_language = lang
+                break
+        
+        if not target_language:
+            if language_lower in code_to_api_name:
+                for api_name in code_to_api_name[language_lower]:
+                    for lang in sku_data.keys():
+                        if lang.lower() == api_name.lower():
+                            target_language = lang
+                            break
+                    if target_language:
+                        break
+        
+        if not target_language:
+            target_language = list(sku_data.keys())[0]
+            logger.info(f"Language {language} not available, using {target_language}")
+        
+        language_info = sku_data[target_language]
+        
+        # 架构映射
+        arch_map = {"x86": 0, "x64": 1, "arm64": 2}
+        target_arch_type = arch_map.get(arch, 1)
+        
+        # 获取下载链接（只返回匹配架构的第一个）
+        for entry in language_info["Data"]:
+            session_idx = entry["SessionIndex"]
+            sku_id = entry["SkuId"]
+            session_id = session_ids[session_idx]
+            
+            download_url = (
+                f"https://www.microsoft.com/software-download-connector/api/GetProductDownloadLinksBySku"
+                f"?profile={profile_id}"
+                f"&productEditionId=undefined"
+                f"&SKU={sku_id}"
+                f"&friendlyFileName=undefined"
+                f"&Locale={language}"
+                f"&sessionID={session_id}"
+            )
+            
+            try:
+                session = requests.Session()
+                headers = {
+                    "Referer": referer_url,
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": f"{language},en-US;q=0.9",
+                    "Origin": "https://www.microsoft.com"
+                }
+                response = session.get(download_url, headers=headers, timeout=timeout)
+                response.raise_for_status()
+                download_info = response.json()
+                
+                if download_info.get("Errors"):
+                    error = download_info["Errors"][0]
+                    if error.get("Type") == 9:
+                        raise Exception("Your IP address has been banned by Microsoft or is in a sanctioned region.")
+                    else:
+                        error_msg = error.get("Value", "Unknown error")
+                        raise Exception(f"Failed to get download link: {error_msg}")
+                
+                # 查找匹配架构的下载选项
+                for option in download_info.get("ProductDownloadOptions", []):
+                    download_type = option.get("DownloadType", 1)
+                    download_url_uri = option.get("Uri", "")
+                    
+                    if not download_url_uri:
+                        continue
+                    
+                    # 只返回匹配架构的URL
+                    if download_type == target_arch_type:
+                        arch_map_reverse = {0: "x86", 1: "x64", 2: "ARM64"}
+                        arch_name = arch_map_reverse.get(download_type, "x64")
+                        url_path = download_url_uri.split('?')[0]
+                        filename = os.path.basename(url_path) or f"Windows_ISO_{arch_name}.iso"
+                        
+                        return {
+                            "url": download_url_uri,
+                            "url_type": "http",
+                            "name": filename,
+                            "architecture": arch_name,
+                            "language": target_language,
+                            "source_type": "me",
+                            "source": "microsoft",
+                            "version": version.upper() if version else ""
+                        }
+            
+            except Exception as e:
+                logger.error(f"Failed to get download link (sku_id={sku_id}): {e}")
+                continue
+        
+        raise ValueError(
+            f"Failed to get download URL from Microsoft. "
+            f"Possible reasons: 1) Network connection issue 2) Specified language/version/arch not available 3) IP restricted"
+        )
+    
+    def _fetch_msdn_url(self, config: Dict[str, str]) -> Dict[str, Any]:
+        """
+        从MSDN镜像站精确获取magnet链接（复用_list_msdn_images的核心逻辑）
+        """
+        os_type = config.get("os", "").lower()
+        version = config.get("version", "").lower()
+        language = config.get("language", "zh-cn")
+        arch = config.get("arch", "x64").lower()
+        
+        # 构建要尝试的URL列表
+        urls_to_try = []
+        
+        if "windows10" in os_type or "win10" in os_type or "w10" in os_type:
+            urls_to_try = [
+                "https://msdn.sjjzm.com/win10.html",
+                "https://msdn.sjjzm.com/windows10.html",
+            ]
+            version_pages = ["22h2", "21h2", "21h1", "20h2", "2004", "1909", "1903"]
+            for v in version_pages:
+                urls_to_try.append(f"https://msdn.sjjzm.com/win10/{v}.html")
+        elif "windows11" in os_type or "win11" in os_type or "w11" in os_type:
+            urls_to_try = [
+                "https://msdn.sjjzm.com/win11.html",
+                "https://msdn.sjjzm.com/windows11.html",
+            ]
+            version_pages = ["25h2", "24h2", "23h2", "22h2", "21h2"]
+            for v in version_pages:
+                urls_to_try.append(f"https://msdn.sjjzm.com/win11/{v}.html")
+        else:
+            raise ValueError(f"不支持的OS类型: {os_type}")
+        
+        # 访问页面并解析magnet链接
+        for url in urls_to_try:
+            try:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, 'lxml')
+                    
+                    # 查找所有magnet链接
+                    for link in soup.find_all('a', href=True):
+                        href = link.get('href', '').strip()
+                        if href.startswith('magnet:'):
+                            filename = link.get_text(strip=True) or self._parse_magnet_filename(href)
+                            try:
+                                image_info = self._parse_iso_filename(filename)
+                                # 检查是否匹配配置
+                                if self._matches_config(image_info, config):
+                                    return {
+                                        "url": href,
+                                        "url_type": "magnet",
+                                        "name": filename,
+                                        "architecture": image_info.get("arch", "x64"),
+                                        "language": image_info.get("language", ""),
+                                        "source_type": "ce",
+                                        "source": "msdn",
+                                        "version": image_info.get("version", ""),
+                                        "build": image_info.get("build", ""),
+                                        "checksum": self._parse_magnet_hash(href),
+                                        "size": self._parse_magnet_size(href)
+                                    }
+                            except ValueError:
+                                continue
+                    
+                    # 从表格中提取镜像信息
+                    import re
+                    for table in soup.find_all('table'):
+                        current_image = {}
+                        for row in table.find_all('tr'):
+                            cells = row.find_all(['td', 'th'])
+                            if len(cells) >= 2:
+                                key = cells[0].get_text(strip=True)
+                                value = cells[1].get_text(strip=True)
+                                
+                                if '文件名' in key or 'file' in key.lower():
+                                    current_image['name'] = value
+                                    try:
+                                        image_info = self._parse_iso_filename(value)
+                                        current_image.update(image_info)
+                                    except ValueError:
+                                        current_image = {}
+                                        continue
+                                
+                                elif '大小' in key or 'size' in key.lower():
+                                    size_str = value.replace('GB', '').replace('MB', '').strip()
+                                    try:
+                                        size_val = float(size_str)
+                                        if 'GB' in value:
+                                            current_image['size'] = int(size_val * 1024 * 1024 * 1024)
+                                        elif 'MB' in value:
+                                            current_image['size'] = int(size_val * 1024 * 1024)
+                                    except:
+                                        pass
+                                
+                                elif 'sha-256' in key.lower() or 'sha256' in key.lower():
+                                    current_image['checksum'] = value
+                            
+                            # 查找magnet链接
+                            for cell in cells:
+                                for link in cell.find_all('a', href=True):
+                                    href = link.get('href', '').strip()
+                                    if href.startswith('magnet:'):
+                                        if current_image.get('name'):
+                                            if self._matches_config(current_image, config):
+                                                return {
+                                                    "url": href,
+                                                    "url_type": "magnet",
+                                                    "name": current_image.get('name', ''),
+                                                    "architecture": current_image.get('arch', 'x64'),
+                                                    "language": current_image.get('language', ''),
+                                                    "source_type": "ce",
+                                                    "source": "msdn",
+                                                    "version": current_image.get('version', ''),
+                                                    "build": current_image.get('build', ''),
+                                                    "checksum": current_image.get('checksum', self._parse_magnet_hash(href)),
+                                                    "size": current_image.get('size', self._parse_magnet_size(href))
+                                                }
+                                
+                                cell_text = cell.get_text()
+                                magnet_match = re.search(r'magnet:[^\s\)]+', cell_text)
+                                if magnet_match:
+                                    magnet_url = magnet_match.group()
+                                    if current_image.get('name') and self._matches_config(current_image, config):
+                                        return {
+                                            "url": magnet_url,
+                                            "url_type": "magnet",
+                                            "name": current_image.get('name', ''),
+                                            "architecture": current_image.get('arch', 'x64'),
+                                            "language": current_image.get('language', ''),
+                                            "source_type": "ce",
+                                            "source": "msdn",
+                                            "version": current_image.get('version', ''),
+                                            "build": current_image.get('build', ''),
+                                            "checksum": current_image.get('checksum', self._parse_magnet_hash(magnet_url)),
+                                            "size": current_image.get('size', self._parse_magnet_size(magnet_url))
+                                        }
+                                    current_image = {}
+            except Exception as e:
+                logger.error(f"Failed to parse MSDN page {url}: {e}")
+                continue
+        
+        raise ValueError(f"无法从MSDN镜像站获取匹配的镜像链接")
+    
+    def _matches_config(self, image_info: Dict[str, Any], config: Dict[str, str]) -> bool:
+        """
+        检查镜像信息是否匹配配置
+        
+        Args:
+            image_info: 镜像信息字典
+            config: 配置参数
+        
+        Returns:
+            是否匹配
+        """
+        # 检查架构
+        arch = config.get("arch", "x64").lower()
+        image_arch = image_info.get("arch", "").lower()
+        if arch and image_arch and arch != image_arch:
+            return False
+        
+        # 检查语言
+        language = config.get("language", "").lower()
+        image_lang = image_info.get("language", "").lower()
+        if language and image_lang:
+            # 支持部分匹配（如zh-cn匹配zh-CN）
+            if language.replace("-", "") not in image_lang.replace("-", "") and image_lang.replace("-", "") not in language.replace("-", ""):
+                return False
+        
+        # 检查版本（如果配置中指定了版本）
+        version = config.get("version", "").lower()
+        if version:
+            image_version = image_info.get("version", "").lower()
+            if image_version and version not in image_version and image_version not in version:
+                return False
+        
+        return True
+    
     def _list_msdn_images(self, filter_options: Optional[Dict[str, str]]) -> List[Dict[str, Any]]:
         """
         从 msdn.sjjzm.com 获取镜像列表（HTML解析，仅支持magnet/BT链接）

@@ -333,7 +333,15 @@ class IsoCacheAPI {
         return this.callBackend('iso_cancel_test', { task_id: taskId })
     }
 
+    async listVersions(osType?: string): Promise<{ [os: string]: string[] }> {
+        return this.callBackend('iso_list_versions', { os_type: osType })
+    }
+
     async listImages(source: string, filters: any = {}): Promise<any[]> {
+        // 只支持local源（用于加载本地镜像列表）
+        if (source !== 'local') {
+            throw new Error('listImages only supports "local" source. Use fetchDownloadUrlStart for remote sources.')
+        }
         // 使用异步任务接口，避免长耗时阻塞后端IPC
         const startResp = await this.callBackend('iso_list_images_start', { source, filter: filters })
         const taskId = startResp?.task_id
@@ -367,12 +375,38 @@ class IsoCacheAPI {
         }
     }
 
-    async listVersions(osType?: string): Promise<{ [os: string]: string[] }> {
-        return this.callBackend('iso_list_versions', { os_type: osType })
+    async fetchDownloadUrlStart(source: string, config: { os: string; version: string; language: string; arch: string }): Promise<{ task_id: string }> {
+        return this.callBackend('iso_fetch_download_url_start', {
+            source,
+            os: config.os,
+            version: config.version,
+            language: config.language,
+            arch: config.arch
+        })
     }
 
-    async downloadImage(url: string, urlType: string, outputPath: string): Promise<{ task_id: string; status: string }> {
-        return this.callBackend('iso_download', { url, url_type: urlType, output_path: outputPath })
+    async fetchDownloadUrlStatus(taskId: string): Promise<{ status: string; result?: any; error?: string }> {
+        return this.callBackend('iso_fetch_download_url_status', { task_id: taskId })
+    }
+
+    async downloadImage(url?: string, urlType?: string, outputPath?: string, source?: string, config?: { os: string; version: string; language: string; arch: string }): Promise<{ task_id: string; status: string }> {
+        if (source && config && outputPath) {
+            // 使用配置参数创建下载任务
+            return this.callBackend('iso_download', {
+                source,
+                config,
+                output_path: outputPath
+            })
+        } else if (url && outputPath) {
+            // 使用直接URL创建下载任务（兼容旧代码）
+            return this.callBackend('iso_download', {
+                url,
+                url_type: urlType || 'http',
+                output_path: outputPath
+            })
+        } else {
+            throw new Error('Must provide either (source+config+outputPath) or (url+outputPath)')
+        }
     }
 
     async getDownloadProgress(taskId: string): Promise<any> {
@@ -420,9 +454,14 @@ class IsoCacheAPI {
         return this.callBackend('iso_verify', { file_path: filePath, checksum })
     }
 
-    async redownloadIso(filePath: string): Promise<{ task_id: string; status: string }> {
-        return this.callBackend('iso_redownload', { file_path: filePath })
+    async verifyIsoStart(filePath: string, checksum?: string): Promise<{ task_id: string }> {
+        return this.callBackend('iso_verify_start', { file_path: filePath, checksum })
     }
+
+    async verifyIsoStatus(taskId: string): Promise<any> {
+        return this.callBackend('iso_verify_status', { task_id: taskId })
+    }
+
 
     async identifyIso(filePath: string): Promise<any> {
         // 使用异步任务接口识别ISO
@@ -675,7 +714,7 @@ class IsoCacheWorkspace {
         if (!this.container) return
 
         const card = document.createElement('div')
-        card.className = 'card'
+        card.className = 'card card-clickable'
 
         const left = document.createElement('div')
         left.className = 'card-left'
@@ -691,10 +730,12 @@ class IsoCacheWorkspace {
         right.className = 'card-right'
         right.innerHTML = `
       <input type="file" id="import-file-input" accept=".iso" style="display: none;">
-      <fluent-button id="import-select-btn" appearance="neutral">选择文件</fluent-button>
-      <div id="import-progress-container" style="display: none; margin-left: 10px; width: 200px;">
+      <div id="import-progress-container" style="display: none; margin-right: 10px; width: 200px;">
         <fluent-progress id="import-progress" value="0" max="100"></fluent-progress>
         <div id="import-status" style="font-size: 12px; margin-top: 5px; color: var(--text-secondary);"></div>
+      </div>
+      <div class="card-indicator">
+        <i data-lucide="chevron-right"></i>
       </div>
     `
 
@@ -707,44 +748,40 @@ class IsoCacheWorkspace {
             window.lucide.createIcons()
         }
 
-        // 绑定事件
-        const selectBtn = document.getElementById('import-select-btn') as any
+        // 绑定事件到card
+        card.addEventListener('click', async () => {
+            if (window.electronAPI?.showOpenDialog) {
+                try {
+                    const result = await window.electronAPI.showOpenDialog({
+                        title: '选择ISO文件',
+                        filters: [
+                            { name: 'ISO文件', extensions: ['iso'] },
+                            { name: '所有文件', extensions: ['*'] }
+                        ],
+                        properties: ['openFile']
+                    })
 
-        if (selectBtn) {
-            selectBtn.addEventListener('click', async () => {
-                if (window.electronAPI?.showOpenDialog) {
-                    try {
-                        const result = await window.electronAPI.showOpenDialog({
-                            title: '选择ISO文件',
-                            filters: [
-                                { name: 'ISO文件', extensions: ['iso'] },
-                                { name: '所有文件', extensions: ['*'] }
-                            ],
-                            properties: ['openFile']
-                        })
-
-                        if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
-                            this.importIso(result.filePaths[0])
-                        }
-                    } catch (error: any) {
-                        console.error('打开文件对话框失败:', error)
-                        this.notificationManager.showNotification('error', '打开文件对话框失败', error.message)
+                    if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+                        this.importIso(result.filePaths[0])
                     }
-                } else {
-                    // 回退到HTML文件输入
-                    const fileInput = document.getElementById('import-file-input') as HTMLInputElement
-                    if (fileInput) {
-                        fileInput.click()
-                        fileInput.addEventListener('change', (e: any) => {
-                            const file = e.target.files?.[0]
-                            if (file) {
-                                this.importIso(file.name)
-                            }
-                        }, { once: true })
-                    }
+                } catch (error: any) {
+                    console.error('打开文件对话框失败:', error)
+                    this.notificationManager.showNotification('error', '打开文件对话框失败', error.message)
                 }
-            })
-        }
+            } else {
+                // 回退到HTML文件输入
+                const fileInput = document.getElementById('import-file-input') as HTMLInputElement
+                if (fileInput) {
+                    fileInput.click()
+                    fileInput.addEventListener('change', (e: any) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                            this.importIso(file.name)
+                        }
+                    }, { once: true })
+                }
+            }
+        })
     }
 
     // 渲染镜像列表
@@ -828,6 +865,7 @@ class IsoCacheWorkspace {
         // 为每个下载任务创建Card
         for (const [taskId, task] of this.state.downloadTasks.entries()) {
             const card = this.createDownloadingCard(taskId, task)
+            card.setAttribute('data-task-id', taskId) // 添加data属性以便后续查找
             container.appendChild(card)
         }
 
@@ -847,7 +885,7 @@ class IsoCacheWorkspace {
 
         // 下载图标
         const icon = document.createElement('i')
-        icon.setAttribute('data-lucide', 'download')
+        icon.setAttribute('data-lucide', task.isFailed ? 'alert-circle' : 'download')
         icon.className = 'card-icon'
 
         // 信息区域
@@ -856,41 +894,95 @@ class IsoCacheWorkspace {
 
         const fileName = document.createElement('div')
         fileName.className = 'card-title'
-        fileName.textContent = task.image?.name || task.outputPath?.split('/').pop() || '正在下载...'
+        // 根据配置参数生成文件名，或使用outputPath
+        let displayName = '正在下载...'
+        if (task.image?.name) {
+            displayName = task.image.name
+        } else if (task.config) {
+            // 根据配置生成显示名称
+            const { os, version, language, arch } = task.config
+            displayName = `${os} ${version} ${language} ${arch}`
+        } else if (task.outputPath) {
+            displayName = task.outputPath.split('/').pop() || '正在下载...'
+        }
+        fileName.textContent = displayName
 
-        // 进度条
-        const progress = document.createElement('div')
-        progress.className = 'progress-container'
-        const progressBar = document.createElement('fluent-progress')
-        progressBar.id = `progress-${taskId}`
-        progressBar.setAttribute('value', '0')
-        progressBar.setAttribute('max', '100')
-        const progressText = document.createElement('div')
-        progressText.id = `progress-text-${taskId}`
-        progressText.className = 'progress-text'
-        progressText.textContent = '准备中...'
-        progress.appendChild(progressBar)
-        progress.appendChild(progressText)
+        // 状态显示区域
+        const statusContainer = document.createElement('div')
+        statusContainer.id = `status-${taskId}`
+
+        // 检查是否是失败状态
+        if (task.isFailed || task.status === 'failed') {
+            // 显示错误状态
+            const errorStatus = document.createElement('div')
+            errorStatus.className = 'status-error'
+            errorStatus.style.color = 'var(--error-color, #d32f2f)'
+            errorStatus.style.fontSize = '12px'
+            errorStatus.textContent = task.error || '下载失败'
+            statusContainer.appendChild(errorStatus)
+        } else {
+            // 进度条（默认隐藏，仅在downloading状态显示）
+            const progress = document.createElement('div')
+            progress.className = 'progress-container'
+            progress.id = `progress-container-${taskId}`
+            progress.style.display = 'none'
+            const progressBar = document.createElement('fluent-progress')
+            progressBar.id = `progress-${taskId}`
+            progressBar.setAttribute('value', '0')
+            progressBar.setAttribute('max', '100')
+            const progressText = document.createElement('div')
+            progressText.id = `progress-text-${taskId}`
+            progressText.className = 'progress-text'
+            progressText.textContent = '准备中...'
+            progress.appendChild(progressBar)
+            progress.appendChild(progressText)
+
+            // URL获取中状态（默认显示）
+            const fetchingStatus = document.createElement('div')
+            fetchingStatus.className = 'status-loading'
+            fetchingStatus.id = `fetching-status-${taskId}`
+            fetchingStatus.innerHTML = '<i data-lucide="loader"></i> URL获取中'
+
+            statusContainer.appendChild(fetchingStatus)
+            statusContainer.appendChild(progress)
+        }
 
         info.appendChild(fileName)
-        info.appendChild(progress)
+        info.appendChild(statusContainer)
 
         left.appendChild(icon)
         left.appendChild(info)
 
-        // 右侧取消按钮
+        // 右侧按钮
         const right = document.createElement('div')
         right.className = 'card-right'
 
-        const cancelBtn = document.createElement('fluent-button')
-        cancelBtn.setAttribute('appearance', 'neutral')
-        cancelBtn.textContent = '取消'
-        cancelBtn.addEventListener('click', () => this.cancelDownload(taskId))
-
-        right.appendChild(cancelBtn)
+        if (task.isFailed || task.status === 'failed') {
+            // 失败状态：显示删除按钮
+            const deleteBtn = document.createElement('fluent-button')
+            deleteBtn.setAttribute('appearance', 'neutral')
+            deleteBtn.textContent = '删除'
+            deleteBtn.addEventListener('click', () => {
+                this.state.downloadTasks.delete(taskId)
+                this.updateDownloadingTasks()
+            })
+            right.appendChild(deleteBtn)
+        } else {
+            // 正常状态：显示取消按钮
+            const cancelBtn = document.createElement('fluent-button')
+            cancelBtn.setAttribute('appearance', 'neutral')
+            cancelBtn.textContent = '取消'
+            cancelBtn.addEventListener('click', () => this.cancelDownload(taskId))
+            right.appendChild(cancelBtn)
+        }
 
         card.appendChild(left)
         card.appendChild(right)
+
+        // 初始化图标
+        if (window.lucide) {
+            window.lucide.createIcons()
+        }
 
         return card
     }
@@ -931,37 +1023,59 @@ class IsoCacheWorkspace {
         const meta = document.createElement('div')
         meta.className = 'card-description'
 
-        const metaItems: string[] = []
-        if (image.os_type) metaItems.push(`OS: ${image.os_type}`)
-        if (image.version) metaItems.push(`版本: ${image.version}`)
-        if (image.build) metaItems.push(`构建: ${image.build}`)
-        if (image.language) metaItems.push(`语言: ${image.language}`)
-        if (image.architecture) metaItems.push(`架构: ${image.architecture}`)
-        if (image.size) {
-            const sizeGB = (image.size / (1024 ** 3)).toFixed(2)
-            metaItems.push(`大小: ${sizeGB} GB`)
+        // 检查状态标记
+        if (image.verifying) {
+            // 校验中状态
+            const verifyingStatus = document.createElement('div')
+            verifyingStatus.className = 'status-loading'
+            verifyingStatus.innerHTML = '<i data-lucide="loader"></i> 校验中'
+            meta.appendChild(verifyingStatus)
+        } else if (image.redownloading) {
+            // 重新下载中状态
+            const redownloadStatus = document.createElement('div')
+            redownloadStatus.className = 'status-loading'
+            redownloadStatus.innerHTML = '<i data-lucide="loader"></i> 重新下载中'
+            meta.appendChild(redownloadStatus)
+        } else {
+            // 正常显示元数据
+            const metaItems: string[] = []
+            if (image.os_type) metaItems.push(`OS: ${image.os_type}`)
+            if (image.version) metaItems.push(`版本: ${image.version}`)
+            if (image.build) metaItems.push(`构建: ${image.build}`)
+            if (image.language) metaItems.push(`语言: ${image.language}`)
+            if (image.architecture) metaItems.push(`架构: ${image.architecture}`)
+            if (image.size) {
+                const sizeGB = (image.size / (1024 ** 3)).toFixed(2)
+                metaItems.push(`大小: ${sizeGB} GB`)
+            }
+            meta.textContent = metaItems.join(' | ')
         }
-
-        meta.textContent = metaItems.join(' | ')
 
         info.appendChild(fileName)
         info.appendChild(meta)
 
-        // 下载进度（如果正在下载）
-        const taskId = this.findTaskIdByPath(image.url)
-        if (taskId) {
-            const progress = document.createElement('div')
-            progress.className = 'progress-container'
-            const progressBar = document.createElement('fluent-progress')
-            progressBar.id = `progress-${taskId}`
-            progressBar.setAttribute('value', '0')
-            progressBar.setAttribute('max', '100')
-            const progressText = document.createElement('div')
-            progressText.id = `progress-text-${taskId}`
-            progressText.className = 'progress-text'
-            progress.appendChild(progressBar)
-            progress.appendChild(progressText)
-            info.appendChild(progress)
+        // 下载进度（如果正在下载且不是重新下载）
+        // 重新下载时，进度条只在下载任务区域显示，不在镜像列表card中显示
+        if (!image.redownloading) {
+            const taskId = this.findTaskIdByPath(image.url)
+            if (taskId) {
+                const task = this.state.downloadTasks.get(taskId)
+                // 只有非重新下载任务才在镜像列表card中显示进度条
+                if (task && !task.isRedownload) {
+                    const progress = document.createElement('div')
+                    progress.className = 'progress-container'
+                    const progressBar = document.createElement('fluent-progress')
+                    progressBar.id = `progress-${taskId}`
+                    progressBar.setAttribute('value', '0')
+                    progressBar.setAttribute('max', '100')
+                    const progressText = document.createElement('div')
+                    progressText.id = `progress-text-${taskId}`
+                    progressText.className = 'progress-text'
+                    progress.appendChild(progressBar)
+                    progress.appendChild(progressText)
+                    info.appendChild(progress)
+                }
+            }
         }
 
         left.appendChild(icon)
@@ -973,29 +1087,41 @@ class IsoCacheWorkspace {
 
         const menuButton = document.createElement('fluent-button')
         menuButton.setAttribute('appearance', 'stealth')
-        menuButton.innerHTML = '<i data-lucide="more-vertical"></i>'
+        menuButton.innerHTML = '<i data-lucide="more-horizontal"></i>'
         menuButton.className = 'menu-trigger'
 
         const menu = document.createElement('fluent-menu')
         menu.style.display = 'none'
 
         const deleteItem = document.createElement('fluent-menu-item')
-        deleteItem.innerHTML = '<i data-lucide="trash-2"></i> 删除'
-        deleteItem.addEventListener('click', () => this.handleDelete(image))
+        deleteItem.textContent = '删除'
+        deleteItem.addEventListener('click', () => {
+            menu.style.display = 'none'
+            this.handleDelete(image)
+        })
 
         const verifyItem = document.createElement('fluent-menu-item')
-        verifyItem.innerHTML = '<i data-lucide="check-circle"></i> 校验'
-        verifyItem.addEventListener('click', () => this.handleVerify(image))
+        verifyItem.textContent = '校验'
+        verifyItem.addEventListener('click', () => {
+            menu.style.display = 'none'
+            this.handleVerify(image)
+        })
 
         const redownloadItem = document.createElement('fluent-menu-item')
-        redownloadItem.innerHTML = '<i data-lucide="download"></i> 重新下载'
-        redownloadItem.addEventListener('click', () => this.handleRedownload(image))
+        redownloadItem.textContent = '重新下载'
+        redownloadItem.addEventListener('click', () => {
+            menu.style.display = 'none'
+            this.handleRedownload(image)
+        })
 
         // 如果文件需要识别，添加自动识别菜单项（放在最前面）
         if (image.needs_identification) {
             const identifyItem = document.createElement('fluent-menu-item')
-            identifyItem.innerHTML = '<i data-lucide="search"></i> 自动识别'
-            identifyItem.addEventListener('click', () => this.handleIdentify(image))
+            identifyItem.textContent = '自动识别'
+            identifyItem.addEventListener('click', () => {
+                menu.style.display = 'none'
+                this.handleIdentify(image)
+            })
             menu.appendChild(identifyItem)
         }
 
@@ -1106,6 +1232,19 @@ class IsoCacheWorkspace {
         }
 
         try {
+            // 保存当前镜像列表中的状态标记（verifying、redownloading）
+            const stateMap = new Map<string, { verifying?: boolean; redownloading?: boolean }>()
+            for (const image of this.state.imageList) {
+                if (image.url) {
+                    const state: { verifying?: boolean; redownloading?: boolean } = {}
+                    if (image.verifying) state.verifying = true
+                    if (image.redownloading) state.redownloading = true
+                    if (state.verifying || state.redownloading) {
+                        stateMap.set(image.url, state)
+                    }
+                }
+            }
+
             console.log('[loadImageList] 开始加载本地镜像列表...')
             const images = await this.api.listImages('local', {})
             console.log('[loadImageList] 后端返回的镜像列表:', images)
@@ -1115,6 +1254,14 @@ class IsoCacheWorkspace {
                 console.warn('[loadImageList] 后端返回的不是数组:', images)
                 this.state.imageList = []
             } else {
+                // 恢复状态标记
+                for (const image of images) {
+                    if (image.url && stateMap.has(image.url)) {
+                        const savedState = stateMap.get(image.url)!
+                        if (savedState.verifying) image.verifying = true
+                        if (savedState.redownloading) image.redownloading = true
+                    }
+                }
                 this.state.imageList = images
             }
 
@@ -1354,39 +1501,54 @@ class IsoCacheWorkspace {
         }
 
         try {
-            // 获取可用镜像列表
-            const filters = {
-                os: this.state.selectedSource === 'microsoft' ? 'Windows11' : undefined,
+            // 构建配置参数
+            const os = this.state.selectedSource === 'microsoft' ? 'Windows11' : 'Windows10'
+            const config = {
+                os,
                 version: this.state.selectedVersion,
                 language: this.state.selectedLanguage,
                 arch: this.state.selectedArch
             }
 
-            const images = await this.api.listImages(this.state.selectedSource, filters)
-            if (images.length === 0) {
-                this.notificationManager.showNotification('warning', '未找到匹配的镜像')
+            // 生成输出路径（使用配置信息生成文件名）
+            const outputPath = `data/isos/download.iso`
+
+            // 立即调用后端API创建下载任务（后端会立即返回task_id，不等待URL获取）
+            let taskId: string
+            try {
+                const result = await this.api.downloadImage(undefined, undefined, outputPath, this.state.selectedSource, config)
+                taskId = result.task_id
+            } catch (error: any) {
+                // 如果后端调用失败，创建失败任务显示在下载列表中
+                const failedTaskId = `failed-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                this.state.downloadTasks.set(failedTaskId, {
+                    outputPath,
+                    progress: 0,
+                    status: 'failed',
+                    error: error.message || '下载启动失败',
+                    isFailed: true,
+                    config
+                })
+                this.updateDownloadingTasks()
+                this.notificationManager.showNotification('error', '下载失败', error.message)
                 return
             }
 
-            // 选择第一个匹配的镜像
-            const image = images[0]
-            const outputPath = `data/isos/${image.name || 'download.iso'}`
-
-            // 开始下载
-            const result = await this.api.downloadImage(image.url, image.url_type || 'http', outputPath)
-
-            // 存储下载任务
-            this.state.downloadTasks.set(result.task_id, {
-                image,
+            // 立即创建下载任务显示（使用后端返回的task_id）
+            this.state.downloadTasks.set(taskId, {
                 outputPath,
-                progress: 0
+                progress: 0,
+                status: 'fetching', // 初始状态为获取URL/magnet中
+                config
             })
 
-            // 更新下载中任务显示
+            // 立即更新下载中任务显示
             this.updateDownloadingTasks()
 
-            // 刷新镜像列表
-            await this.loadImageList()
+            // 刷新镜像列表（不阻塞）
+            this.loadImageList().catch((error) => {
+                console.error('刷新镜像列表失败:', error)
+            })
         } catch (error: any) {
             this.notificationManager.showNotification('error', '下载失败', error.message)
         }
@@ -1447,13 +1609,68 @@ class IsoCacheWorkspace {
     // 处理校验
     private async handleVerify(image: any) {
         try {
-            const result = await this.api.verifyIso(image.url, image.checksum)
-            if (result.valid) {
-                this.notificationManager.showNotification('success', '校验通过')
-            } else {
-                this.notificationManager.showNotification('error', '校验失败')
+            // 在镜像数据中添加校验中状态
+            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === image.url)
+            if (imageIndex !== -1) {
+                this.state.imageList[imageIndex].verifying = true
+                this.updateImageList()
             }
+
+            // 启动异步校验任务
+            const result = await this.api.verifyIsoStart(image.url, image.checksum)
+            const taskId = result.task_id
+
+            // 轮询校验状态
+            const verifyInterval = window.setInterval(async () => {
+                try {
+                    const status = await this.api.verifyIsoStatus(taskId)
+
+                    if (status.status === 'completed') {
+                        clearInterval(verifyInterval)
+                        const verifyResult = status.result
+
+                        // 移除校验中状态
+                        if (imageIndex !== -1) {
+                            delete this.state.imageList[imageIndex].verifying
+                            this.updateImageList()
+                        }
+
+                        if (verifyResult?.valid) {
+                            this.notificationManager.showNotification('success', '校验通过')
+                        } else {
+                            this.notificationManager.showNotification('error', '校验失败')
+                        }
+                    } else if (status.status === 'failed' || status.error) {
+                        clearInterval(verifyInterval)
+
+                        // 移除校验中状态
+                        if (imageIndex !== -1) {
+                            delete this.state.imageList[imageIndex].verifying
+                            this.updateImageList()
+                        }
+
+                        this.notificationManager.showNotification('error', '校验失败', status.error || '未知错误')
+                    }
+                } catch (error: any) {
+                    clearInterval(verifyInterval)
+
+                    // 移除校验中状态
+                    if (imageIndex !== -1) {
+                        delete this.state.imageList[imageIndex].verifying
+                        this.updateImageList()
+                    }
+
+                    this.notificationManager.showNotification('error', '校验失败', error.message)
+                }
+            }, 500) // 每500ms轮询一次
         } catch (error: any) {
+            // 移除校验中状态
+            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === image.url)
+            if (imageIndex !== -1) {
+                delete this.state.imageList[imageIndex].verifying
+                this.updateImageList()
+            }
+
             this.notificationManager.showNotification('error', '校验失败', error.message)
         }
     }
@@ -1480,20 +1697,54 @@ class IsoCacheWorkspace {
         // 移除确认对话框，直接执行重新下载
 
         try {
-            const result = await this.api.redownloadIso(image.url)
+            // 在镜像数据中添加重新下载中状态
+            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === image.url)
+            if (imageIndex !== -1) {
+                this.state.imageList[imageIndex].redownloading = true
+                this.updateImageList()
+            }
+
+            // 从镜像信息中提取配置参数
+            const osType = image.os_type || (image.source_type === 'me' ? 'Windows11' : 'Windows10')
+            const os = osType.includes('11') ? 'Windows11' : 'Windows10'
+            const config = {
+                os,
+                version: image.version || '',
+                language: image.language || 'zh-cn',
+                arch: image.architecture || 'x64'
+            }
+
+            // 确定下载源
+            const source = image.source_type === 'me' ? 'microsoft' : 'msdn'
+
+            // 使用配置参数创建下载任务
+            const result = await this.api.downloadImage(undefined, undefined, image.url, source, config)
 
             // 存储下载任务
             this.state.downloadTasks.set(result.task_id, {
-                image,
                 outputPath: image.url,
-                progress: 0
+                progress: 0,
+                status: 'fetching',
+                isRedownload: true, // 标记为重新下载任务
+                config,
+                image // 保留image信息用于后续处理
             })
 
-            // 刷新镜像列表
-            await this.loadImageList()
+            // 更新下载任务显示
+            this.updateDownloadingTasks()
+
+            // 开始轮询进度（startProgressPolling会自动轮询所有下载任务）
+            this.startProgressPolling()
 
             this.notificationManager.showNotification('success', '重新下载已开始')
         } catch (error: any) {
+            // 移除重新下载中状态
+            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === image.url)
+            if (imageIndex !== -1) {
+                delete this.state.imageList[imageIndex].redownloading
+                this.updateImageList()
+            }
+
             this.notificationManager.showNotification('error', '重新下载失败', error.message)
         }
     }
@@ -1503,8 +1754,19 @@ class IsoCacheWorkspace {
         // 移除确认对话框，直接执行取消
 
         try {
+            const task = this.state.downloadTasks.get(taskId)
+
             const result = await this.api.cancelDownload(taskId)
             if (result.success) {
+                // 如果是重新下载任务，移除镜像数据中的redownloading状态标记
+                if (task?.isRedownload && task?.image) {
+                    const imageIndex = this.state.imageList.findIndex((img: any) => img.url === task.image.url)
+                    if (imageIndex !== -1) {
+                        delete this.state.imageList[imageIndex].redownloading
+                        this.updateImageList()
+                    }
+                }
+
                 // 后端会很快把状态标记为 cancelled，这里先从前端列表中移除
                 this.state.downloadTasks.delete(taskId)
                 this.updateDownloadingTasks()
@@ -1534,12 +1796,41 @@ class IsoCacheWorkspace {
         }
 
         this.progressInterval = window.setInterval(async () => {
-            for (const [taskId] of this.state.downloadTasks.entries()) {
+            for (const [taskId, task] of this.state.downloadTasks.entries()) {
+                // 跳过失败任务（已显示错误状态）
+                if (task.isFailed) {
+                    continue
+                }
+
                 try {
                     const progress = await this.api.getDownloadProgress(taskId)
 
+                    // 处理fetching状态（获取URL/magnet中）
+                    if (progress.status === 'fetching') {
+                        const fetchingStatus = document.getElementById(`fetching-status-${taskId}`)
+                        const progressContainer = document.getElementById(`progress-container-${taskId}`)
+
+                        if (fetchingStatus) {
+                            fetchingStatus.style.display = 'flex'
+                        }
+                        if (progressContainer) {
+                            progressContainer.style.display = 'none'
+                        }
+                        continue
+                    }
+
                     // 更新下载中任务的进度显示
-                    if (progress.status === 'downloading' || progress.status === 'starting') {
+                    if (progress.status === 'downloading') {
+                        // 隐藏URL获取状态，显示进度条
+                        const fetchingStatus = document.getElementById(`fetching-status-${taskId}`)
+                        const progressContainer = document.getElementById(`progress-container-${taskId}`)
+
+                        if (fetchingStatus) {
+                            fetchingStatus.style.display = 'none'
+                        }
+                        if (progressContainer) {
+                            progressContainer.style.display = 'block'
+                        }
                         const percent = (progress.progress || 0) * 100
                         const downloaded = progress.downloaded || 0
                         const total = progress.total || 0
@@ -1588,14 +1879,57 @@ class IsoCacheWorkspace {
                         }
                     } else if (progress.status === 'completed') {
                         // 下载完成，移除任务并刷新列表
+                        const task = this.state.downloadTasks.get(taskId)
+
+                        // 如果是重新下载任务，移除镜像数据中的redownloading标记
+                        if (task?.isRedownload && task?.image) {
+                            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === task.image.url)
+                            if (imageIndex !== -1) {
+                                delete this.state.imageList[imageIndex].redownloading
+                                this.updateImageList()
+                            }
+                        }
+
                         this.state.downloadTasks.delete(taskId)
                         this.updateDownloadingTasks()
                         // 延迟刷新，确保文件已重命名
                         setTimeout(async () => {
                             await this.loadImageList()
                         }, 1000)
-                    } else if (progress.status === 'failed' || progress.status === 'cancelled' || progress.error) {
-                        // 下载失败或被取消，移除任务
+                    } else if (progress.status === 'failed' || progress.error) {
+                        // 下载失败，更新任务状态为失败（不删除，显示在列表中）
+                        const task = this.state.downloadTasks.get(taskId)
+                        if (task) {
+                            task.status = 'failed'
+                            task.error = progress.error || '下载失败'
+                            task.isFailed = true
+                            this.state.downloadTasks.set(taskId, task)
+                        }
+
+                        // 如果是重新下载任务，移除镜像数据中的redownloading标记
+                        if (task?.isRedownload && task?.image) {
+                            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === task.image.url)
+                            if (imageIndex !== -1) {
+                                delete this.state.imageList[imageIndex].redownloading
+                                this.updateImageList()
+                            }
+                        }
+
+                        this.updateDownloadingTasks()
+                        await this.loadImageList()
+                    } else if (progress.status === 'cancelled') {
+                        // 下载被取消，移除任务
+                        const task = this.state.downloadTasks.get(taskId)
+
+                        // 如果是重新下载任务，移除镜像数据中的redownloading标记
+                        if (task?.isRedownload && task?.image) {
+                            const imageIndex = this.state.imageList.findIndex((img: any) => img.url === task.image.url)
+                            if (imageIndex !== -1) {
+                                delete this.state.imageList[imageIndex].redownloading
+                                this.updateImageList()
+                            }
+                        }
+
                         this.state.downloadTasks.delete(taskId)
                         this.updateDownloadingTasks()
                         await this.loadImageList()

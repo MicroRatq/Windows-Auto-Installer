@@ -199,10 +199,11 @@ class BackendServer:
             self.project_root = project_root
             
             self.register_handler("iso_list_sources", self._handle_iso_list_sources)
-            self.register_handler("iso_list_images", self._handle_iso_list_images)
+            self.register_handler("iso_list_versions", self._handle_iso_list_versions)
             self.register_handler("iso_list_images_start", self._handle_iso_list_images_start)
             self.register_handler("iso_list_images_status", self._handle_iso_list_images_status)
-            self.register_handler("iso_list_versions", self._handle_iso_list_versions)
+            self.register_handler("iso_fetch_download_url_start", self._handle_iso_fetch_download_url_start)
+            self.register_handler("iso_fetch_download_url_status", self._handle_iso_fetch_download_url_status)
             self.register_handler("iso_test_mirror", self._handle_iso_test_mirror)
             self.register_handler("iso_test_mirror_start", self._handle_iso_test_mirror_start)
             self.register_handler("iso_test_mirror_status", self._handle_iso_test_mirror_status)
@@ -213,6 +214,8 @@ class BackendServer:
             self.register_handler("iso_download_progress", self._handle_iso_download_progress)
             self.register_handler("iso_cancel_download", self._handle_iso_cancel_download)
             self.register_handler("iso_verify", self._handle_iso_verify)
+            self.register_handler("iso_verify_start", self._handle_iso_verify_start)
+            self.register_handler("iso_verify_status", self._handle_iso_verify_status)
             self.register_handler("iso_delete", self._handle_iso_delete)
             self.register_handler("iso_import", self._handle_iso_import)
             self.register_handler("iso_import_start", self._handle_iso_import_start)
@@ -261,16 +264,20 @@ class BackendServer:
         """获取镜像源列表"""
         return self.iso_handler.list_sources()
     
-    def _handle_iso_list_images(self, params: Dict[str, Any]) -> list:
-        """获取镜像列表"""
-        source = params.get("source", "local")
-        filter_options = params.get("filter", {})
-        return self.iso_handler.list_images(source, filter_options)
-
+    def _handle_iso_list_versions(self, params: Dict[str, Any]) -> Dict[str, List[str]]:
+        """获取可用版本列表（从配置文件读取）"""
+        os_type = params.get("os_type")
+        return self.iso_handler.list_available_versions(os_type)
+    
     def _handle_iso_list_images_start(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """异步获取镜像列表：启动任务"""
+        """异步获取镜像列表：启动任务（仅支持local源）"""
         source = params.get("source", "local")
         filter_options = params.get("filter", {})
+        
+        # 只支持local源
+        if source != "local":
+            raise ValueError("iso_list_images_start only supports 'local' source. Use iso_fetch_download_url_start for remote sources.")
+        
         task_id = self.task_manager.create_task(
             "iso_list_images",
             self.iso_handler.list_images,
@@ -286,10 +293,33 @@ class BackendServer:
             raise ValueError("Missing task_id parameter")
         return self.task_manager.get_task_status(task_id)
     
-    def _handle_iso_list_versions(self, params: Dict[str, Any]) -> Dict[str, List[str]]:
-        """获取可用版本列表（从配置文件读取）"""
-        os_type = params.get("os_type")
-        return self.iso_handler.list_available_versions(os_type)
+    def _handle_iso_fetch_download_url_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+        """异步获取下载URL：启动任务"""
+        source = params.get("source")
+        config = {
+            "os": params.get("os"),
+            "version": params.get("version"),
+            "language": params.get("language"),
+            "arch": params.get("arch")
+        }
+        
+        if not source:
+            raise ValueError("Missing source parameter")
+        
+        task_id = self.task_manager.create_task(
+            "iso_fetch_download_url",
+            self.iso_handler.fetch_download_url,
+            source,
+            config,
+        )
+        return {"task_id": task_id}
+    
+    def _handle_iso_fetch_download_url_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """异步获取下载URL：查询任务状态"""
+        task_id = params.get("task_id")
+        if not task_id:
+            raise ValueError("Missing task_id parameter")
+        return self.task_manager.get_task_status(task_id)
     
     def _handle_iso_test_mirror(self, params: Dict[str, Any]) -> Dict[str, float]:
         """测试镜像站网络（同步版本，保持向后兼容）"""
@@ -339,39 +369,139 @@ class BackendServer:
         return {"success": success}
     
     def _handle_iso_download(self, params: Dict[str, Any]) -> Dict[str, str]:
-        """下载镜像"""
+        """下载镜像 - 支持配置参数或直接URL"""
+        # 检查是配置参数还是直接URL
+        source = params.get("source")
+        config = params.get("config")
         url = params.get("url")
         url_type = params.get("url_type", "http")
         output_path = params.get("output_path")
         
-        if not url or not output_path:
-            raise ValueError("Missing url or output_path parameter")
+        if not output_path:
+            raise ValueError("Missing output_path parameter")
         
         # 标准化输出路径（相对路径默认以项目根目录为基准）
         if not os.path.isabs(output_path):
             base_dir = getattr(self, "project_root", Path(__file__).parent.parent)
             output_path = os.path.abspath(os.path.join(str(base_dir), output_path))
         
-        # 根据 URL 判断来源类型（用于后续文件重命名）
-        source_type = "ce"  # 默认 Consumer Editions
-        if "microsoft.com" in url or "dl.delivery.mp.microsoft.com" in url:
-            source_type = "me"  # Multi Editions
+        # 如果提供了配置参数，先创建URL获取任务
+        if source and config:
+            # 创建URL获取任务
+            url_task_id = self.task_manager.create_task(
+                "iso_fetch_download_url",
+                self.iso_handler.fetch_download_url,
+                source,
+                config,
+            )
+            
+            # 创建下载任务，初始状态为fetching
+            download_task_id = str(uuid.uuid4())
+            self.download_tasks[download_task_id] = {
+                "url_task_id": url_task_id,
+                "output_path": output_path,
+                "status": "fetching",
+                "source": source,
+                "config": config
+            }
+            
+            # 在后台线程中等待URL获取完成，然后开始下载
+            def start_download_after_url():
+                try:
+                    # 轮询URL获取任务状态
+                    while True:
+                        # 检查任务是否被取消
+                        task_info = self.download_tasks.get(download_task_id)
+                        if task_info and task_info.get("status") == "cancelled":
+                            # 用户取消了，停止URL获取，不启动curl
+                            logger.info(f"Download task {download_task_id} was cancelled during URL fetching")
+                            break
+                        
+                        url_status = self.task_manager.get_task_status(url_task_id)
+                        if url_status.get("status") == "completed":
+                            url_result = url_status.get("result")
+                            if url_result:
+                                # 获取到URL，开始下载
+                                actual_url = url_result.get("url")
+                                actual_url_type = url_result.get("url_type", "http")
+                                source_type = url_result.get("source_type", "ce")
+                                
+                                # 检查任务是否被取消（可能在URL获取完成后、启动curl前被取消）
+                                if task_info and task_info.get("status") == "cancelled":
+                                    # 用户取消了，不启动curl
+                                    logger.info(f"Download task {download_task_id} was cancelled before starting download")
+                                    break
+                                
+                                # 开始下载（下载器会返回自己的task_id）
+                                if actual_url_type == "magnet":
+                                    actual_task_id = self.downloader.download_bt(actual_url, output_path)
+                                else:
+                                    actual_task_id = self.downloader.download_with_curl(actual_url, output_path)
+                                
+                                # 立即保存downloader_task_id，防止竞态条件
+                                self.download_tasks[download_task_id]["downloader_task_id"] = actual_task_id
+                                
+                                # 将下载器返回的task_id信息合并到download_tasks中
+                                if actual_task_id in self.downloader.download_tasks:
+                                    downloader_task = self.downloader.download_tasks[actual_task_id]
+                                    self.download_tasks[download_task_id].update({
+                                        "url": actual_url,
+                                        "url_type": actual_url_type,
+                                        "source_type": source_type,
+                                        "status": downloader_task.get("status", "downloading"),
+                                        "progress": downloader_task.get("progress", 0),
+                                        "downloaded": downloader_task.get("downloaded", 0),
+                                        "total": downloader_task.get("total", 0),
+                                        "speed": downloader_task.get("speed", 0)
+                                    })
+                            break
+                        elif url_status.get("status") == "failed":
+                            # URL获取失败
+                            error = url_status.get("error", "Failed to fetch download URL")
+                            self.download_tasks[download_task_id].update({
+                                "status": "failed",
+                                "error": error
+                            })
+                            break
+                        time.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"Error in start_download_after_url: {e}")
+                    self.download_tasks[download_task_id].update({
+                        "status": "failed",
+                        "error": str(e)
+                    })
+            
+            # 在后台线程中执行
+            import threading
+            thread = threading.Thread(target=start_download_after_url, daemon=True)
+            thread.start()
+            
+            return {"task_id": download_task_id, "status": "fetching"}
         
-        # 使用下载器下载
-        if url_type == "ed2k":
-            task_id = self.downloader.download_ed2k(url, output_path)
+        # 如果提供了直接URL，使用原有逻辑
+        elif url:
+            # 根据 URL 判断来源类型（用于后续文件重命名）
+            source_type = "ce"  # 默认 Consumer Editions
+            if "microsoft.com" in url or "dl.delivery.mp.microsoft.com" in url:
+                source_type = "me"  # Multi Editions
+            
+            # 立即创建任务并返回task_id
+            if url_type == "magnet":
+                task_id = self.downloader.download_bt(url, output_path)
+            else:
+                task_id = self.downloader.download_with_curl(url, output_path)
+            
+            # 存储任务信息（包括来源类型，用于下载完成后重命名）
+            self.download_tasks[task_id] = {
+                "url": url,
+                "output_path": output_path,
+                "url_type": url_type,
+                "source_type": source_type
+            }
+            
+            return {"task_id": task_id, "status": "started"}
         else:
-            task_id = self.downloader.download_with_curl(url, output_path)
-        
-        # 存储任务信息（包括来源类型，用于下载完成后重命名）
-        self.download_tasks[task_id] = {
-            "url": url,
-            "output_path": output_path,
-            "url_type": url_type,
-            "source_type": source_type
-        }
-        
-        return {"task_id": task_id, "status": "started"}
+            raise ValueError("Must provide either (source+config) or url parameter")
     
     def _handle_iso_download_progress(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """查询下载进度"""
@@ -379,57 +509,169 @@ class BackendServer:
         if not task_id:
             raise ValueError("Missing task_id parameter")
         
-        progress_info = self.downloader.get_download_progress(task_id)
-        
-        # 如果下载完成，尝试重命名文件为标准格式
-        if progress_info.get("status") == "completed" and task_id in self.download_tasks:
+        # 检查是否是配置参数创建的下载任务
+        if task_id in self.download_tasks:
             task_info = self.download_tasks[task_id]
-            output_path = task_info.get("output_path")
-            source_type = task_info.get("source_type", "ce")
+            task_status = task_info.get("status", "fetching")
             
-            if output_path and os.path.exists(output_path):
-                try:
-                    # 识别ISO版本信息
-                    image_info = self.iso_handler._identify_iso_version(output_path)
-                    
-                    # 如果识别成功，生成标准文件名并重命名
-                    if image_info.get("version") and image_info.get("build_major") and image_info.get("build_minor"):
-                        new_filename = self.iso_handler._generate_iso_filename(
-                            os_type=image_info.get("os_type", ""),
-                            version=image_info.get("version", ""),
-                            build_major=image_info.get("build_major", ""),
-                            build_minor=image_info.get("build_minor", ""),
-                            language=image_info.get("language", "zh-cn"),
-                            arch=image_info.get("arch", "x64"),
-                            source_type=source_type
-                        )
+            # 如果任务已取消，直接返回取消状态
+            if task_status == "cancelled":
+                return {
+                    "status": "cancelled",
+                    "progress": 0,
+                    "downloaded": 0,
+                    "total": 0,
+                    "speed": 0,
+                    "error": task_info.get("error", "下载已取消")
+                }
+            
+            # 优先检查是否有下载器的task_id（即使状态还是fetching，如果已经有downloader_task_id，说明curl已经启动）
+            downloader_task_id = task_info.get("downloader_task_id")
+            if downloader_task_id:
+                # 有downloader_task_id，从下载器获取最新进度
+                progress_info = self.downloader.get_download_progress(downloader_task_id)
+            elif task_status == "fetching":
+                # 如果任务还在获取URL/magnet阶段，且没有downloader_task_id
+                return {
+                    "status": "fetching",
+                    "progress": 0,
+                    "downloaded": 0,
+                    "total": 0,
+                    "speed": 0
+                }
+            else:
+                # 没有downloader_task_id，且状态不是fetching，返回当前状态
+                return {
+                    "status": task_status,
+                    "progress": task_info.get("progress", 0),
+                    "downloaded": task_info.get("downloaded", 0),
+                    "total": task_info.get("total", 0),
+                    "speed": task_info.get("speed", 0),
+                    "error": task_info.get("error")
+                }
+            
+            # 如果下载完成，尝试重命名文件为标准格式
+            if progress_info and progress_info.get("status") == "completed":
+                output_path = task_info.get("output_path")
+                source_type = task_info.get("source_type", "ce")
+                
+                if output_path and os.path.exists(output_path):
+                    try:
+                        # 识别ISO版本信息
+                        image_info = self.iso_handler._identify_iso_version(output_path)
                         
-                        # 重命名文件
-                        output_dir = os.path.dirname(output_path)
-                        new_path = os.path.join(output_dir, new_filename)
-                        if new_path != output_path:
-                            os.rename(output_path, new_path)
-                            logger.info(f"File renamed to standard format: {new_filename}")
-                            # Update path in task info
-                            task_info["output_path"] = new_path
-                            progress_info["final_path"] = new_path
-                except Exception as e:
-                    logger.error(f"Failed to rename file after download: {e}")
-                    import traceback
-                    traceback.print_exc()
-        
-        return progress_info
+                        # 如果识别成功，生成标准文件名并重命名
+                        if image_info.get("version") and image_info.get("build_major") and image_info.get("build_minor"):
+                            new_filename = self.iso_handler._generate_iso_filename(
+                                os_type=image_info.get("os_type", ""),
+                                version=image_info.get("version", ""),
+                                build_major=image_info.get("build_major", ""),
+                                build_minor=image_info.get("build_minor", ""),
+                                language=image_info.get("language", "zh-cn"),
+                                arch=image_info.get("arch", "x64"),
+                                source_type=source_type
+                            )
+                            
+                            # 重命名文件
+                            output_dir = os.path.dirname(output_path)
+                            new_path = os.path.join(output_dir, new_filename)
+                            if new_path != output_path:
+                                os.rename(output_path, new_path)
+                                logger.info(f"File renamed to standard format: {new_filename}")
+                                # Update path in task info
+                                task_info["output_path"] = new_path
+                                progress_info["final_path"] = new_path
+                    except Exception as e:
+                        logger.error(f"Failed to rename file after download: {e}")
+                        import traceback
+                        traceback.print_exc()
+            
+            # 更新download_tasks中的进度信息
+            task_info.update({
+                "status": progress_info.get("status", task_info.get("status")),
+                "progress": progress_info.get("progress", task_info.get("progress", 0)),
+                "downloaded": progress_info.get("downloaded", task_info.get("downloaded", 0)),
+                "total": progress_info.get("total", task_info.get("total", 0)),
+                "speed": progress_info.get("speed", task_info.get("speed", 0)),
+                "error": progress_info.get("error", task_info.get("error"))
+            })
+            
+            return progress_info
+        else:
+            # 直接使用下载器的task_id查询（兼容旧代码）
+            progress_info = self.downloader.get_download_progress(task_id)
+            
+            # 如果下载完成，尝试重命名文件为标准格式
+            if progress_info.get("status") == "completed" and task_id in self.download_tasks:
+                task_info = self.download_tasks[task_id]
+                output_path = task_info.get("output_path")
+                source_type = task_info.get("source_type", "ce")
+                
+                if output_path and os.path.exists(output_path):
+                    try:
+                        # 识别ISO版本信息
+                        image_info = self.iso_handler._identify_iso_version(output_path)
+                        
+                        # 如果识别成功，生成标准文件名并重命名
+                        if image_info.get("version") and image_info.get("build_major") and image_info.get("build_minor"):
+                            new_filename = self.iso_handler._generate_iso_filename(
+                                os_type=image_info.get("os_type", ""),
+                                version=image_info.get("version", ""),
+                                build_major=image_info.get("build_major", ""),
+                                build_minor=image_info.get("build_minor", ""),
+                                language=image_info.get("language", "zh-cn"),
+                                arch=image_info.get("arch", "x64"),
+                                source_type=source_type
+                            )
+                            
+                            # 重命名文件
+                            output_dir = os.path.dirname(output_path)
+                            new_path = os.path.join(output_dir, new_filename)
+                            if new_path != output_path:
+                                os.rename(output_path, new_path)
+                                logger.info(f"File renamed to standard format: {new_filename}")
+                                # Update path in task info
+                                task_info["output_path"] = new_path
+                                progress_info["final_path"] = new_path
+                    except Exception as e:
+                        logger.error(f"Failed to rename file after download: {e}")
+                        import traceback
+                        traceback.print_exc()
+            
+            return progress_info
 
     def _handle_iso_cancel_download(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """取消下载任务"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
-        success = self.downloader.cancel_download(task_id)
-        return {"success": success}
+        
+        # 检查是否是配置参数创建的下载任务
+        if task_id in self.download_tasks:
+            # 重新获取task_info以确保获取最新的downloader_task_id（防止竞态条件）
+            task_info = self.download_tasks.get(task_id)
+            if not task_info:
+                return {"success": False}
+            
+            # 检查是否有下载器的task_id
+            downloader_task_id = task_info.get("downloader_task_id")
+            if downloader_task_id:
+                # curl进程已经启动，调用cancel_download终止curl进程
+                success = self.downloader.cancel_download(downloader_task_id)
+            else:
+                success = True
+            
+            # 统一设置状态为cancelled（无论curl是否已启动）
+            task_info["status"] = "cancelled"
+            task_info["error"] = "下载已取消"
+            return {"success": success}
+        else:
+            # 直接使用下载器的task_id取消（兼容旧代码）
+            success = self.downloader.cancel_download(task_id)
+            return {"success": success}
     
     def _handle_iso_verify(self, params: Dict[str, Any]) -> Dict[str, bool]:
-        """校验镜像文件"""
+        """校验镜像文件（同步版本，保留兼容性）"""
         file_path = params.get("file_path")
         expected_sha256 = params.get("checksum")
         
@@ -438,6 +680,30 @@ class BackendServer:
         
         result = self.iso_handler.verify_iso(file_path, expected_sha256)
         return {"valid": result.get("valid", False)}
+    
+    def _handle_iso_verify_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+        """异步校验ISO文件：启动任务"""
+        file_path = params.get("file_path")
+        expected_sha256 = params.get("checksum")
+        
+        if not file_path:
+            raise ValueError("Missing file_path parameter")
+        
+        task_id = self.task_manager.create_task(
+            "iso_verify",
+            self.iso_handler.verify_iso,
+            file_path,
+            expected_sha256,
+        )
+        return {"task_id": task_id}
+    
+    def _handle_iso_verify_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """异步校验ISO文件：获取任务状态"""
+        task_id = params.get("task_id")
+        if not task_id:
+            raise ValueError("Missing task_id parameter")
+        
+        return self.task_manager.get_task_status(task_id)
     
     def _handle_iso_delete(self, params: Dict[str, Any]) -> Dict[str, bool]:
         """删除本地镜像"""
@@ -548,36 +814,23 @@ class BackendServer:
             "arch": arch
         }
         
-        available_images = self.iso_handler.list_images(source, filter_options)
-        if not available_images:
-            raise ValueError("No matching images found for redownload")
-        
-        # 选择第一个匹配的镜像
-        target_image = available_images[0]
-        download_url = target_image.get("url")
-        url_type = target_image.get("url_type", "http")
-        
-        if not download_url:
-            raise ValueError("Image has no download URL")
+        # 使用新的fetch_download_url方法获取URL
+        config = {
+            "os": "Windows11" if "11" in os_type else "Windows10",
+            "version": version,
+            "language": language,
+            "arch": arch
+        }
         
         # 生成输出路径（覆盖原文件）
         output_path = file_path
         
-        # 开始下载
-        if url_type == "ed2k":
-            task_id = self.downloader.download_ed2k(download_url, output_path)
-        else:
-            task_id = self.downloader.download_with_curl(download_url, output_path)
-        
-        # 存储任务信息
-        self.download_tasks[task_id] = {
-            "url": download_url,
-            "output_path": output_path,
-            "url_type": url_type,
-            "source_type": source_type
-        }
-        
-        return {"task_id": task_id, "status": "started"}
+        # 使用配置参数创建下载任务（复用_handle_iso_download的逻辑）
+        return self._handle_iso_download({
+            "source": source,
+            "config": config,
+            "output_path": output_path
+        })
     
     def _handle_iso_identify(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """手动识别ISO文件版本信息"""

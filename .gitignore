@@ -87,6 +87,8 @@ dist-electron/
 Temp/
 temp/
 .cache/
+data/isos
+data/tmp
 
 # OS
 Thumbs.db

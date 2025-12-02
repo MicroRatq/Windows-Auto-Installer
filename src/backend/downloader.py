@@ -12,6 +12,7 @@ import uuid
 import re
 import logging
 import atexit
+import shutil
 from typing import Dict, Optional, Callable, List, Tuple
 from pathlib import Path
 import requests
@@ -35,14 +36,23 @@ class DownloadError(Exception):
 class Downloader:
     """通用下载器"""
     
-    def __init__(self, curl_path: Optional[str] = None):
+    def __init__(self, curl_path: Optional[str] = None, temp_dir: Optional[str] = None):
         """
         初始化下载器
         
         Args:
             curl_path: curl.exe的路径，如果为None则自动查找或下载
+            temp_dir: 临时文件目录，如果为None则使用./data/tmp
         """
         self.curl_path = curl_path or self._get_curl_path()
+        # 设置临时文件目录（用于存储下载分片）
+        if temp_dir:
+            self.temp_dir = Path(temp_dir)
+        else:
+            # 默认使用项目根目录下的 data/tmp
+            project_root = Path(__file__).parent.parent.parent
+            self.temp_dir = project_root / "data" / "tmp"
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.download_tasks: Dict[str, Dict] = {}
         self._lock = threading.Lock()
         # 跟踪所有curl子进程以及按任务跟踪，用于取消和退出清理
@@ -428,7 +438,7 @@ class Downloader:
         # 创建任务记录
         with self._lock:
             self.download_tasks[task_id] = {
-                "status": "starting",
+                "status": "fetching",
                 "progress": 0.0,
                 "downloaded": 0,
                 "total": 0,
@@ -440,10 +450,10 @@ class Downloader:
         # 在后台线程中执行下载
         def _download():
             try:
+                # 首先获取文件大小（URL获取阶段）
                 with self._lock:
-                    self.download_tasks[task_id]["status"] = "downloading"
+                    self.download_tasks[task_id]["status"] = "fetching"
                 
-                # 首先获取文件大小
                 head_cmd = [self.curl_path, "-I", "-L", url]
                 try:
                     head_result = subprocess.run(head_cmd, capture_output=True, text=True, timeout=10)
@@ -455,7 +465,9 @@ class Downloader:
                 except Exception:
                     total_size = 0
                 
+                # URL获取完成，切换到下载状态
                 with self._lock:
+                    self.download_tasks[task_id]["status"] = "downloading"
                     self.download_tasks[task_id]["total"] = total_size
                 
                 # 如果文件大小未知或小于10MB，使用单线程下载
@@ -616,10 +628,14 @@ class Downloader:
                 last_time = now
                 time.sleep(1)
 
+        # 生成临时分片文件路径（存储在临时目录中）
+        output_filename = os.path.basename(output_path)
+        temp_chunk_base = self.temp_dir / f"{output_filename}.{task_id}"
+        
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = []
             for i, (start, end) in enumerate(chunks):
-                chunk_file = f"{output_path}.part{i}"
+                chunk_file = str(temp_chunk_base) + f".part{i}"
                 chunk_files.append(chunk_file)
                 future = executor.submit(self._download_chunk, url, chunk_file, start, end, task_id, 3600)
                 futures.append((i, future))
@@ -649,19 +665,41 @@ class Downloader:
                 if monitor_thread:
                     monitor_thread.join(timeout=5)
         
-        # Merge chunks
+        # Merge chunks to temporary file first, then move to final location
         output_dir = os.path.dirname(output_path)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-        with open(output_path, 'wb') as outfile:
+        
+        # 先合并到临时文件
+        temp_output = str(temp_chunk_base) + ".tmp"
+        try:
+            with open(temp_output, 'wb') as outfile:
+                for chunk_file in chunk_files:
+                    with open(chunk_file, 'rb') as infile:
+                        while True:
+                            chunk = infile.read(8192)
+                            if not chunk:
+                                break
+                            outfile.write(chunk)
+                    os.unlink(chunk_file)
+            
+            # 合并完成后，移动到最终目标位置
+            if os.path.exists(temp_output):
+                shutil.move(temp_output, output_path)
+        except Exception as e:
+            # 清理临时文件
+            if os.path.exists(temp_output):
+                try:
+                    os.unlink(temp_output)
+                except:
+                    pass
             for chunk_file in chunk_files:
-                with open(chunk_file, 'rb') as infile:
-                    while True:
-                        chunk = infile.read(8192)
-                        if not chunk:
-                            break
-                        outfile.write(chunk)
-                os.unlink(chunk_file)
+                if os.path.exists(chunk_file):
+                    try:
+                        os.unlink(chunk_file)
+                    except:
+                        pass
+            raise DownloadError(f"Failed to merge chunks: {e}")
         
         with self._lock:
             self.download_tasks[task_id]["downloaded"] = total_size
@@ -698,7 +736,7 @@ class Downloader:
         
         with self._lock:
             self.download_tasks[task_id] = {
-                "status": "downloading",
+                "status": "fetching",
                 "progress": 0.0,
                 "downloaded": 0,
                 "total": 0,
@@ -709,7 +747,16 @@ class Downloader:
         
         def _download():
             try:
+                # URL获取阶段
+                with self._lock:
+                    self.download_tasks[task_id]["status"] = "fetching"
+                
                 response = requests.get(url, stream=True, timeout=30)
+                response.raise_for_status()
+                
+                # URL获取完成，切换到下载状态
+                with self._lock:
+                    self.download_tasks[task_id]["status"] = "downloading"
                 response.raise_for_status()
                 
                 total_size = int(response.headers.get('content-length', 0))
@@ -759,26 +806,6 @@ class Downloader:
                 "speed": task.get("speed", 0),
                 "error": task.get("error")
             }
-    
-    def download_ed2k(self, ed2k_link: str, output_path: str) -> str:
-        """
-        下载ed2k链接（需要第三方工具）
-        
-        Args:
-            ed2k_link: ed2k链接
-            output_path: 输出路径
-        
-        Returns:
-            任务ID
-        """
-        # ed2k下载需要专门的工具，这里先返回错误
-        task_id = str(uuid.uuid4())
-        with self._lock:
-            self.download_tasks[task_id] = {
-                "status": "failed",
-                "error": "ed2k下载需要第三方工具（如aMule、eMule），暂不支持自动下载"
-            }
-        return task_id
     
     def _get_tracker_list(self) -> list:
         """
@@ -1022,7 +1049,8 @@ class Downloader:
             trackers = self._get_tracker_list()
             
             # 解析torrent或磁力链接
-            temp_dir = os.path.join(os.path.dirname(os.path.abspath('.')), 'tmp', 'bt_test')
+            # 使用统一的临时目录
+            temp_dir = str(self.temp_dir / 'bt_test')
             os.makedirs(temp_dir, exist_ok=True)
             
             if torrent_path.startswith('magnet:'):
@@ -1211,7 +1239,7 @@ class Downloader:
         # 创建任务记录
         with self._lock:
             self.download_tasks[task_id] = {
-                "status": "starting",
+                "status": "fetching",
                 "progress": 0.0,
                 "downloaded": 0,
                 "total": 0,
@@ -1231,7 +1259,7 @@ class Downloader:
                 # 获取tracker列表
                 trackers = self._get_tracker_list()
                 
-                # 解析torrent或磁力链接
+                # 解析torrent或磁力链接（fetching阶段：获取magnet/torrent元数据）
                 if torrent_path.startswith('magnet:'):
                     params = {
                         'save_path': output_path,
@@ -1245,12 +1273,13 @@ class Downloader:
                 # 添加tracker
                 self._add_trackers_to_handle(handle, trackers)
                 
-                with self._lock:
-                    self.download_tasks[task_id]["status"] = "downloading"
-                
-                # 等待元数据
+                # 等待元数据（fetching阶段）
                 while not handle.has_metadata():
                     time.sleep(0.1)
+                
+                # 获取元数据完成，切换到下载状态
+                with self._lock:
+                    self.download_tasks[task_id]["status"] = "downloading"
                 
                 # 获取总大小
                 info = handle.get_torrent_info()

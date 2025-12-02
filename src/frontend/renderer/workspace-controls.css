@@ -6,16 +6,24 @@
 
 :root {
     --workspace-button-fill: rgb(55, 55, 55);
-    --workspace-button-stroke: rgb(58, 58, 58);
-    --workspace-select-bg: rgb(43, 43, 43);
-    --workspace-select-option-hover: rgb(56, 56, 56);
+    --workspace-button-border: rgb(63, 63, 63);
+    --workspace-button-hover: rgb(60, 60, 60);
+    --workspace-select-fill: rgb(55, 55, 55);
+    --workspace-select-border: rgb(63, 63, 63);
+    --workspace-select-hover: rgb(60, 60, 60);
+    --workspace-option-fill: rgb(45, 45, 45);
+    --workspace-option-hover: rgb(56, 56, 56);
 }
 
 :root[data-theme="light"] {
     --workspace-button-fill: rgb(254, 254, 254);
-    --workspace-button-stroke: rgb(236, 236, 236);
-    --workspace-select-bg: rgb(249, 249, 249);
-    --workspace-select-option-hover: rgb(240, 240, 240);
+    --workspace-button-border: rgb(236, 236, 236);
+    --workspace-button-hover: rgb(250, 250, 250);
+    --workspace-select-fill: rgb(254, 254, 254);
+    --workspace-select-border: rgb(236, 236, 236);
+    --workspace-select-hover: rgb(250, 250, 250);
+    --workspace-option-fill: rgb(249, 249, 249);
+    --workspace-option-hover: rgb(240, 240, 240);
 }
 
 /* ========================================
@@ -61,46 +69,50 @@
     --neutral-foreground-rest: var(--text-primary);
     --accent-foreground-rest: var(--text-primary);
     --neutral-fill-rest: var(--workspace-button-fill);
-    --neutral-fill-hover: var(--workspace-button-fill);
-    --neutral-fill-active: var(--workspace-button-fill);
-    --neutral-stroke-rest: var(--workspace-button-stroke);
+    --neutral-fill-hover: var(--workspace-button-hover);
+    --neutral-fill-active: var(--workspace-button-hover);
+    --neutral-stroke-rest: var(--workspace-button-border);
+    background: var(--workspace-button-fill);
 }
 
 .workspace fluent-button::part(control) {
-    background-color: var(--workspace-button-fill);
+    background: var(--workspace-button-fill);
     color: var(--text-primary);
-    border-color: var(--workspace-button-stroke);
+    border-color: var(--workspace-button-border);
 }
 
 .workspace fluent-button:hover::part(control) {
-    background-color: var(--workspace-button-fill);
-    border-color: var(--workspace-button-stroke);
+    background: var(--workspace-button-hover);
+    border-color: var(--workspace-button-border);
 }
 
 /* Select 样式 */
 .workspace fluent-select {
-    --neutral-fill-rest: var(--workspace-select-bg);
-    --neutral-fill-hover: var(--workspace-select-bg);
+    --neutral-fill-rest: var(--workspace-select-fill);
+    --neutral-fill-hover: var(--workspace-select-hover);
+    --neutral-fill-active: var(--workspace-select-hover);
     --neutral-foreground-rest: var(--text-primary);
-    --neutral-stroke-rest: var(--border-color);
-    --neutral-layer-1: var(--workspace-select-bg);
-    --neutral-layer-2: var(--workspace-select-bg);
+    --neutral-stroke-rest: var(--workspace-select-border);
+    --neutral-layer-1: var(--workspace-select-fill);
+    --neutral-layer-2: var(--workspace-select-fill);
+    background: var(--workspace-select-fill);
 }
 
 .workspace fluent-select::part(control) {
-    background-color: var(--neutral-fill-rest);
-    color: var(--neutral-foreground-rest);
-    border-color: var(--neutral-stroke-rest);
+    background: var(--workspace-select-fill);
+    color: var(--text-primary);
+    border-color: var(--workspace-select-border);
     padding-left: 10px;
 }
 
 .workspace fluent-select:hover::part(control) {
-    background-color: var(--neutral-fill-hover);
+    background: var(--workspace-select-hover);
+    border-color: var(--workspace-select-border);
 }
 
 /* Select 下拉列表样式 */
 .workspace fluent-select::part(listbox) {
-    background-color: var(--workspace-select-bg);
+    background-color: var(--workspace-option-fill);
     border-color: var(--border-color);
 }
 
@@ -108,11 +120,11 @@
 .workspace fluent-option {
     padding-left: 10px;
     color: var(--text-primary);
-    background-color: transparent;
+    background-color: var(--workspace-option-fill);
 }
 
 .workspace fluent-option:hover {
-    background-color: var(--workspace-select-option-hover);
+    background-color: var(--workspace-option-hover);
 }
 
 .workspace fluent-option[disabled] {
@@ -131,17 +143,31 @@
 
 /* Menu 样式 */
 .workspace fluent-menu {
-    background-color: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
+    background-color: var(--workspace-option-fill) !important;
+    border: none !important;
     border-radius: 4px;
     padding: 4px;
     min-width: 150px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
     position: absolute;
     top: 100%;
     right: 0;
     margin-top: 4px;
     z-index: 1000;
+}
+
+.workspace fluent-menu::part(listbox) {
+    background-color: var(--workspace-option-fill) !important;
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.workspace fluent-menu:hover {
+    border: none !important;
+}
+
+.workspace fluent-menu:hover::part(listbox) {
+    border: none !important;
 }
 
 /* Menu Item 样式 */
@@ -154,15 +180,15 @@
     align-items: center;
     gap: 8px;
     font-size: 14px;
+    background-color: var(--workspace-option-fill);
 }
 
 .workspace fluent-menu-item:hover {
-    background-color: var(--hover-bg);
+    background-color: var(--workspace-option-hover);
 }
 
 .workspace fluent-menu-item i {
-    width: 16px;
-    height: 16px;
+    display: none;
 }
 
 /* ========================================
@@ -195,7 +221,12 @@
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-.workspace .card:hover {
+/* 可点击的 Card（用于进入其他窗口） */
+.workspace .card-clickable {
+    cursor: pointer;
+}
+
+.workspace .card-clickable:hover {
     background-color: var(--hover-bg);
 }
 
@@ -205,7 +236,8 @@
     background-color: rgba(0, 123, 255, 0.05);
 }
 
-.workspace .card-transparent:hover {
+/* 透明 Card 只有在可点击时才悬停变色 */
+.workspace .card-transparent.card-clickable:hover {
     background-color: rgba(0, 123, 255, 0.1);
 }
 
@@ -269,6 +301,26 @@
     flex-shrink: 0;
     gap: 10px;
     position: relative;
+}
+
+/* 可点击 Card 的指示器图标 */
+.workspace .card-clickable .card-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.workspace .card-clickable .card-indicator i {
+    width: 16px;
+    height: 16px;
+}
+
+.workspace .card-clickable:hover .card-indicator {
+    color: var(--text-primary);
 }
 
 /* Card 列表容器 */
@@ -368,4 +420,29 @@
 
 .workspace .card:hover .menu-trigger::part(control) {
     background-color: transparent;
+}
+
+/* 状态加载指示器 */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.workspace .status-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.workspace .status-loading i {
+    width: 14px;
+    height: 14px;
+    animation: spin 1s linear infinite;
 }
