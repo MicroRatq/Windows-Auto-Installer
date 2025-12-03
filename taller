@@ -1,0 +1,27 @@
+[33mcommit 0185074c476874eae6a3c8707872304255e49971[m
+Author:     Xucadent <311555@stu.xjtu.edu.cn>
+AuthorDate: Wed Dec 3 00:22:46 2025 +0800
+Commit:     Xucadent <311555@stu.xjtu.edu.cn>
+CommitDate: Wed Dec 3 00:22:46 2025 +0800
+
+    refactor: optimize download task status management and progress query logic
+    
+    Main changes:
+    
+    - Remove waiting status, unified use of cancelled to represent cancellation
+    
+    - Change fetching_url to fetching, unified initial status for BT and HTTP downloads
+    
+    - BT downloads maintain fetching status during metadata acquisition, switch to downloading after completion
+    
+    - Optimize progress query logic, prioritize getting progress through downloader_task_id, reduce dependency on status
+    
+    - Fix progress feedback failure issue after curl starts
+    
+    Files changed:
+    
+    - src/backend/main.py: refactor download task status management and progress query
+    
+    - src/backend/downloader.py: unified status naming, add fetching stage for BT downloads
+    
+    - src/frontend/renderer/iso-cache.ts: update frontend status handling logic

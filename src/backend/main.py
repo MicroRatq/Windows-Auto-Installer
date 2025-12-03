@@ -535,7 +535,7 @@ class BackendServer:
                     "downloaded": 0,
                     "total": 0,
                     "speed": 0,
-                    "error": task_info.get("error", "下载已取消")
+                    "error": task_info.get("error", "Download cancelled")
                 }
             
             # 优先检查是否有下载器的task_id（即使状态还是fetching，如果已经有downloader_task_id，说明curl已经启动）
@@ -676,7 +676,7 @@ class BackendServer:
             
             # 统一设置状态为cancelled（无论curl是否已启动）
             task_info["status"] = "cancelled"
-            task_info["error"] = "下载已取消"
+            task_info["error"] = "Download cancelled"
             return {"success": success}
         else:
             # 直接使用下载器的task_id取消（兼容旧代码）

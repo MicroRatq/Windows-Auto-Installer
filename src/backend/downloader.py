@@ -382,7 +382,7 @@ class Downloader:
             {"valid": bool, "sha256": str, "size": int}
         """
         if not os.path.exists(file_path):
-            return {"valid": False, "sha256": "", "size": 0, "error": "文件不存在"}
+            return {"valid": False, "sha256": "", "size": 0, "error": "File does not exist"}
         
         file_size = os.path.getsize(file_path)
         
@@ -405,7 +405,7 @@ class Downloader:
             "valid": valid,
             "sha256": calculated_sha256,
             "size": file_size,
-            "error": None if valid else "SHA256不匹配"
+            "error": None if valid else "SHA256 mismatch"
         }
     
     def download_with_curl(
@@ -796,7 +796,7 @@ class Downloader:
         with self._lock:
             task = self.download_tasks.get(task_id)
             if not task:
-                return {"error": "任务不存在"}
+                return {"error": "Task does not exist"}
             return {
                 "status": task["status"],
                 "progress": task["progress"],
@@ -1231,7 +1231,7 @@ class Downloader:
             with self._lock:
                 self.download_tasks[task_id] = {
                     "status": "failed",
-                    "error": "libtorrent库未安装，请安装: pip install libtorrent python-libtorrent-bin"
+                    "error": "libtorrent library not installed, please install: pip install libtorrent python-libtorrent-bin"
                 }
             return task_id
         
@@ -1310,7 +1310,7 @@ class Downloader:
                     if status.state == lt.torrent_status.downloading and status.paused:
                         with self._lock:
                             self.download_tasks[task_id]["status"] = "failed"
-                            self.download_tasks[task_id]["error"] = "下载已暂停"
+                            self.download_tasks[task_id]["error"] = "Download paused"
                         break
                     
                     time.sleep(0.5)

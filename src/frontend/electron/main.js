@@ -167,7 +167,7 @@ function startPythonBackend() {
   })
 
   pythonProcess.stderr.on('data', (data) => {
-    console.error('[Python Error]', data.toString())
+    console.error('[Backend]', data.toString())
   })
 
   pythonProcess.on('exit', (code) => {

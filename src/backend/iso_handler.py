@@ -29,19 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger('ISOHandler')
 
-# # 导入 Downloader - 支持相对导入和绝对导入
-# try:
-#     # 首先尝试相对导入（作为包的一部分）
-#     from .downloader import Downloader
-# except (ImportError, ValueError):
-#     # 如果失败，尝试绝对导入（直接运行脚本时）
-#     import sys
-#     from pathlib import Path
-#     backend_dir = Path(__file__).parent
-#     if str(backend_dir) not in sys.path:
-#         sys.path.insert(0, str(backend_dir))
-#     from downloader import Downloader
-
 
 class ISOHandler:
     """ISO镜像处理器"""
@@ -76,7 +63,7 @@ class ISOHandler:
         
         if not config_path.exists():
             raise FileNotFoundError(
-                f"产品ID配置文件不存在: {config_path}\n请确保 data/product_edition_ids.json 文件存在"
+                f"Product ID config file not found: {config_path}\nPlease ensure data/product_edition_ids.json file exists"
             )
         
         try:
@@ -88,9 +75,9 @@ class ISOHandler:
                 data.pop('_source', None)
                 return data
         except json.JSONDecodeError as e:
-            raise ValueError(f"产品ID配置文件格式错误: {e}")
+            raise ValueError(f"Product ID config file format error: {e}")
         except Exception as e:
-            raise ValueError(f"加载产品ID配置文件失败: {e}")
+            raise ValueError(f"Failed to load product ID config file: {e}")
     
     def _get_product_edition_ids_from_config(
         self,
@@ -111,7 +98,7 @@ class ISOHandler:
             ValueError: 如果找不到对应的产品ID
         """
         if not self.product_edition_ids:
-            raise ValueError("产品ID配置未加载，无法获取产品版本ID")
+            raise ValueError("Product ID config not loaded, unable to get product edition IDs")
         
         # 确定操作系统键
         if "windows11" in os_type or "win11" in os_type or "w11" in os_type:
@@ -119,12 +106,12 @@ class ISOHandler:
         elif "windows10" in os_type or "win10" in os_type or "w10" in os_type:
             os_key = "Windows 10"
         else:
-            raise ValueError(f"不支持的OS类型: {os_type}")
+            raise ValueError(f"Unsupported OS type: {os_type}")
         
         # 检查操作系统是否存在
         if os_key not in self.product_edition_ids:
             raise ValueError(
-                f"配置文件中未找到 {os_key} 的配置。可用操作系统: {list(self.product_edition_ids.keys())}"
+                f"Configuration for {os_key} not found in config file. Available OS: {list(self.product_edition_ids.keys())}"
             )
         
         os_config = self.product_edition_ids[os_key]
@@ -155,7 +142,7 @@ class ISOHandler:
         if not version_key:
             available_versions = list(os_config.keys())
             raise ValueError(
-                f"配置文件中未找到 {os_key} 的版本 '{version}'。可用版本: {available_versions}"
+                f"Version '{version}' for {os_key} not found in config file. Available versions: {available_versions}"
             )
         
         version_config = os_config[version_key]
@@ -163,13 +150,13 @@ class ISOHandler:
         # 只支持 Multi Editions
         if "Multi Editions" not in version_config:
             raise ValueError(
-                f"配置文件中未找到 {os_key} {version_key} 的 Multi Editions 配置。"
+                f"Multi Editions configuration for {os_key} {version_key} not found in config file."
             )
         
         multi_editions = version_config["Multi Editions"]
         if "ids" not in multi_editions:
             raise ValueError(
-                f"配置文件中 {os_key} {version_key} 的 Multi Editions 缺少 ids 字段。"
+                f"Multi Editions for {os_key} {version_key} is missing 'ids' field in config file."
             )
         
         product_ids = multi_editions["ids"]
@@ -181,7 +168,7 @@ class ISOHandler:
             return [product_ids]
         else:
             raise ValueError(
-                f"配置文件中的产品ID格式错误: {os_key}/{version_key}/Multi Editions/ids = {product_ids}"
+                f"Product ID format error in config file: {os_key}/{version_key}/Multi Editions/ids = {product_ids}"
             )
     
     def list_sources(self) -> list[str]:
@@ -270,7 +257,7 @@ class ISOHandler:
         elif source == "local":
             return self._list_local_images(filter_options)
         else:
-            raise ValueError(f"未知的镜像源: {source}")
+            raise ValueError(f"Unknown image source: {source}")
     
     def _list_microsoft_images(self, filter_options: dict[str, str] | None) -> list[dict[str, Any]]:
         """
@@ -304,7 +291,7 @@ class ISOHandler:
         # 如果没有指定OS类型，直接抛异常
         if not os_type or ("windows10" not in os_type and "win10" not in os_type and "w10" not in os_type and 
                           "windows11" not in os_type and "win11" not in os_type and "w11" not in os_type):
-            raise ValueError("必须指定OS类型（Windows10或Windows11）才能从微软官网获取镜像列表")
+            raise ValueError("OS type (Windows10 or Windows11) must be specified to get image list from Microsoft website")
         
         try:
             # 确定下载页面URL
@@ -315,7 +302,7 @@ class ISOHandler:
                 download_page_url = "https://www.microsoft.com/software-download/windows10"
                 referer_url = "https://www.microsoft.com/software-download/windows10"
             else:
-                raise ValueError(f"不支持的OS类型: {os_type}")
+                raise ValueError(f"Unsupported OS type: {os_type}")
             
             # 从配置文件获取产品版本ID（仅支持 Multi Editions）
             product_edition_ids = self._get_product_edition_ids_from_config(os_type, version)
@@ -376,7 +363,7 @@ class ISOHandler:
                         if 'html' in content_type:
                             logger.warning(f"API returned HTML format (Content-Type: {content_type}, Status: {response.status_code})")
                             logger.debug(f"Response content first 500 chars: {response.text[:500]}")
-                            raise Exception(f"API返回HTML格式: {content_type}")
+                            raise Exception(f"API returned HTML format: {content_type}")
                         else:
                             # 尝试解析为JSON（可能是text/plain但内容是JSON）
                             logger.warning(f"Content-Type is {content_type}, attempting to parse as JSON")
@@ -658,7 +645,7 @@ class ISOHandler:
         elif source == "msdn":
             return self._fetch_msdn_url(config)
         else:
-            raise ValueError(f"不支持的镜像源: {source}")
+            raise ValueError(f"Unsupported image source: {source}")
     
     def _fetch_microsoft_url(self, config: dict[str, str]) -> dict[str, Any]:
         """
@@ -677,7 +664,7 @@ class ISOHandler:
             download_page_url = "https://www.microsoft.com/software-download/windows10"
             referer_url = "https://www.microsoft.com/software-download/windows10"
         else:
-            raise ValueError(f"不支持的OS类型: {os_type}")
+            raise ValueError(f"Unsupported OS type: {os_type}")
         
         # 从配置文件获取产品版本ID
         product_edition_ids = self._get_product_edition_ids_from_config(os_type, version)
@@ -731,7 +718,7 @@ class ISOHandler:
                 except ValueError:
                     content_type = response.headers.get('Content-Type', '').lower()
                     if 'html' in content_type:
-                        raise Exception(f"API返回HTML格式: {content_type}")
+                        raise Exception(f"API returned HTML format: {content_type}")
                     try:
                         sku_info = response.json()
                     except ValueError as e:
@@ -907,7 +894,7 @@ class ISOHandler:
             for v in version_pages:
                 urls_to_try.append(f"https://msdn.sjjzm.com/win11/{v}.html")
         else:
-            raise ValueError(f"不支持的OS类型: {os_type}")
+            raise ValueError(f"Unsupported OS type: {os_type}")
         
         # 访问页面并解析magnet链接
         for url in urls_to_try:
@@ -1018,7 +1005,7 @@ class ISOHandler:
                 logger.error(f"Failed to parse MSDN page {url}: {e}")
                 continue
         
-        raise ValueError(f"无法从MSDN镜像站获取匹配的镜像链接")
+        raise ValueError(f"Unable to get matching image link from MSDN mirror site")
     
     def _matches_config(self, image_info: dict[str, Any], config: dict[str, str]) -> bool:
         """
@@ -1066,7 +1053,7 @@ class ISOHandler:
         # 如果没有指定OS类型，直接抛异常
         if not os_type or ("windows10" not in os_type and "win10" not in os_type and "w10" not in os_type and 
                           "windows11" not in os_type and "win11" not in os_type and "w11" not in os_type):
-            raise ValueError("必须指定OS类型（Windows10或Windows11）才能从msdn镜像站获取镜像列表")
+            raise ValueError("OS type (Windows10 or Windows11) must be specified to get image list from MSDN mirror site")
         
         try:
             # 构建要尝试的URL列表
@@ -1233,7 +1220,7 @@ class ISOHandler:
             
             # 如果仍然没有找到，抛出异常
             if not images:
-                raise ValueError(f"无法从msdn镜像站获取镜像列表，请检查网络连接或网站结构是否发生变化")
+                raise ValueError(f"Unable to get image list from MSDN mirror site, please check network connection or if website structure has changed")
         
         except Exception as e:
             logger.error(f"MSDN mirror site parsing failed: {e}")
@@ -1465,10 +1452,10 @@ class ISOHandler:
         
         # 检查源文件是否存在
         if not source_path.exists():
-            raise FileNotFoundError(f"源ISO文件不存在: {iso_path}")
+            raise FileNotFoundError(f"Source ISO file does not exist: {iso_path}")
         
         if not source_path.is_file():
-            raise ValueError(f"路径不是文件: {iso_path}")
+            raise ValueError(f"Path is not a file: {iso_path}")
         
         # 识别ISO版本信息
         logger.info(f"Starting ISO file version identification: {iso_path}")
@@ -1502,7 +1489,7 @@ class ISOHandler:
         if target_path.exists() and not overwrite:
             return {
                 "success": False,
-                "message": f"目标文件已存在: {new_filename}。如需覆盖，请设置 overwrite=True",
+                "message": f"Target file already exists: {new_filename}. Set overwrite=True to overwrite",
                 "source_path": str(source_path),
                 "target_path": str(target_path),
                 "image_info": image_info
@@ -1519,7 +1506,7 @@ class ISOHandler:
             
             # 验证复制结果
             if not target_path.exists():
-                raise FileNotFoundError(f"目标文件不存在: {target_path}")
+                raise FileNotFoundError(f"Target file does not exist: {target_path}")
             
             target_size = target_path.stat().st_size
             logger.info(f"Target file size: {target_size / (1024**3):.2f} GB ({target_size:,} bytes)")
@@ -1534,7 +1521,7 @@ class ISOHandler:
             
             return {
                 "success": True,
-                "message": f"ISO文件已成功导入并重命名为: {new_filename}",
+                "message": f"ISO file successfully imported and renamed to: {new_filename}",
                 "source_path": str(source_path),
                 "target_path": str(target_path),
                 "image_info": image_info
@@ -2177,7 +2164,7 @@ class ISOHandler:
         elif os_prefix == "win10":
             os_type = "Windows10"
         else:
-            raise ValueError(f"不支持的操作系统前缀: {os_prefix}")
+            raise ValueError(f"Unsupported OS prefix: {os_prefix}")
         
         return {
             "os_type": os_type,
@@ -2221,11 +2208,11 @@ class ISOHandler:
         elif "windows10" in os_type.lower() or "win10" in os_type.lower() or "w10" in os_type.lower():
             os_prefix = "win10"
         else:
-            raise ValueError(f"不支持的操作系统类型: {os_type}")
+            raise ValueError(f"Unsupported OS type: {os_type}")
         
         # 验证 source_type
         if source_type not in ["me", "ce"]:
-            raise ValueError(f"source_type 必须是 'me' 或 'ce'，当前值: {source_type}")
+            raise ValueError(f"source_type must be 'me' or 'ce', current value: {source_type}")
         
         # 转换为小写并格式化
         version_lower = version.lower()
@@ -2665,7 +2652,7 @@ class ISOHandler:
                 path.unlink()
                 return {"success": True}
             else:
-                return {"success": False, "error": "文件不存在"}
+                return {"success": False, "error": "File does not exist"}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
