@@ -13,7 +13,7 @@ import re
 import logging
 import atexit
 import shutil
-from typing import Dict, Optional, Callable, List, Tuple
+from typing import Any, Callable
 from pathlib import Path
 import requests
 from concurrent.futures import ThreadPoolExecutor
@@ -36,7 +36,7 @@ class DownloadError(Exception):
 class Downloader:
     """通用下载器"""
     
-    def __init__(self, curl_path: Optional[str] = None, temp_dir: Optional[str] = None):
+    def __init__(self, curl_path: str | None = None, temp_dir: str | None = None):
         """
         初始化下载器
         
@@ -44,29 +44,29 @@ class Downloader:
             curl_path: curl.exe的路径，如果为None则自动查找或下载
             temp_dir: 临时文件目录，如果为None则使用./data/tmp
         """
-        self.curl_path = curl_path or self._get_curl_path()
+        self.curl_path: str = curl_path or self._get_curl_path()
         # 设置临时文件目录（用于存储下载分片）
         if temp_dir:
-            self.temp_dir = Path(temp_dir)
+            self.temp_dir: Path = Path(temp_dir)
         else:
             # 默认使用项目根目录下的 data/tmp
             project_root = Path(__file__).parent.parent.parent
             self.temp_dir = project_root / "data" / "tmp"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        self.download_tasks: Dict[str, Dict] = {}
-        self._lock = threading.Lock()
+        self.download_tasks: dict[str, dict[str, Any]] = {}
+        self._lock: threading.Lock = threading.Lock()
         # 跟踪所有curl子进程以及按任务跟踪，用于取消和退出清理
-        self._active_processes: List[subprocess.Popen] = []
-        self._task_processes: Dict[str, List[subprocess.Popen]] = {}
+        self._active_processes: list[subprocess.Popen[str]] = []
+        self._task_processes: dict[str, list[subprocess.Popen[str]]] = {}
         atexit.register(self._cleanup_processes)
 
-    def _register_process(self, process: subprocess.Popen, task_id: Optional[str] = None):
+    def _register_process(self, process: subprocess.Popen[str], task_id: str | None = None) -> None:
         with self._lock:
             self._active_processes.append(process)
             if task_id:
                 self._task_processes.setdefault(task_id, []).append(process)
 
-    def _unregister_process(self, process: subprocess.Popen):
+    def _unregister_process(self, process: subprocess.Popen[str]) -> None:
         with self._lock:
             if process in self._active_processes:
                 self._active_processes.remove(process)
@@ -77,13 +77,13 @@ class Downloader:
                     if not plist:
                         del self._task_processes[task_id]
 
-    def _cleanup_processes(self):
+    def _cleanup_processes(self) -> None:
         with self._lock:
             for process in list(self._active_processes):
                 if process and process.poll() is None:
                     try:
                         process.terminate()
-                        process.wait(timeout=5)
+                        _ = process.wait(timeout=5)
                     except Exception:
                         try:
                             process.kill()
@@ -91,7 +91,7 @@ class Downloader:
                             pass
             self._active_processes.clear()
 
-    def _run_curl_command(self, cmd: List[str], timeout: Optional[int] = None, task_id: Optional[str] = None) -> Tuple[int, str]:
+    def _run_curl_command(self, cmd: list[str], timeout: int | None = None, task_id: str | None = None) -> tuple[int, str]:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -120,7 +120,7 @@ class Downloader:
             if process and process.poll() is None:
                 try:
                     process.terminate()
-                    process.wait(timeout=5)
+                    _ = process.wait(timeout=5)
                 except Exception:
                     try:
                         process.kill()
@@ -180,7 +180,7 @@ class Downloader:
         
         # 查找所有链接，寻找zip文件
         for link in soup.find_all('a', href=True):
-            href = link.get('href', '')
+            href = str(link.get('href', ''))
             # curl.se/windows通常提供类似 curl-8.x.x-win64-mingw.zip 的文件
             if href.endswith('.zip') and ('win64' in href.lower() or 'mingw' in href.lower()):
                 # 如果是相对路径，转换为绝对路径
@@ -199,7 +199,6 @@ class Downloader:
             # 尝试获取最新版本号
             try:
                 # 从页面中提取版本号（通常在标题或链接中）
-                version_match = None
                 for text in soup.stripped_strings:
                     # 查找版本号模式，如 8.17.0
                     match = re.search(r'curl[-\s]?(\d+\.\d+\.\d+)', text, re.IGNORECASE)
@@ -221,7 +220,7 @@ class Downloader:
                 if dl_response.status_code == 200:
                     dl_soup = BeautifulSoup(dl_response.text, 'html.parser')
                     for link in dl_soup.find_all('a', href=True):
-                        href = link.get('href', '')
+                        href = str(link.get('href', ''))
                         if href.endswith('.zip') and 'win64' in href.lower():
                             curl_zip_url = f"{dl_url.rstrip('/')}/{href}"
                             break
@@ -326,7 +325,7 @@ class Downloader:
             logger.error(f"Latency test failed: {e}")
             return -1
     
-    def test_download_speed(self, url: str, test_size: int = 1024 * 1024, timeout: int = 10) -> Dict[str, float]:
+    def test_download_speed(self, url: str, test_size: int = 1024 * 1024, timeout: int = 10) -> dict[str, float]:
         """
         测试下载速度
         
@@ -371,7 +370,7 @@ class Downloader:
             logger.error(f"Download speed test failed: {e}")
             return {"speed": -1, "latency": -1}
     
-    def verify_file(self, file_path: str, expected_sha256: Optional[str] = None) -> Dict[str, any]:
+    def verify_file(self, file_path: str, expected_sha256: str | None = None) -> dict[str, Any]:
         """
         校验文件完整性
         
@@ -414,7 +413,7 @@ class Downloader:
         url: str,
         output_path: str,
         num_threads: int = 4,
-        progress_callback: Optional[Callable[[float, int, int], None]] = None
+        progress_callback: Callable[[float, int, int], None] | None = None
     ) -> str:
         """
         使用curl进行多线程下载
@@ -496,7 +495,7 @@ class Downloader:
         url: str,
         output_path: str,
         task_id: str,
-        progress_callback: Optional[Callable[[float, int, int], None]]
+        progress_callback: Callable[[float, int, int], None] | None
     ):
         """Single-threaded curl download"""
         output_dir = os.path.dirname(output_path)
@@ -578,7 +577,7 @@ class Downloader:
         output_path: str,
         num_threads: int,
         task_id: str,
-        progress_callback: Optional[Callable[[float, int, int], None]]
+        progress_callback: Callable[[float, int, int], None] | None
     ):
         """多线程curl下载（使用Range请求）"""
         with self._lock:
@@ -596,9 +595,9 @@ class Downloader:
             chunks.append((start, end))
         
         # 下载各个分块
-        chunk_files: List[str] = []
+        chunk_files: list[str] = []
         stop_event = threading.Event()
-        monitor_thread: Optional[threading.Thread] = None
+        monitor_thread: threading.Thread | None = None
 
         def monitor_progress():
             last_total = 0
@@ -659,7 +658,7 @@ class Downloader:
                 for cf in chunk_files:
                     if os.path.exists(cf):
                         os.unlink(cf)
-                raise DownloadError(f"Chunk {i} download failed: {e}")
+                raise DownloadError(f"Download failed: {e}")
             finally:
                 stop_event.set()
                 if monitor_thread:
@@ -729,7 +728,7 @@ class Downloader:
         self,
         url: str,
         output_path: str,
-        progress_callback: Optional[Callable[[float, int, int], None]]
+        progress_callback: Callable[[float, int, int], None] | None
     ) -> str:
         """使用requests作为备选下载方法"""
         task_id = str(uuid.uuid4())
@@ -792,7 +791,7 @@ class Downloader:
         
         return task_id
     
-    def get_download_progress(self, task_id: str) -> Dict[str, any]:
+    def get_download_progress(self, task_id: str) -> dict[str, Any]:
         """获取下载进度"""
         with self._lock:
             task = self.download_tasks.get(task_id)
@@ -949,7 +948,7 @@ class Downloader:
         except Exception as e:
             logger.warning(f"Failed to add trackers: {e}")
     
-    def test_bt_latency(self, torrent_path: str, timeout: Optional[int] = None) -> float:
+    def test_bt_latency(self, torrent_path: str, timeout: int | None = None) -> float:
         """
         测试BT网络延迟（通过tracker）
         
@@ -1025,9 +1024,9 @@ class Downloader:
         self,
         torrent_path: str,
         test_size: int = 100 * 1024 * 1024,
-        timeout: Optional[int] = None,
-        cancel_check: Optional[Callable[[], bool]] = None
-    ) -> Dict[str, any]:
+        timeout: int | None = None,
+        cancel_check: Callable[[], bool] | None = None
+    ) -> dict[str, Any]:
         """
         测试BT下载速度（下载指定大小，不完整下载）
         
@@ -1211,7 +1210,7 @@ class Downloader:
         self,
         torrent_path: str,
         output_path: str,
-        progress_callback: Optional[Callable[[float, int, int], None]] = None
+        progress_callback: Callable[[float, int, int], None] | None = None
     ) -> str:
         """
         使用libtorrent进行BT下载

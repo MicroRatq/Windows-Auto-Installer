@@ -15,10 +15,11 @@ import time
 import sys
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Optional, Any
+from typing import Any
 from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
+from downloader import Downloader
 
 # Configure logging
 logging.basicConfig(
@@ -28,18 +29,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger('ISOHandler')
 
-# 导入 Downloader - 支持相对导入和绝对导入
-try:
-    # 首先尝试相对导入（作为包的一部分）
-    from .downloader import Downloader
-except (ImportError, ValueError):
-    # 如果失败，尝试绝对导入（直接运行脚本时）
-    import sys
-    from pathlib import Path
-    backend_dir = Path(__file__).parent
-    if str(backend_dir) not in sys.path:
-        sys.path.insert(0, str(backend_dir))
-    from downloader import Downloader
+# # 导入 Downloader - 支持相对导入和绝对导入
+# try:
+#     # 首先尝试相对导入（作为包的一部分）
+#     from .downloader import Downloader
+# except (ImportError, ValueError):
+#     # 如果失败，尝试绝对导入（直接运行脚本时）
+#     import sys
+#     from pathlib import Path
+#     backend_dir = Path(__file__).parent
+#     if str(backend_dir) not in sys.path:
+#         sys.path.insert(0, str(backend_dir))
+#     from downloader import Downloader
 
 
 class ISOHandler:
@@ -52,15 +53,15 @@ class ISOHandler:
         Args:
             cache_dir: 本地缓存目录
         """
-        self.cache_dir = Path(cache_dir)
+        self.cache_dir: Path = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.downloader = Downloader()
-        self.product_edition_ids = self._load_product_edition_ids()
+        self.downloader: Downloader = Downloader()
+        self.product_edition_ids: dict[str, Any] = self._load_product_edition_ids()
         # 测试任务管理
-        self.test_tasks: Dict[str, Dict[str, Any]] = {}
-        self._test_lock = threading.Lock()
+        self.test_tasks: dict[str, dict[str, Any]] = {}
+        self._test_lock: threading.Lock = threading.Lock()
     
-    def _load_product_edition_ids(self) -> Dict[str, Any]:
+    def _load_product_edition_ids(self) -> dict[str, Any]:
         """
         从配置文件加载产品版本ID映射
         
@@ -75,8 +76,7 @@ class ISOHandler:
         
         if not config_path.exists():
             raise FileNotFoundError(
-                f"产品ID配置文件不存在: {config_path}\n"
-                f"请确保 data/product_edition_ids.json 文件存在"
+                f"产品ID配置文件不存在: {config_path}\n请确保 data/product_edition_ids.json 文件存在"
             )
         
         try:
@@ -96,7 +96,7 @@ class ISOHandler:
         self,
         os_type: str,
         version: str
-    ) -> List[int]:
+    ) -> list[int]:
         """
         从配置文件中获取产品版本ID（仅支持 Multi Editions）
         
@@ -124,8 +124,7 @@ class ISOHandler:
         # 检查操作系统是否存在
         if os_key not in self.product_edition_ids:
             raise ValueError(
-                f"配置文件中未找到 {os_key} 的配置。"
-                f"可用操作系统: {list(self.product_edition_ids.keys())}"
+                f"配置文件中未找到 {os_key} 的配置。可用操作系统: {list(self.product_edition_ids.keys())}"
             )
         
         os_config = self.product_edition_ids[os_key]
@@ -156,8 +155,7 @@ class ISOHandler:
         if not version_key:
             available_versions = list(os_config.keys())
             raise ValueError(
-                f"配置文件中未找到 {os_key} 的版本 '{version}'。"
-                f"可用版本: {available_versions}"
+                f"配置文件中未找到 {os_key} 的版本 '{version}'。可用版本: {available_versions}"
             )
         
         version_config = os_config[version_key]
@@ -186,11 +184,11 @@ class ISOHandler:
                 f"配置文件中的产品ID格式错误: {os_key}/{version_key}/Multi Editions/ids = {product_ids}"
             )
     
-    def list_sources(self) -> List[str]:
+    def list_sources(self) -> list[str]:
         """获取可用的镜像源列表"""
         return ["microsoft", "msdn", "local"]
     
-    def list_available_versions(self, os_type: Optional[str] = None) -> Dict[str, Any]:
+    def list_available_versions(self, os_type: str | None = None) -> dict[str, Any]:
         """
         从配置文件中获取可用版本列表（包含description字段用于前端过滤）
         
@@ -253,8 +251,8 @@ class ISOHandler:
     def list_images(
         self,
         source: str,
-        filter_options: Optional[Dict[str, str]] = None
-    ) -> List[Dict[str, Any]]:
+        filter_options: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
         """
         获取镜像列表
         
@@ -274,7 +272,7 @@ class ISOHandler:
         else:
             raise ValueError(f"未知的镜像源: {source}")
     
-    def _list_microsoft_images(self, filter_options: Optional[Dict[str, str]]) -> List[Dict[str, Any]]:
+    def _list_microsoft_images(self, filter_options: dict[str, str] | None) -> list[dict[str, Any]]:
         """
         从微软官网获取镜像列表（基于Fido方案）
         
@@ -619,8 +617,7 @@ class ISOHandler:
             # 如果仍然没有找到，抛出异常
             if not images:
                 raise ValueError(
-                    f"Failed to get image list from Microsoft official website. "
-                    f"Possible reasons: 1) Network connection issue 2) Specified language/version/edition not available 3) IP restricted"
+                    f"Failed to get image list from Microsoft official website. Possible reasons: 1) Network connection issue 2) Specified language/version/edition not available 3) IP restricted"
                 )
         
         except Exception as e:
@@ -629,7 +626,7 @@ class ISOHandler:
         
         return self._filter_images(images, filter_options)
     
-    def fetch_download_url(self, source: str, config: Dict[str, str]) -> Dict[str, Any]:
+    def fetch_download_url(self, source: str, config: dict[str, str]) -> dict[str, Any]:
         """
         根据配置精确获取下载URL/magnet（不返回列表，只返回第一个匹配的结果）
         
@@ -663,7 +660,7 @@ class ISOHandler:
         else:
             raise ValueError(f"不支持的镜像源: {source}")
     
-    def _fetch_microsoft_url(self, config: Dict[str, str]) -> Dict[str, Any]:
+    def _fetch_microsoft_url(self, config: dict[str, str]) -> dict[str, Any]:
         """
         从微软官网精确获取下载URL（复用_list_microsoft_images的核心逻辑）
         """
@@ -878,11 +875,10 @@ class ISOHandler:
                 continue
         
         raise ValueError(
-            f"Failed to get download URL from Microsoft. "
-            f"Possible reasons: 1) Network connection issue 2) Specified language/version/arch not available 3) IP restricted"
+            f"Failed to get download URL from Microsoft. Possible reasons: 1) Network connection issue 2) Specified language/version/arch not available 3) IP restricted"
         )
     
-    def _fetch_msdn_url(self, config: Dict[str, str]) -> Dict[str, Any]:
+    def _fetch_msdn_url(self, config: dict[str, str]) -> dict[str, Any]:
         """
         从MSDN镜像站精确获取magnet链接（复用_list_msdn_images的核心逻辑）
         """
@@ -922,7 +918,7 @@ class ISOHandler:
                     
                     # 查找所有magnet链接
                     for link in soup.find_all('a', href=True):
-                        href = link.get('href', '').strip()
+                        href = str(link.get('href', '')).strip()
                         if href.startswith('magnet:'):
                             filename = link.get_text(strip=True) or self._parse_magnet_filename(href)
                             try:
@@ -981,7 +977,7 @@ class ISOHandler:
                             # 查找magnet链接
                             for cell in cells:
                                 for link in cell.find_all('a', href=True):
-                                    href = link.get('href', '').strip()
+                                    href = str(link.get('href', '')).strip()
                                     if href.startswith('magnet:'):
                                         if current_image.get('name'):
                                             if self._matches_config(current_image, config):
@@ -1024,7 +1020,7 @@ class ISOHandler:
         
         raise ValueError(f"无法从MSDN镜像站获取匹配的镜像链接")
     
-    def _matches_config(self, image_info: Dict[str, Any], config: Dict[str, str]) -> bool:
+    def _matches_config(self, image_info: dict[str, Any], config: dict[str, str]) -> bool:
         """
         检查镜像信息是否匹配配置
         
@@ -1058,7 +1054,7 @@ class ISOHandler:
         
         return True
     
-    def _list_msdn_images(self, filter_options: Optional[Dict[str, str]]) -> List[Dict[str, Any]]:
+    def _list_msdn_images(self, filter_options: dict[str, str] | None) -> list[dict[str, Any]]:
         """
         从 msdn.sjjzm.com 获取镜像列表（HTML解析，仅支持magnet/BT链接）
         """
@@ -1108,7 +1104,7 @@ class ISOHandler:
                         
                         # 查找所有magnet链接
                         for link in soup.find_all('a', href=True):
-                            href = link.get('href', '').strip()
+                            href = str(link.get('href', '')).strip()
                             text = link.get_text(strip=True)
                             
                             # 仅检查magnet链接
@@ -1178,7 +1174,7 @@ class ISOHandler:
                                 for cell in cells:
                                     # 方法1: 检查链接标签
                                     for link in cell.find_all('a', href=True):
-                                        href = link.get('href', '').strip()
+                                        href = str(link.get('href', '')).strip()
                                         text = link.get_text(strip=True)
                                         
                                         # 仅检查magnet链接
@@ -1278,7 +1274,7 @@ class ISOHandler:
             pass
         return ""
     
-    def _list_local_images(self, filter_options: Optional[Dict[str, str]]) -> List[Dict[str, Any]]:
+    def _list_local_images(self, filter_options: dict[str, str] | None) -> list[dict[str, Any]]:
         """扫描本地缓存目录"""
         images = []
         
@@ -1380,7 +1376,7 @@ class ISOHandler:
         if deleted_count > 0:
             logger.info(f"Deleted {deleted_count} non-ISO file(s) from cache directory")
     
-    def identify_iso(self, iso_path: str) -> Dict[str, Any]:
+    def identify_iso(self, iso_path: str) -> dict[str, Any]:
         """
         手动识别ISO文件版本信息
         
@@ -1445,7 +1441,7 @@ class ISOHandler:
                 "message": f"Failed to identify ISO: {str(e)}"
             }
     
-    def import_iso(self, iso_path: str, overwrite: bool = False) -> Dict[str, Any]:
+    def import_iso(self, iso_path: str, overwrite: bool = False) -> dict[str, Any]:
         """
         导入ISO文件到 cache_dir (data/isos) 并按照标准格式重命名
         
@@ -1563,7 +1559,7 @@ class ISOHandler:
                 "image_info": image_info
             }
     
-    def _identify_iso_version(self, iso_path: str) -> Dict[str, str]:
+    def _identify_iso_version(self, iso_path: str) -> dict[str, str]:
         """
         识别ISO文件的版本信息
         
@@ -1728,7 +1724,7 @@ class ISOHandler:
         
         return result
     
-    def _read_iso_with_pycdlib(self, iso_path: str) -> Optional[Dict[str, str]]:
+    def _read_iso_with_pycdlib(self, iso_path: str) -> dict[str, str] | None:
         """
         使用 pycdlib 直接读取 ISO 文件内容（无需挂载）
         
@@ -1738,7 +1734,7 @@ class ISOHandler:
         - 跨平台支持
         """
         try:
-            import pycdlib
+            from pycdlib.pycdlib import PyCdlib
         except ImportError:
             logger.warning("pycdlib not installed, cannot use direct read method")
             return None
@@ -1747,7 +1743,7 @@ class ISOHandler:
         iso = None
         
         try:
-            iso = pycdlib.PyCdlib()
+            iso = PyCdlib()
             iso.open(iso_path)
             
             # # 方法1: 读取 sources/ei.cfg
@@ -2125,7 +2121,7 @@ class ISOHandler:
         
         return result if result else None
     
-    def _parse_iso_filename(self, filename: str) -> Dict[str, str]:
+    def _parse_iso_filename(self, filename: str) -> dict[str, str]:
         """
         解析标准格式的ISO文件名
         
@@ -2316,7 +2312,7 @@ class ISOHandler:
         
         return sha256_hash.hexdigest()
     
-    def _match_sha256_to_version(self, sha256: str, language: str = "", arch: str = "") -> Optional[Dict[str, str]]:
+    def _match_sha256_to_version(self, sha256: str, language: str = "", arch: str = "") -> dict[str, str] | None:
         """
         在配置文件中查找匹配的SHA256，返回对应的版本信息
         
@@ -2405,11 +2401,7 @@ class ISOHandler:
         
         return None
     
-    def _filter_images(
-        self,
-        images: List[Dict[str, Any]],
-        filter_options: Optional[Dict[str, str]]
-    ) -> List[Dict[str, Any]]:
+    def _filter_images(self, images: list[dict[str, Any]], filter_options: dict[str, str] | None = None) -> list[dict[str, Any]]:
         """过滤镜像列表"""
         if not filter_options:
             return images
@@ -2442,7 +2434,7 @@ class ISOHandler:
         
         return filtered
     
-    def start_test_mirror(self, source: str, test_url: Optional[str] = None) -> str:
+    def start_test_mirror(self, source: str, test_url: str | None = None) -> str:
         """
         开始测试镜像站网络（异步）
         
@@ -2583,7 +2575,7 @@ class ISOHandler:
         
         return task_id
     
-    def get_test_status(self, task_id: str) -> Dict[str, Any]:
+    def get_test_status(self, task_id: str) -> dict[str, Any]:
         """
         获取测试任务状态
         
@@ -2629,7 +2621,7 @@ class ISOHandler:
             task["status"] = "cancelling"
             return True
     
-    def test_mirror(self, source: str, test_url: Optional[str] = None) -> Dict[str, float]:
+    def test_mirror(self, source: str, test_url: str | None = None) -> dict[str, float]:
         """
         测试镜像站网络（同步版本，保持向后兼容）
         
@@ -2661,11 +2653,11 @@ class ISOHandler:
         self.cancel_test(task_id)
         return {"latency": -1, "download_speed": -1}
     
-    def verify_iso(self, file_path: str, expected_sha256: Optional[str] = None) -> Dict[str, Any]:
+    def verify_iso(self, file_path: str, expected_sha256: str | None = None) -> dict[str, Any]:
         """校验ISO文件"""
         return self.downloader.verify_file(file_path, expected_sha256)
     
-    def delete_iso(self, file_path: str) -> Dict[str, bool]:
+    def delete_iso(self, file_path: str) -> dict[str, bool | str]:
         """删除ISO文件"""
         try:
             path = Path(file_path)

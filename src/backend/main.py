@@ -11,7 +11,9 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Callable
+from iso_handler import ISOHandler
+from downloader import Downloader
 
 # Configure logging
 logging.basicConfig(
@@ -26,10 +28,10 @@ class TaskManager:
     """通用异步任务管理器"""
 
     def __init__(self):
-        self._tasks: Dict[str, Dict[str, Any]] = {}
-        self._lock = threading.Lock()
+        self._tasks: dict[str, dict[str, Any]] = {}
+        self._lock: threading.Lock = threading.Lock()
 
-    def create_task(self, name: str, func, *args, **kwargs) -> str:
+    def create_task(self, name: str, func: Callable[..., Any], *args: Any, **kwargs: Any) -> str:
         """创建后台任务并立即返回 task_id"""
         task_id = str(uuid.uuid4())
         with self._lock:
@@ -76,7 +78,7 @@ class TaskManager:
         thread.start()
         return task_id
 
-    def get_task_status(self, task_id: str) -> Dict[str, Any]:
+    def get_task_status(self, task_id: str) -> dict[str, Any]:
         """查询任务状态"""
         with self._lock:
             task = self._tasks.get(task_id)
@@ -103,16 +105,26 @@ class IPCError(Exception):
 class BackendServer:
     """后端服务器，处理来自前端的IPC请求"""
     
-    def __init__(self):
-        self.running = True
-        self.handlers = {}
-        self.task_manager = TaskManager()
+    # iso_handler: "ISOHandler | None"
+    # downloader: "Downloader | None"
+    # download_tasks: dict[str, dict[str, Any]]
+    # project_root: Path
     
-    def register_handler(self, method: str, handler):
+    def __init__(self):
+        self.running: bool = True
+        self.handlers: dict[str, Callable[..., Any]] = {}
+        self.task_manager: TaskManager = TaskManager()
+        # 这些属性在run()方法中初始化
+        self.iso_handler = None
+        self.downloader = None
+        self.download_tasks = {}
+        self.project_root = Path(__file__).parent.parent.parent
+    
+    def register_handler(self, method: str, handler: Callable[..., Any]) -> None:
         """注册请求处理器"""
         self.handlers[method] = handler
     
-    def send_response(self, request_id: str, result: Any = None, error: Optional[str] = None):
+    def send_response(self, request_id: str | None, result: Any = None, error: str | None = None) -> None:
         """发送响应到前端"""
         response = {
             "jsonrpc": "2.0",
@@ -125,7 +137,8 @@ class BackendServer:
                 "message": error
             }
         else:
-            response["result"] = result
+            if result is not None:
+                response["result"] = result
         
         try:
             json_str = json.dumps(response, ensure_ascii=False)
@@ -143,14 +156,14 @@ class BackendServer:
             }
             print(json.dumps(error_response, ensure_ascii=False), flush=True)  # Keep print for IPC communication
     
-    def handle_request(self, request: Dict[str, Any]):
+    def handle_request(self, request: dict[str, Any]) -> None:
         """处理单个请求"""
         request_id = request.get("id")
         method = request.get("method")
         params = request.get("params", {})
         
         if not request_id:
-            self.send_response(None, error="Missing request ID")
+            self.send_response("", error="Missing request ID")
             return
         
         if not method:
@@ -181,22 +194,22 @@ class BackendServer:
         
         # 注册ISO镜像相关处理器
         try:
-            # 添加当前目录到Python路径，以便导入同目录下的模块
+            # # 添加当前目录到Python路径，以便导入同目录下的模块
             backend_dir = Path(__file__).parent
-            if str(backend_dir) not in sys.path:
-                sys.path.insert(0, str(backend_dir))
+            # if str(backend_dir) not in sys.path:
+            #     sys.path.insert(0, str(backend_dir))
             
-            from iso_handler import ISOHandler
-            from downloader import Downloader
+            # from .iso_handler import ISOHandler
+            # from .downloader import Downloader
             
             # 计算项目根目录（main.py 在 src/backend/，所以需要向上两级）
             project_root = backend_dir.parent.parent
             cache_dir = project_root / "data" / "isos"
             
-            self.iso_handler = ISOHandler(cache_dir=str(cache_dir))
-            self.downloader = Downloader()
-            self.download_tasks = {}  # 存储下载任务
-            self.project_root = project_root
+            self.iso_handler: ISOHandler = ISOHandler(cache_dir=str(cache_dir))
+            self.downloader: Downloader = Downloader()
+            self.download_tasks: dict[str, dict[str, Any]] = {}  # 存储下载任务
+            self.project_root: Path = project_root
             
             self.register_handler("iso_list_sources", self._handle_iso_list_sources)
             self.register_handler("iso_list_versions", self._handle_iso_list_versions)
@@ -241,16 +254,16 @@ class BackendServer:
                 self.handle_request(request)
             except json.JSONDecodeError as e:
                 logger.error(f"JSON parsing failed: {e}")
-                self.send_response(None, error=f"JSON parsing failed: {str(e)}")
+                self.send_response("", error=f"JSON parsing failed: {str(e)}")
             except Exception as e:
                 logger.error(f"Request processing failed: {e}")
-                self.send_response(None, error=f"Request processing failed: {str(e)}")
+                self.send_response("", error=f"Request processing failed: {str(e)}")
     
-    def _handle_ping(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_ping(self, params: dict[str, Any]) -> dict[str, Any]:
         """处理ping请求"""
         return {"status": "ok", "message": "pong"}
     
-    def _handle_get_platform(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_get_platform(self, params: dict[str, Any]) -> dict[str, Any]:
         """获取平台信息"""
         import platform
         return {
@@ -260,16 +273,16 @@ class BackendServer:
             "architecture": platform.machine()
         }
     
-    def _handle_iso_list_sources(self, params: Dict[str, Any]) -> list:
+    def _handle_iso_list_sources(self, params: dict[str, Any]) -> list[str]:
         """获取镜像源列表"""
         return self.iso_handler.list_sources()
     
-    def _handle_iso_list_versions(self, params: Dict[str, Any]) -> Dict[str, List[str]]:
+    def _handle_iso_list_versions(self, params: dict[str, Any]) -> dict[str, list[str]]:
         """获取可用版本列表（从配置文件读取）"""
         os_type = params.get("os_type")
         return self.iso_handler.list_available_versions(os_type)
     
-    def _handle_iso_list_images_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_list_images_start(self, params: dict[str, Any]) -> dict[str, str]:
         """异步获取镜像列表：启动任务（仅支持local源）"""
         source = params.get("source", "local")
         filter_options = params.get("filter", {})
@@ -286,14 +299,14 @@ class BackendServer:
         )
         return {"task_id": task_id}
 
-    def _handle_iso_list_images_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_list_images_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步获取镜像列表：查询任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
         return self.task_manager.get_task_status(task_id)
     
-    def _handle_iso_fetch_download_url_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_fetch_download_url_start(self, params: dict[str, Any]) -> dict[str, str]:
         """异步获取下载URL：启动任务"""
         source = params.get("source")
         config = {
@@ -314,20 +327,20 @@ class BackendServer:
         )
         return {"task_id": task_id}
     
-    def _handle_iso_fetch_download_url_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_fetch_download_url_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步获取下载URL：查询任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
         return self.task_manager.get_task_status(task_id)
     
-    def _handle_iso_test_mirror(self, params: Dict[str, Any]) -> Dict[str, float]:
+    def _handle_iso_test_mirror(self, params: dict[str, Any]) -> dict[str, float]:
         """测试镜像站网络（同步版本，保持向后兼容）"""
         source = params.get("source", "msdl")
         test_url = params.get("url")
         return self.iso_handler.test_mirror(source, test_url)
 
-    def _handle_iso_test_mirror_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_test_mirror_start(self, params: dict[str, Any]) -> dict[str, str]:
         """异步测试镜像站网络：启动任务"""
         source = params.get("source", "msdl")
         test_url = params.get("url")
@@ -339,28 +352,28 @@ class BackendServer:
         )
         return {"task_id": task_id}
 
-    def _handle_iso_test_mirror_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_test_mirror_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步测试镜像站网络：查询任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
         return self.task_manager.get_task_status(task_id)
     
-    def _handle_iso_start_test_mirror(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_start_test_mirror(self, params: dict[str, Any]) -> dict[str, str]:
         """开始测试镜像站网络（异步）"""
         source = params.get("source", "microsoft")
         test_url = params.get("url")
         task_id = self.iso_handler.start_test_mirror(source, test_url)
         return {"task_id": task_id}
     
-    def _handle_iso_get_test_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_get_test_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """获取测试任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
         return self.iso_handler.get_test_status(task_id)
     
-    def _handle_iso_cancel_test(self, params: Dict[str, Any]) -> Dict[str, bool]:
+    def _handle_iso_cancel_test(self, params: dict[str, Any]) -> dict[str, bool]:
         """中止测试任务"""
         task_id = params.get("task_id")
         if not task_id:
@@ -368,7 +381,7 @@ class BackendServer:
         success = self.iso_handler.cancel_test(task_id)
         return {"success": success}
     
-    def _handle_iso_download(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_download(self, params: dict[str, Any]) -> dict[str, str]:
         """下载镜像 - 支持配置参数或直接URL"""
         # 检查是配置参数还是直接URL
         source = params.get("source")
@@ -503,7 +516,7 @@ class BackendServer:
         else:
             raise ValueError("Must provide either (source+config) or url parameter")
     
-    def _handle_iso_download_progress(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_download_progress(self, params: dict[str, Any]) -> dict[str, Any]:
         """查询下载进度"""
         task_id = params.get("task_id")
         if not task_id:
@@ -640,7 +653,7 @@ class BackendServer:
             
             return progress_info
 
-    def _handle_iso_cancel_download(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_cancel_download(self, params: dict[str, Any]) -> dict[str, Any]:
         """取消下载任务"""
         task_id = params.get("task_id")
         if not task_id:
@@ -670,7 +683,7 @@ class BackendServer:
             success = self.downloader.cancel_download(task_id)
             return {"success": success}
     
-    def _handle_iso_verify(self, params: Dict[str, Any]) -> Dict[str, bool]:
+    def _handle_iso_verify(self, params: dict[str, Any]) -> dict[str, bool]:
         """校验镜像文件（同步版本，保留兼容性）"""
         file_path = params.get("file_path")
         expected_sha256 = params.get("checksum")
@@ -681,7 +694,7 @@ class BackendServer:
         result = self.iso_handler.verify_iso(file_path, expected_sha256)
         return {"valid": result.get("valid", False)}
     
-    def _handle_iso_verify_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_verify_start(self, params: dict[str, Any]) -> dict[str, str]:
         """异步校验ISO文件：启动任务"""
         file_path = params.get("file_path")
         expected_sha256 = params.get("checksum")
@@ -697,7 +710,7 @@ class BackendServer:
         )
         return {"task_id": task_id}
     
-    def _handle_iso_verify_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_verify_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步校验ISO文件：获取任务状态"""
         task_id = params.get("task_id")
         if not task_id:
@@ -705,7 +718,7 @@ class BackendServer:
         
         return self.task_manager.get_task_status(task_id)
     
-    def _handle_iso_delete(self, params: Dict[str, Any]) -> Dict[str, bool]:
+    def _handle_iso_delete(self, params: dict[str, Any]) -> dict[str, bool | str]:
         """删除本地镜像"""
         file_path = params.get("file_path")
         if not file_path:
@@ -713,7 +726,7 @@ class BackendServer:
         
         return self.iso_handler.delete_iso(file_path)
     
-    def _handle_iso_import(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_import(self, params: dict[str, Any]) -> dict[str, Any]:
         """导入本地ISO文件（同步包装，保持兼容）"""
         iso_path = params.get("iso_path")
         overwrite = params.get("overwrite", False)
@@ -722,7 +735,7 @@ class BackendServer:
         # 为兼容性，直接调用同步方法
         return self.iso_handler.import_iso(iso_path, overwrite)
 
-    def _handle_iso_import_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_import_start(self, params: dict[str, Any]) -> dict[str, str]:
         """异步导入本地ISO文件：启动任务"""
         iso_path = params.get("iso_path")
         overwrite = params.get("overwrite", False)
@@ -736,21 +749,21 @@ class BackendServer:
         )
         return {"task_id": task_id}
 
-    def _handle_iso_import_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_import_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步导入本地ISO文件：查询任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
         return self.task_manager.get_task_status(task_id)
 
-    def _handle_iso_identify(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_identify(self, params: dict[str, Any]) -> dict[str, Any]:
         """同步识别ISO文件版本信息（保持兼容）"""
         file_path = params.get("file_path")
         if not file_path:
             raise ValueError("Missing file_path parameter")
         return self.iso_handler.identify_iso(file_path)
 
-    def _handle_iso_identify_start(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_identify_start(self, params: dict[str, Any]) -> dict[str, str]:
         """异步识别ISO文件版本信息：启动任务"""
         file_path = params.get("file_path")
         if not file_path:
@@ -762,14 +775,14 @@ class BackendServer:
         )
         return {"task_id": task_id}
 
-    def _handle_iso_identify_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_iso_identify_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步识别ISO文件版本信息：查询任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
         return self.task_manager.get_task_status(task_id)
     
-    def _handle_iso_redownload(self, params: Dict[str, Any]) -> Dict[str, str]:
+    def _handle_iso_redownload(self, params: dict[str, Any]) -> dict[str, str]:
         """重新下载镜像"""
         file_path = params.get("file_path")
         image_id = params.get("image_id")
@@ -831,15 +844,6 @@ class BackendServer:
             "config": config,
             "output_path": output_path
         })
-    
-    def _handle_iso_identify(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """手动识别ISO文件版本信息"""
-        file_path = params.get("file_path")
-        
-        if not file_path:
-            raise ValueError("Missing file_path parameter")
-        
-        return self.iso_handler.identify_iso(file_path)
 
 
 def main():
