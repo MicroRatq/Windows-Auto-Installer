@@ -151,6 +151,30 @@
     --progress-foreground: var(--accent-color, #0078d4);
 }
 
+/* Radio 样式 */
+.workspace fluent-radio {
+    --neutral-foreground-rest: var(--text-primary);
+    color: var(--text-primary);
+    transition: color 0.3s;
+}
+
+.workspace fluent-radio::part(label) {
+    color: var(--text-primary);
+    transition: color 0.3s;
+}
+
+/* Checkbox 样式 */
+.workspace fluent-checkbox {
+    --neutral-foreground-rest: var(--text-primary);
+    color: var(--text-primary);
+    transition: color 0.3s;
+}
+
+.workspace fluent-checkbox::part(label) {
+    color: var(--text-primary);
+    transition: color 0.3s;
+}
+
 /* Menu 样式 */
 .workspace fluent-menu {
     background-color: var(--workspace-option-fill) !important;
@@ -467,4 +491,383 @@
     width: 14px;
     height: 14px;
     animation: spin 1s linear infinite;
+}
+
+/* ========================================
+   可展开 Card 样式
+   ======================================== */
+
+/* 可展开 Card 容器 */
+.workspace .card-expandable {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: background-color 0.2s, border-color 0.2s;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+/* 可展开 Card 头部 */
+.workspace .card-expandable-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.workspace .card-expandable-header:hover {
+    background-color: var(--hover-bg);
+}
+
+/* 可展开 Card 头部左侧 */
+.workspace .card-expandable-header-left {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: 12px;
+}
+
+/* 可展开 Card 标题 */
+.workspace .card-expandable-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* 可展开 Card 左侧图标（不旋转） */
+.workspace .card-expandable-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.workspace .card-expandable-header-icon i {
+    width: 16px;
+    height: 16px;
+}
+
+/* 可展开 Card 右侧箭头图标（展开时旋转） */
+.workspace .card-expandable-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.workspace .card-expandable.expanded .card-expandable-arrow {
+    transform: rotate(180deg);
+}
+
+.workspace .card-expandable-arrow i {
+    width: 16px;
+    height: 16px;
+}
+
+/* 可展开 Card 内容区域 */
+.workspace .card-expandable-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0 20px;
+}
+
+.workspace .card-expandable.expanded .card-expandable-content {
+    max-height: 5000px;
+    padding: 0 20px 20px 20px;
+}
+
+/* 可展开 Card 内容内部间距 */
+.workspace .card-expandable-content>* {
+    margin-top: 16px;
+}
+
+.workspace .card-expandable-content>*:first-child {
+    margin-top: 0;
+}
+
+/* ========================================
+   Radio 容器样式（继承自card-expandable）
+   ======================================== */
+
+/* Radio 容器 - 继承card-expandable样式，只需添加radio-container类即可 */
+
+/* Radio 容器标题文本区域 */
+.workspace .radio-container-header-title-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+}
+
+/* Radio 容器描述文字（可选，可隐藏） */
+.workspace .radio-container-header-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .radio-container-header-description.hidden {
+    display: none;
+}
+
+/* Radio 容器当前选中值 */
+.workspace .radio-container-header-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Radio 列表容器 */
+.workspace .radio-container-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 8px;
+}
+
+/* Radio 列表项 */
+.workspace .radio-container-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-radius: 4px;
+    margin: 0 -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    position: relative;
+}
+
+.workspace .radio-container-item:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Radio 选项内容区域 */
+.workspace .radio-container-item-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+    margin-left: 32px;
+}
+
+/* Radio 选项主标题 */
+.workspace .radio-container-item-title {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* Radio 选项副标题（描述）- 可隐藏 */
+.workspace .radio-container-item-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .radio-container-item-description.hidden {
+    display: none;
+}
+
+/* 选中状态的Radio项 */
+.workspace .radio-container-item[data-selected="true"] .radio-container-item-title {
+    font-weight: 500;
+}
+
+/* Radio 容器内的 fluent-radio 样式调整 */
+.workspace .radio-container-item fluent-radio {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+}
+
+.workspace .radio-container-item fluent-radio::part(control) {
+    width: 20px;
+    height: 20px;
+}
+
+/* ========================================
+   Combo 容器样式（继承自card-expandable，支持Checkbox/Select/Switch）
+   ======================================== */
+
+/* Combo 容器 - 继承card-expandable样式，只需添加combo-container类即可 */
+
+/* Combo 容器标题文本区域 */
+.workspace .combo-container-header-title-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+}
+
+/* Combo 容器描述文字（可选，可隐藏） */
+.workspace .combo-container-header-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .combo-container-header-description.hidden {
+    display: none;
+}
+
+/* Combo 容器当前选中值 */
+.workspace .combo-container-header-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Combo 列表容器 */
+.workspace .combo-container-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 8px;
+}
+
+/* Combo 列表项 */
+.workspace .combo-container-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 0;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-radius: 4px;
+    margin: 0 -8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    position: relative;
+}
+
+.workspace .combo-container-item:hover {
+    background-color: var(--hover-bg);
+}
+
+/* Combo 选项内容区域 */
+.workspace .combo-container-item-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+    margin-left: 32px;
+}
+
+/* Combo 选项主标题 */
+.workspace .combo-container-item-title {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* Combo 选项副标题（描述）- 可隐藏 */
+.workspace .combo-container-item-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .combo-container-item-description.hidden {
+    display: none;
+}
+
+/* 选中状态的Combo项 */
+.workspace .combo-container-item[data-selected="true"] .combo-container-item-title {
+    font-weight: 500;
+}
+
+/* Combo 容器内的 fluent-checkbox 样式调整 */
+.workspace .combo-container-item fluent-checkbox {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+}
+
+.workspace .combo-container-item fluent-checkbox::part(control) {
+    width: 20px;
+    height: 20px;
+}
+
+/* Combo 容器内的 fluent-switch 样式调整 */
+.workspace .combo-container-item fluent-switch {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+}
+
+/* Combo 容器内的 fluent-select 样式调整 */
+.workspace .combo-container-item fluent-select {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+}
+
+/* ========================================
+   ComboCard 容器样式（单个card，右侧控件）
+   ======================================== */
+
+/* ComboCard - 继承card样式，只需添加combo-card类即可 */
+
+/* ComboCard 右侧控件区域 */
+.workspace .combo-card .card-right {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 16px;
+    min-width: 0;
+    /* 允许内容收缩 */
+}
+
+/* ComboCard 内的控件样式调整 */
+.workspace .combo-card fluent-checkbox,
+.workspace .combo-card fluent-switch {
+    margin: 0;
+}
+
+/* ComboCard 内的 select 控件样式调整 */
+.workspace .combo-card fluent-select {
+    margin: 0;
+    min-width: 150px;
+    max-width: none;
+    /* 移除最大宽度限制 */
+    width: auto;
+    /* 允许自适应内容宽度 */
+    flex-shrink: 1;
+    /* 允许在必要时收缩 */
 }

@@ -7,11 +7,17 @@ import {
   fluentSelect,
   fluentProgress,
   fluentMenu,
-  fluentMenuItem
+  fluentMenuItem,
+  fluentCheckbox,
+  fluentRadio,
+  fluentTextArea,
+  fluentSwitch
 } from '@fluentui/web-components'
 
 // 导入镜像缓存模块
 import { initIsoCache } from './iso-cache'
+// 导入镜像配置模块
+import { initIsoConfig } from './iso-config'
 
 // 注册 Fluent UI 组件
 provideFluentDesignSystem()
@@ -23,7 +29,11 @@ provideFluentDesignSystem()
     fluentSelect(),
     fluentProgress(),
     fluentMenu(),
-    fluentMenuItem()
+    fluentMenuItem(),
+    fluentCheckbox(),
+    fluentRadio(),
+    fluentTextArea(),
+    fluentSwitch()
   )
 
 // 菜单配置
@@ -551,6 +561,11 @@ function init() {
   // 初始化镜像缓存工作区
   if (typeof initIsoCache === 'function') {
     initIsoCache()
+  }
+
+  // 初始化镜像配置工作区
+  if (typeof initIsoConfig === 'function') {
+    initIsoConfig()
   }
 
   console.log('应用初始化完成')
