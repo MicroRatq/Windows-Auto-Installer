@@ -435,6 +435,32 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
   return result
 })
 
+ipcMain.handle('show-save-dialog', async (event, options) => {
+  if (!mainWindow) return { canceled: true }
+  const result = await dialog.showSaveDialog(mainWindow, options)
+  return result
+})
+
+// 文件读写
+ipcMain.handle('read-file', async (event, filePath) => {
+  const fs = require('fs').promises
+  try {
+    const content = await fs.readFile(filePath, 'utf-8')
+    return content
+  } catch (error) {
+    throw new Error(`Failed to read file: ${error.message}`)
+  }
+})
+
+ipcMain.handle('write-file', async (event, filePath, content) => {
+  const fs = require('fs').promises
+  try {
+    await fs.writeFile(filePath, content, 'utf-8')
+  } catch (error) {
+    throw new Error(`Failed to write file: ${error.message}`)
+  }
+})
+
 // 应用准备就绪
 app.whenReady().then(() => {
   createWindow()

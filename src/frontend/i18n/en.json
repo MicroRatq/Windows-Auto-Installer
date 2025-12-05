@@ -5,7 +5,9 @@
         "add": "Add",
         "remove": "Remove",
         "selectAll": "Select all",
-        "deselectAll": "Deselect all"
+        "deselectAll": "Deselect all",
+        "importFile": "Import",
+        "exportFile": "Export"
     },
     "isoConfig": {
         "regionLanguage": {
@@ -18,17 +20,15 @@
             "firstLanguageTitle": "First language",
             "firstLanguageDesc": "The first language will also determine the initial regional format, which defines how numbers, dates, times and currency are formatted.",
             "firstKeyboardTitle": "First keyboard layout",
+            "selectLanguageInSetup": "Select language settings during Windows Setup",
+            "selectLanguageInSetupDesc": "If enabled, language settings will be selected interactively during Windows Setup. If disabled, the language settings below will be used.",
             "timeZoneTitle": "Time zone",
+            "autoSetTimeZone": "Automatically set time zone",
+            "autoSetTimeZoneDesc": "If enabled, Windows will determine your time zone based on language and region settings. If disabled, you can set a specific time zone below.",
             "timeZoneImplicit": "Let Windows determine your time zone based on language and region settings",
             "timeZoneExplicit": "Set your time zone explicitly",
             "timeZoneExplicitDesc": "This is useful when your country or region spans multiple time zones, like Australia or the United States.",
             "useThisTimeZone": "Use this time zone"
-        },
-        "processorArch": {
-            "title": "Processor architectures",
-            "x86": "Intel / AMD 32-bit",
-            "amd64": "Intel / AMD 64-bit",
-            "arm64": "Windows on Arm64"
         },
         "setupSettings": {
             "title": "Setup settings",
@@ -109,11 +109,13 @@
             "windowsRe": "Choose how to install Windows RE",
             "windowsReDesc": "Windows 24H2 seems to ignore this setting and will always create a recovery partition with a minimum size of 600 MB.",
             "rePartition": "Install on recovery partition",
+            "rePartitionDesc": "Create a separate recovery partition",
             "reFolder": "Install on Windows partition",
             "reFolderDesc": "This will install Windows RE in C:\\Recovery. No recovery partition will be created.",
             "reNone": "Remove Windows RE",
             "reNoneDesc": "This will delete the C:\\Recovery folder and thus free about 600 MB of disk space. No recovery partition will be created.",
             "recoverySize": "Recovery partition size:",
+            "recoverySizeDesc": "Set the size for the Windows RE recovery partition (minimum 300 MB recommended)",
             "diskpartScript": "Diskpart script",
             "diskpartScriptDesc": "Drive letter assignments in the script (e.g. ASSIGN LETTER=W) solely affect the Windows PE stage of Windows Setup; these assignments do not persist to the new installation.",
             "installTo": "Choose partition to install Windows to",
@@ -122,6 +124,10 @@
             "installLocation": "Install location",
             "disk": "Disk (0-based):",
             "partition": "Partition (1-based):",
+            "installDisk": "Install disk",
+            "installDiskDesc": "Disk number (0-based)",
+            "installPartition": "Install partition",
+            "installPartitionDesc": "Partition number (1-based)",
             "diskAssertion": "Disk assertion",
             "diskAssertionDesc": "When you let Windows Setup partition your disks unattendedly, there is a risk they were assigned unexpected index numbers. In rare cases, disk 0 does not refer to your primary hard drive, but rather your USB thumb drive. You can provide VBScript code to check the assigned disk index numbers. If your script returns with WScript.Quit 1, Windows Setup will halt to avoid data loss.",
             "diskAssertionSkip": "Do not run a script",

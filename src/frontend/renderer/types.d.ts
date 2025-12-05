@@ -8,6 +8,9 @@ interface ElectronAPI {
   windowIsMaximized: () => Promise<boolean>
   platform: string
   showOpenDialog: (options: any) => Promise<{ canceled: boolean; filePaths?: string[] }>
+  showSaveDialog: (options: any) => Promise<{ canceled: boolean; filePath?: string }>
+  readFile: (path: string) => Promise<string>
+  writeFile: (path: string, content: string) => Promise<void>
 }
 
 declare global {

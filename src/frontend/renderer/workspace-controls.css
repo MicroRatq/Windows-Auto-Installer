@@ -13,6 +13,9 @@
     --workspace-select-hover: rgb(60, 60, 60);
     --workspace-option-fill: rgb(45, 45, 45);
     --workspace-option-hover: rgb(56, 56, 56);
+    --workspace-input-fill: rgb(42, 42, 42);
+    --workspace-input-border: rgb(63, 63, 63);
+    --workspace-input-focus: rgb(50, 50, 50);
 }
 
 :root[data-theme="light"] {
@@ -24,6 +27,9 @@
     --workspace-select-hover: rgb(250, 250, 250);
     --workspace-option-fill: rgb(249, 249, 249);
     --workspace-option-hover: rgb(240, 240, 240);
+    --workspace-input-fill: rgb(255, 255, 255);
+    --workspace-input-border: rgb(225, 225, 225);
+    --workspace-input-focus: rgb(250, 250, 250);
 }
 
 /* ========================================
@@ -604,6 +610,11 @@
 
 /* Radio 容器 - 继承card-expandable样式，只需添加radio-container类即可 */
 
+/* Radio 容器展开时的底部内边距调整，使其与左右边距一致（20px） */
+.workspace .radio-container.expanded .card-expandable-content {
+    padding-bottom: 12px;
+}
+
 /* Radio 容器标题文本区域 */
 .workspace .radio-container-header-title-group {
     display: flex;
@@ -643,10 +654,20 @@
     margin-top: 8px;
 }
 
+/* Radio 容器折叠区域的顶部分隔线（对比度较大） */
+.workspace .radio-container-content::before {
+    content: '';
+    display: block;
+    height: 1px;
+    background-color: var(--border-color);
+    opacity: 0.6;
+    margin-bottom: 8px;
+}
+
 /* Radio 列表项 */
 .workspace .radio-container-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 12px 0;
     cursor: pointer;
     transition: background-color 0.2s;
@@ -655,6 +676,18 @@
     padding-left: 8px;
     padding-right: 8px;
     position: relative;
+}
+
+/* Radio 列表项之间的分隔线（对比度较小） */
+.workspace .radio-container-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 0;
+    height: 1px;
+    background-color: var(--border-color);
+    opacity: 0.25;
 }
 
 .workspace .radio-container-item:hover {
@@ -704,9 +737,57 @@
     margin: 0;
 }
 
+/* 当有嵌套卡片时，radio 对齐标题区域（标题+描述）的中间 */
+.workspace .radio-container-item:has(.radio-container-nested-cards) fluent-radio {
+    top: 12px;
+    transform: none;
+}
+
+/* 有嵌套卡片且有描述时，radio 垂直居中对齐标题和描述 */
+.workspace .radio-container-item:has(.radio-container-nested-cards):has(.radio-container-item-description:not(.hidden)) fluent-radio {
+    top: calc(12px + 1em);
+    transform: translateY(-50%);
+}
+
 .workspace .radio-container-item fluent-radio::part(control) {
     width: 20px;
     height: 20px;
+}
+
+/* Radio 容器内的嵌套 ComboCard */
+.workspace .radio-container-nested-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 12px;
+    padding-top: 0;
+    position: relative;
+}
+
+/* 嵌套卡片区域顶部的分隔线（对比度较小，有缩进） */
+.workspace .radio-container-nested-cards::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1px;
+    background-color: var(--border-color);
+    opacity: 0.25;
+}
+
+/* 嵌套卡片之间的分隔线 */
+.workspace .radio-container-nested-divider {
+    height: 1px;
+    background-color: var(--border-color);
+    opacity: 0.3;
+    margin: 0;
+}
+
+/* 嵌套的卡片无需左侧缩进（已经在 item-content 中处理） */
+.workspace .radio-container-nested-cards .combo-card-borderless,
+.workspace .radio-container-nested-cards .combo-card {
+    margin: 0;
 }
 
 /* ========================================
@@ -870,4 +951,294 @@
     /* 允许自适应内容宽度 */
     flex-shrink: 1;
     /* 允许在必要时收缩 */
+}
+
+/* ComboCard 内的 text-field 控件样式调整 */
+.workspace .combo-card fluent-text-field {
+    margin: 0;
+    min-width: 150px;
+    max-width: 300px;
+}
+
+.workspace .combo-card fluent-text-field::part(root) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .combo-card fluent-text-field::part(control) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+    color: var(--text-primary);
+}
+
+.workspace .combo-card fluent-text-field::part(control):hover {
+    background: var(--workspace-input-focus);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .combo-card fluent-text-field::part(control):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+.workspace .combo-card fluent-text-field::part(root):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+/* ComboCard 无边框模式 */
+.workspace .combo-card-borderless {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+}
+
+.workspace .combo-card-borderless .card-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.workspace .combo-card-borderless .card-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.workspace .combo-card-borderless .card-content {
+    flex: 1;
+}
+
+.workspace .combo-card-borderless .card-title {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.workspace .combo-card-borderless .card-description {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .combo-card-borderless .card-right {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.workspace .combo-card-borderless fluent-checkbox,
+.workspace .combo-card-borderless fluent-switch {
+    margin: 0;
+}
+
+.workspace .combo-card-borderless fluent-select {
+    margin: 0;
+    min-width: 150px;
+    max-width: none;
+}
+
+.workspace .combo-card-borderless fluent-text-field {
+    margin: 0;
+    min-width: 150px;
+    max-width: 300px;
+}
+
+.workspace .combo-card-borderless fluent-text-field::part(root) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .combo-card-borderless fluent-text-field::part(control) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+    color: var(--text-primary);
+}
+
+.workspace .combo-card-borderless fluent-text-field::part(control):hover {
+    background: var(--workspace-input-focus);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .combo-card-borderless fluent-text-field::part(control):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+.workspace .combo-card-borderless fluent-text-field::part(root):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+/* ========================================
+   TextCard 容器样式（多行文本输入，带导入导出）
+   ======================================== */
+
+/* TextCard - 标准卡片样式 */
+.workspace .text-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.workspace .text-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.workspace .text-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.workspace .text-card-header-content {
+    flex: 1;
+}
+
+.workspace .text-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.workspace .text-card-actions fluent-button {
+    min-width: 80px;
+    height: 32px;
+}
+
+.workspace .text-card-body {
+    width: 100%;
+}
+
+.workspace .text-card-body fluent-text-area {
+    width: 100%;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.workspace .text-card-body fluent-text-area::part(root) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .text-card-body fluent-text-area::part(control) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+    color: var(--text-primary);
+}
+
+.workspace .text-card-body fluent-text-area::part(control):hover {
+    background: var(--workspace-input-focus);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .text-card-body fluent-text-area::part(control):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+.workspace .text-card-body fluent-text-area::part(root):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+/* TextCard - 无边框样式 */
+.workspace .text-card-borderless {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 0;
+}
+
+.workspace .text-card-borderless .text-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.workspace .text-card-borderless .text-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.workspace .text-card-borderless .text-card-header-content {
+    flex: 1;
+}
+
+.workspace .text-card-borderless .card-title {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.workspace .text-card-borderless .card-description {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .text-card-borderless .card-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.workspace .text-card-borderless .text-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.workspace .text-card-borderless .text-card-actions fluent-button {
+    min-width: 80px;
+    height: 32px;
+}
+
+.workspace .text-card-borderless .text-card-body {
+    width: 100%;
+}
+
+.workspace .text-card-borderless .text-card-body fluent-text-area {
+    width: 100%;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.workspace .text-card-borderless .text-card-body fluent-text-area::part(root) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .text-card-borderless .text-card-body fluent-text-area::part(control) {
+    background: var(--workspace-input-fill);
+    border-color: var(--workspace-input-border);
+    color: var(--text-primary);
+}
+
+.workspace .text-card-borderless .text-card-body fluent-text-area::part(control):hover {
+    background: var(--workspace-input-focus);
+    border-color: var(--workspace-input-border);
+}
+
+.workspace .text-card-borderless .text-card-body fluent-text-area::part(control):focus-within {
+    background: var(--workspace-input-focus);
+}
+
+.workspace .text-card-borderless .text-card-body fluent-text-area::part(root):focus-within {
+    background: var(--workspace-input-focus);
 }

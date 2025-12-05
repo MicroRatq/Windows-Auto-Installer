@@ -5,7 +5,9 @@
     "add": "添加",
     "remove": "移除",
     "selectAll": "全选",
-    "deselectAll": "取消全选"
+    "deselectAll": "取消全选",
+    "importFile": "导入",
+    "exportFile": "导出"
   },
   "isoConfig": {
     "regionLanguage": {
@@ -18,17 +20,15 @@
       "firstLanguageTitle": "第一语言",
       "firstLanguageDesc": "第一语言还将决定初始区域格式，该格式定义了数字、日期、时间和货币的格式。",
       "firstKeyboardTitle": "第一键盘布局",
+      "selectLanguageInSetup": "Windows安装中选择语言设置",
+      "selectLanguageInSetupDesc": "如果启用，将在 Windows 安装过程中交互式选择语言设置。如果禁用，将使用下面的语言设置。",
       "timeZoneTitle": "时区",
+      "autoSetTimeZone": "自动设置时区",
+      "autoSetTimeZoneDesc": "如果启用，Windows 将根据语言和区域设置确定您的时区。如果禁用，您可以在下面设置特定时区。",
       "timeZoneImplicit": "让 Windows 根据语言和区域设置确定您的时区",
       "timeZoneExplicit": "明确设置您的时区",
       "timeZoneExplicitDesc": "当您的国家或地区跨越多个时区时（如澳大利亚或美国），这很有用。",
       "useThisTimeZone": "使用此时区"
-    },
-    "processorArch": {
-      "title": "处理器架构",
-      "x86": "Intel / AMD 32位",
-      "amd64": "Intel / AMD 64位",
-      "arm64": "Windows on Arm64"
     },
     "setupSettings": {
       "title": "安装设置",
@@ -109,11 +109,13 @@
       "windowsRe": "选择如何安装 Windows RE",
       "windowsReDesc": "Windows 24H2 似乎忽略此设置，总是会创建至少 600 MB 的恢复分区。",
       "rePartition": "安装在恢复分区上",
+      "rePartitionDesc": "创建单独的恢复分区",
       "reFolder": "安装在 Windows 分区上",
       "reFolderDesc": "这将在 C:\\Recovery 中安装 Windows RE。不会创建恢复分区。",
       "reNone": "移除 Windows RE",
       "reNoneDesc": "这将删除 C:\\Recovery 文件夹，从而释放约 600 MB 的磁盘空间。不会创建恢复分区。",
       "recoverySize": "恢复分区大小：",
+      "recoverySizeDesc": "设置 Windows RE 恢复分区的大小（建议最小 300 MB）",
       "diskpartScript": "Diskpart 脚本",
       "diskpartScriptDesc": "脚本中的驱动器号分配（例如 ASSIGN LETTER=W）仅影响 Windows 安装的 Windows PE 阶段；这些分配不会保留到新安装中。",
       "installTo": "选择要安装 Windows 的分区",
@@ -122,6 +124,10 @@
       "installLocation": "安装位置",
       "disk": "磁盘（从 0 开始）：",
       "partition": "分区（从 1 开始）：",
+      "installDisk": "指定安装磁盘",
+      "installDiskDesc": "磁盘（从 0 开始）",
+      "installPartition": "指定安装分区",
+      "installPartitionDesc": "分区（从 1 开始）",
       "diskAssertion": "磁盘断言",
       "diskAssertionDesc": "当您让 Windows 安装程序无人值守地分区磁盘时，存在分配意外索引号的风险。在极少数情况下，磁盘 0 不是指您的主硬盘，而是指您的 USB 闪存驱动器。您可以提供 VBScript 代码来检查分配的磁盘索引号。如果您的脚本返回 WScript.Quit 1，Windows 安装程序将停止以避免数据丢失。",
       "diskAssertionSkip": "不运行脚本",

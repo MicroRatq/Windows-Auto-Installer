@@ -9,7 +9,11 @@ import {
   createComboCard,
   setupComboCard,
   createComboContainer,
-  setupComboContainer
+  setupComboContainer,
+  createTextCard, // 通过 createRadioContainer 的嵌套功能动态调用
+  setupTextCard,
+  getTextCardValue,
+  setTextCardValue
 } from './workspace'
 import { t } from './i18n'
 
@@ -628,10 +632,7 @@ class UnattendConfigManager {
     // 1. Region, Language and Time Zone (合并模块1和6)
     this.renderRegionLanguageTimeZone()
 
-    // 2. Processor architectures
-    this.renderProcessorArch()
-
-    // 3. Setup settings
+    // 2. Setup settings
     this.renderSetupSettings()
 
     // 4. Name and Account (合并模块4、11、12、13)
@@ -736,27 +737,14 @@ class UnattendConfigManager {
     const lang = this.config.languageSettings
     const tz = this.config.timeZone
 
-    // 语言模式 Radio 容器
-    const languageModeRadioHtml = createRadioContainer({
-      id: 'language-mode-container',
-      name: 'language-mode',
-      title: t('isoConfig.regionLanguage.languageMode'),
-      description: '',
+    // 语言模式 Switch ComboCard
+    const languageModeCardHtml = createComboCard({
+      id: 'config-language-mode-card',
+      title: t('isoConfig.regionLanguage.selectLanguageInSetup'),
+      description: t('isoConfig.regionLanguage.selectLanguageInSetupDesc'),
       icon: 'globe',
-      options: [
-        {
-          value: 'interactive',
-          label: t('isoConfig.regionLanguage.selectInteractively'),
-          description: ''
-        },
-        {
-          value: 'unattended',
-          label: t('isoConfig.regionLanguage.installWithSettings'),
-          description: ''
-        }
-      ],
-      selectedValue: lang.mode,
-      expanded: true
+      controlType: 'switch',
+      value: lang.mode === 'interactive'
     })
 
     // Windows display language ComboCard
@@ -767,7 +755,7 @@ class UnattendConfigManager {
         description: t('isoConfig.regionLanguage.uiLanguageDesc'),
         icon: 'globe',
         controlType: 'select',
-        selectOptions: preset.languages.map(l => ({ value: l.id, label: l.name })),
+        options: preset.languages.map(l => ({ value: l.id, label: l.name })),
         value: lang.uiLanguage || ''
       })
       : ''
@@ -780,7 +768,7 @@ class UnattendConfigManager {
         description: t('isoConfig.regionLanguage.firstLanguageDesc'),
         icon: 'languages',
         controlType: 'select',
-        selectOptions: preset.locales.map(l => ({ value: l.id, label: l.name })),
+        options: preset.locales.map(l => ({ value: l.id, label: l.name })),
         value: lang.locale || ''
       })
       : ''
@@ -793,32 +781,19 @@ class UnattendConfigManager {
         description: '',
         icon: 'keyboard',
         controlType: 'select',
-        selectOptions: preset.keyboards.map(k => ({ value: k.id, label: k.name })),
+        options: preset.keyboards.map(k => ({ value: k.id, label: k.name })),
         value: lang.keyboard || ''
       })
       : ''
 
-    // 时区模式 Radio 容器
-    const timezoneModeRadioHtml = createRadioContainer({
-      id: 'timezone-container',
-      name: 'timezone-mode',
-      title: t('isoConfig.regionLanguage.timeZoneTitle'),
-      description: '',
+    // 时区模式 Switch ComboCard
+    const timezoneModeCardHtml = createComboCard({
+      id: 'config-timezone-mode-card',
+      title: t('isoConfig.regionLanguage.autoSetTimeZone'),
+      description: t('isoConfig.regionLanguage.autoSetTimeZoneDesc'),
       icon: 'clock',
-      options: [
-        {
-          value: 'implicit',
-          label: t('isoConfig.regionLanguage.timeZoneImplicit'),
-          description: ''
-        },
-        {
-          value: 'explicit',
-          label: t('isoConfig.regionLanguage.timeZoneExplicit'),
-          description: t('isoConfig.regionLanguage.timeZoneExplicitDesc')
-        }
-      ],
-      selectedValue: tz.mode,
-      expanded: true
+      controlType: 'switch',
+      value: tz.mode === 'implicit'
     })
 
     // 时区选择 ComboCard
@@ -829,30 +804,27 @@ class UnattendConfigManager {
         description: '',
         icon: 'map-pin',
         controlType: 'select',
-        selectOptions: preset.timeZones.map(t => ({ value: t.id, label: t.name })),
+        options: preset.timeZones.map(t => ({ value: t.id, label: t.name })),
         value: tz.timeZone || ''
       })
       : ''
 
     contentDiv.innerHTML = `
-      ${languageModeRadioHtml}
+      ${languageModeCardHtml}
       ${uiLanguageCardHtml}
       ${firstLanguageCardHtml}
       ${firstKeyboardCardHtml}
-      ${timezoneModeRadioHtml}
+      ${timezoneModeCardHtml}
       ${timezoneSelectCardHtml}
     `
 
-    // 设置语言模式 Radio 容器事件监听
-    setupRadioContainer(
-      'language-mode-container',
-      'language-mode',
-      (value) => {
-        this.updateModule('languageSettings', { mode: value as 'interactive' | 'unattended' })
-        this.renderRegionLanguageTimeZone()
-      },
-      true
-    )
+    // 设置语言模式 Switch ComboCard 事件监听
+    setupComboCard('config-language-mode-card', (value) => {
+      this.updateModule('languageSettings', {
+        mode: value ? 'interactive' : 'unattended'
+      })
+      this.renderRegionLanguageTimeZone()
+    })
 
     // 设置 Windows display language ComboCard 事件监听
     if (lang.mode === 'unattended') {
@@ -869,16 +841,13 @@ class UnattendConfigManager {
       })
     }
 
-    // 设置时区模式 Radio 容器事件监听
-    setupRadioContainer(
-      'timezone-container',
-      'timezone-mode',
-      (value) => {
-        this.updateModule('timeZone', { mode: value as 'implicit' | 'explicit' })
-        this.renderRegionLanguageTimeZone()
-      },
-      true
-    )
+    // 设置时区模式 Switch ComboCard 事件监听
+    setupComboCard('config-timezone-mode-card', (value) => {
+      this.updateModule('timeZone', {
+        mode: value ? 'implicit' : 'explicit'
+      })
+      this.renderRegionLanguageTimeZone()
+    })
 
     // 设置时区选择 ComboCard 事件监听
     if (tz.mode === 'explicit') {
@@ -893,53 +862,7 @@ class UnattendConfigManager {
     }
   }
 
-  // 渲染模块2: Processor architectures
-  private renderProcessorArch() {
-    const contentDiv = this.getSectionContent('config-processor-arch')
-    if (!contentDiv) return
-
-    const archs = this.config.processorArchitectures
-
-    contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.processorArch.title')}</div>
-            <div style="display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" value="x86" ${archs.includes('x86') ? 'checked' : ''}>
-                <span>${t('isoConfig.processorArch.x86')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" value="amd64" ${archs.includes('amd64') ? 'checked' : ''}>
-                <span>${t('isoConfig.processorArch.amd64')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" value="arm64" ${archs.includes('arm64') ? 'checked' : ''}>
-                <span>${t('isoConfig.processorArch.arm64')}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-    `
-
-    contentDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', (e: any) => {
-        const value = e.target.value as ProcessorArchitecture
-        const checked = e.target.checked
-        let newArchs = [...archs]
-        if (checked) {
-          if (!newArchs.includes(value)) newArchs.push(value)
-        } else {
-          newArchs = newArchs.filter(a => a !== value)
-        }
-        this.updateConfig({ processorArchitectures: newArchs })
-      })
-    })
-  }
-
-  // 渲染模块3: Setup settings
+  // 渲染模块2: Setup settings
   private renderSetupSettings() {
     const contentDiv = this.getSectionContent('config-setup-settings')
     if (!contentDiv) return
@@ -1051,7 +974,7 @@ class UnattendConfigManager {
     const pe = this.config.passwordExpiration
     const lockout = this.config.lockoutSettings
 
-    // 1. Computer name - RadioContainer
+    // 1. Computer name - RadioContainer（带嵌套卡片）
     const computerNameRadioHtml = createRadioContainer({
       id: 'computer-name-container',
       name: 'computer-name-mode',
@@ -1067,41 +990,40 @@ class UnattendConfigManager {
         {
           value: 'custom',
           label: t('isoConfig.nameAccount.computerNameCustom'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-computer-name-input-card',
+              title: t('isoConfig.nameAccount.useThisName'),
+              description: '',
+              controlType: 'text',
+              value: cn.name || '',
+              borderless: true,
+              placeholder: 'DESKTOP-PC'
+            }
+          ]
         },
         {
           value: 'script',
           label: t('isoConfig.nameAccount.computerNameScript'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-computer-name-script-card',
+              title: t('isoConfig.nameAccount.powerShellScript'),
+              description: '',
+              value: cn.script || '',
+              placeholder: "return 'DESKTOP-{0:D3}' -f ( Get-Random -Minimum 0 -Maximum 999 );",
+              rows: 5,
+              borderless: true,
+              showImportExport: true
+            } as any // TextCard 配置
+          ]
         }
       ],
       selectedValue: cn.mode,
       expanded: true
     })
-
-    // Computer name input card
-    const computerNameInputHtml = cn.mode === 'custom'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.useThisName')}</label>
-              <fluent-text-field id="config-computer-name-input" value="${cn.name || ''}" maxlength="15" style="width: 100%;"></fluent-text-field>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // Computer name script card
-    const computerNameScriptHtml = cn.mode === 'script'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.powerShellScript')}</label>
-              <fluent-text-area id="config-computer-name-script" style="width: 100%; min-height: 120px;" rows="5">${cn.script || "return 'DESKTOP-{0:D3}' -f ( Get-Random -Minimum 0 -Maximum 999 );"}</fluent-text-area>
-            </div>
-          </div>
-        </div>`
-      : ''
 
     // 2. User accounts - RadioContainer
     const userAccountsRadioHtml = createRadioContainer({
@@ -1240,7 +1162,7 @@ class UnattendConfigManager {
       })
       : ''
 
-    // 3. Password expiration - RadioContainer
+    // 3. Password expiration - RadioContainer（带嵌套 ComboCard）
     const passwordExpirationRadioHtml = createRadioContainer({
       id: 'password-expiration-container',
       name: 'password-expiration-mode',
@@ -1261,26 +1183,25 @@ class UnattendConfigManager {
         {
           value: 'custom',
           label: t('isoConfig.nameAccount.passwordCustom'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-password-max-age-card',
+              title: t('isoConfig.nameAccount.passwordExpireAfter'),
+              description: '',
+              controlType: 'text',
+              value: (pe.maxAge || 42).toString(),
+              borderless: true,
+              placeholder: '42'
+            }
+          ]
         }
       ],
       selectedValue: pe.mode,
       expanded: true
     })
 
-    // Custom password expiration
-    const customPasswordExpirationHtml = pe.mode === 'custom'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.passwordExpireAfter')}</label>
-              <fluent-text-field id="config-password-max-age" type="number" value="${pe.maxAge || 42}" min="1" max="999" placeholder="42" style="width: 100%;"></fluent-text-field>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // 4. Account Lockout policy - RadioContainer
+    // 4. Account Lockout policy - RadioContainer（带嵌套 ComboCard）
     const accountLockoutRadioHtml = createRadioContainer({
       id: 'account-lockout-container',
       name: 'lockout-mode',
@@ -1301,54 +1222,51 @@ class UnattendConfigManager {
         {
           value: 'custom',
           label: t('isoConfig.nameAccount.lockoutCustom'),
-          description: ''
+          description: t('isoConfig.nameAccount.lockoutCustomDesc'),
+          nestedCards: [
+            {
+              id: 'config-lockout-threshold-card',
+              title: t('isoConfig.nameAccount.lockoutThreshold'),
+              description: t('isoConfig.nameAccount.failedAttempts'),
+              controlType: 'text',
+              value: (lockout.lockoutThreshold || 10).toString(),
+              borderless: true,
+              placeholder: '10'
+            },
+            {
+              id: 'config-lockout-window-card',
+              title: t('isoConfig.nameAccount.lockoutWindow'),
+              description: t('isoConfig.nameAccount.minutes'),
+              controlType: 'text',
+              value: (lockout.resetLockoutCounter || 10).toString(),
+              borderless: true,
+              placeholder: '10'
+            },
+            {
+              id: 'config-lockout-duration-card',
+              title: t('isoConfig.nameAccount.lockoutDuration'),
+              description: t('isoConfig.nameAccount.minutes'),
+              controlType: 'text',
+              value: (lockout.lockoutDuration || 10).toString(),
+              borderless: true,
+              placeholder: '10'
+            }
+          ]
         }
       ],
       selectedValue: lockout.mode,
       expanded: true
     })
 
-    // Custom lockout policy
-    const customLockoutHtml = lockout.mode === 'custom'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <div class="card-description" style="margin-bottom: 12px;">${t('isoConfig.nameAccount.lockoutCustomDesc')}</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-                <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.lockoutThreshold')}</label>
-                  <fluent-text-field id="config-lockout-threshold" type="number" value="${lockout.lockoutThreshold || 10}" min="0" max="999" placeholder="10" style="width: 100%;"></fluent-text-field>
-                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">${t('isoConfig.nameAccount.failedAttempts')}</div>
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.lockoutWindow')}</label>
-                  <fluent-text-field id="config-lockout-window" type="number" value="${lockout.resetLockoutCounter || 10}" min="1" max="99999" placeholder="10" style="width: 100%;"></fluent-text-field>
-                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">${t('isoConfig.nameAccount.minutes')}</div>
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.lockoutDuration')}</label>
-                  <fluent-text-field id="config-lockout-duration" type="number" value="${lockout.lockoutDuration || 10}" min="1" max="99999" placeholder="10" style="width: 100%;"></fluent-text-field>
-                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">${t('isoConfig.nameAccount.minutes')}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>`
-      : ''
-
     contentDiv.innerHTML = `
       ${computerNameRadioHtml}
-      ${computerNameInputHtml}
-      ${computerNameScriptHtml}
       ${userAccountsRadioHtml}
       ${userAccountsListHtml}
       ${firstLogonRadioHtml}
       ${builtinAdminPasswordHtml}
       ${obscurePasswordsCardHtml}
       ${passwordExpirationRadioHtml}
-      ${customPasswordExpirationHtml}
       ${accountLockoutRadioHtml}
-      ${customLockoutHtml}
     `
 
     // === 事件监听设置 ===
@@ -1359,18 +1277,46 @@ class UnattendConfigManager {
       this.renderNameAndAccount()
     }, true)
 
-    const nameInput = contentDiv.querySelector('#config-computer-name-input') as any
-    if (nameInput) {
-      nameInput.addEventListener('input', (e: any) => {
-        this.updateModule('computerName', { name: e.target.value })
+    // 设置嵌套卡片的事件监听
+    if (cn.mode === 'custom') {
+      setupComboCard('config-computer-name-input-card', (value) => {
+        this.updateModule('computerName', { name: value as string })
       })
-    }
-
-    const scriptInput = contentDiv.querySelector('#config-computer-name-script') as any
-    if (scriptInput) {
-      scriptInput.addEventListener('input', (e: any) => {
-        this.updateModule('computerName', { script: e.target.value })
-      })
+    } else if (cn.mode === 'script') {
+      setupTextCard(
+        'config-computer-name-script-card',
+        (value) => {
+          this.updateModule('computerName', { script: value })
+        },
+        async () => {
+          // 导入脚本
+          if (window.electronAPI?.showOpenDialog) {
+            const result = await window.electronAPI.showOpenDialog({
+              filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
+              properties: ['openFile']
+            })
+            if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+              const content = await window.electronAPI.readFile(result.filePaths[0])
+              setTextCardValue('config-computer-name-script-card', content)
+              this.updateModule('computerName', { script: content })
+            }
+          }
+        },
+        async () => {
+          // 导出脚本
+          if (window.electronAPI?.showSaveDialog) {
+            const result = await window.electronAPI.showSaveDialog({
+              filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
+              defaultPath: 'computer-name.ps1'
+            })
+            if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+              // 获取当前值，如果为空则使用placeholder中的默认脚本
+              const currentValue = getTextCardValue('config-computer-name-script-card', true)
+              await window.electronAPI.writeFile(result.filePath, currentValue)
+            }
+          }
+        }
+      )
     }
 
     // 2. User accounts 事件
@@ -1450,10 +1396,11 @@ class UnattendConfigManager {
       this.renderNameAndAccount()
     }, true)
 
-    const maxAgeInput = contentDiv.querySelector('#config-password-max-age') as any
-    if (maxAgeInput) {
-      maxAgeInput.addEventListener('input', (e: any) => {
-        this.updateModule('passwordExpiration', { maxAge: parseInt(e.target.value) || undefined })
+    // 设置嵌套的 ComboCard 事件监听
+    if (pe.mode === 'custom') {
+      setupComboCard('config-password-max-age-card', (value) => {
+        const numValue = parseInt(value as string) || 42
+        this.updateModule('passwordExpiration', { maxAge: numValue })
       })
     }
 
@@ -1463,24 +1410,21 @@ class UnattendConfigManager {
       this.renderNameAndAccount()
     }, true)
 
-    const thresholdInput = contentDiv.querySelector('#config-lockout-threshold') as any
-    if (thresholdInput) {
-      thresholdInput.addEventListener('input', (e: any) => {
-        this.updateModule('lockoutSettings', { lockoutThreshold: parseInt(e.target.value) || undefined })
+    // 设置嵌套的 ComboCard 事件监听
+    if (lockout.mode === 'custom') {
+      setupComboCard('config-lockout-threshold-card', (value) => {
+        const numValue = parseInt(value as string) || 10
+        this.updateModule('lockoutSettings', { lockoutThreshold: numValue })
       })
-    }
 
-    const windowInput = contentDiv.querySelector('#config-lockout-window') as any
-    if (windowInput) {
-      windowInput.addEventListener('input', (e: any) => {
-        this.updateModule('lockoutSettings', { resetLockoutCounter: parseInt(e.target.value) || undefined })
+      setupComboCard('config-lockout-window-card', (value) => {
+        const numValue = parseInt(value as string) || 10
+        this.updateModule('lockoutSettings', { resetLockoutCounter: numValue })
       })
-    }
 
-    const durationInput = contentDiv.querySelector('#config-lockout-duration') as any
-    if (durationInput) {
-      durationInput.addEventListener('input', (e: any) => {
-        this.updateModule('lockoutSettings', { lockoutDuration: parseInt(e.target.value) || undefined })
+      setupComboCard('config-lockout-duration-card', (value) => {
+        const numValue = parseInt(value as string) || 10
+        this.updateModule('lockoutSettings', { lockoutDuration: numValue })
       })
     }
 
@@ -1544,88 +1488,59 @@ class UnattendConfigManager {
         {
           value: 'generated',
           label: t('isoConfig.advancedSettings.peGenerated'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-pe-disable-8dot3-card',
+              title: t('isoConfig.advancedSettings.disable8dot3'),
+              description: t('isoConfig.advancedSettings.disable8dot3Desc'),
+              controlType: 'checkbox',
+              value: pe.disable8Dot3Names || false,
+              borderless: true
+            },
+            {
+              id: 'config-pe-pause-formatting-card',
+              title: t('isoConfig.advancedSettings.pauseFormatting'),
+              description: '',
+              controlType: 'checkbox',
+              value: pe.pauseBeforeFormatting || false,
+              borderless: true
+            },
+            {
+              id: 'config-pe-pause-reboot-card',
+              title: t('isoConfig.advancedSettings.pauseReboot'),
+              description: '',
+              controlType: 'checkbox',
+              value: pe.pauseBeforeReboot || false,
+              borderless: true
+            }
+          ]
         },
         {
           value: 'script',
           label: t('isoConfig.advancedSettings.peScript'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-pe-custom-script-card',
+              title: t('isoConfig.advancedSettings.customPeScript'),
+              description: t('isoConfig.advancedSettings.customPeScriptDesc'),
+              icon: 'code',
+              value: pe.cmdScript || '',
+              placeholder: `@echo off
+echo Custom PE script
+pause`,
+              rows: 10,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
         }
       ],
       selectedValue: pe.mode,
       expanded: true
     })
 
-    // 2.1 Generated模式 - Checkbox选项
-    const generatedOptionsHtml = pe.mode === 'generated'
-      ? `<div class="card">
-          <div class="card-left">
-            <i data-lucide="settings" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.advancedSettings.generatedOptions')}</div>
-              <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
-                <div>
-                  <fluent-checkbox id="config-pe-disable-8dot3" ${pe.disable8Dot3Names ? 'checked' : ''}>${t('isoConfig.advancedSettings.disable8dot3')}</fluent-checkbox>
-                  <div class="card-description" style="margin-left: 24px; margin-top: 4px;">${t('isoConfig.advancedSettings.disable8dot3Desc')}</div>
-                </div>
-                <fluent-checkbox id="config-pe-pause-formatting" ${pe.pauseBeforeFormatting ? 'checked' : ''}>${t('isoConfig.advancedSettings.pauseFormatting')}</fluent-checkbox>
-                <fluent-checkbox id="config-pe-pause-reboot" ${pe.pauseBeforeReboot ? 'checked' : ''}>${t('isoConfig.advancedSettings.pauseReboot')}</fluent-checkbox>
-              </div>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // 2.2 Script模式 - 自定义脚本
-    const customScriptDefaultValue = `@for %%d in (C D E F G H I J K L M N O P Q T U V Y Z) do @(
-    if exist %%d:\\sources\\install.wim set "IMAGE_FILE=%%d:\\sources\\install.wim"
-    if exist %%d:\\sources\\install.esd set "IMAGE_FILE=%%d:\\sources\\install.esd"
-    if exist %%d:\\sources\\install.swm set "IMAGE_FILE=%%d:\\sources\\install.swm" & set "SWM_PARAM=/SWMFile:%%d:\\sources\\install*.swm"
-    if exist %%d:\\autounattend.xml set "XML_FILE=%%d:\\autounattend.xml"
-    if exist %%d:\\$OEM$ set "OEM_FOLDER=%%d:\\$OEM$"
-    if exist %%d:\\$WinPEDriver$ set "PEDRIVERS_FOLDER=%%d:\\$WinPEDriver$"
-)
-for /f "tokens=3" %%t in ('reg.exe query HKLM\\System\\Setup /v UnattendFile') do ( if exist %%t set "XML_FILE=%%t" )
-@if not defined IMAGE_FILE echo Could not locate install.wim, install.esd or install.swm. & pause & exit /b 1
-@if not defined XML_FILE echo Could not locate autounattend.xml. & pause & exit /b 1
-
-rem Install drivers from $WinPEDriver$ folder
-if defined PEDRIVERS_FOLDER (
-    for /R %PEDRIVERS_FOLDER% %%f IN (*.inf) do drvload.exe "%%f"
-)
-
->X:\\diskpart.txt (
-    echo SELECT DISK=0
-    echo CLEAN
-    echo CONVERT GPT
-    echo CREATE PARTITION EFI SIZE=300
-    echo FORMAT QUICK FS=FAT32 LABEL="System"
-    echo ASSIGN LETTER=S
-    echo CREATE PARTITION MSR SIZE=16
-    echo CREATE PARTITION PRIMARY
-    echo FORMAT QUICK FS=NTFS LABEL="Windows"
-    echo ASSIGN LETTER=W
-)
-
-diskpart.exe /s X:\\diskpart.txt || ( echo diskpart.exe encountered an error. & pause & exit /b 1 )
-dism.exe /Apply-Image /ImageFile:%IMAGE_FILE% %SWM_PARAM% /Name:"Windows 11 Pro" /ApplyDir:W:\\ || ( echo dism.exe encountered an error. & pause & exit /b 1 )
-bcdboot.exe W:\\Windows /s S: || ( echo bcdboot.exe encountered an error. & pause & exit /b 1 )
-
-rem Continue with next stage of Windows Setup after reboot
-wpeutil.exe reboot`
-
-    const customScriptHtml = pe.mode === 'script'
-      ? `<div class="card">
-          <div class="card-left">
-            <i data-lucide="code" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.advancedSettings.customPeScript')}</div>
-              <fluent-text-area id="config-pe-custom-script" style="width: 100%; min-height: 400px; font-family: 'Consolas', 'Monaco', monospace;" rows="25">${pe.cmdScript || customScriptDefaultValue}</fluent-text-area>
-              <div class="card-description" style="margin-top: 8px;">${t('isoConfig.advancedSettings.customPeScriptDesc')}</div>
-            </div>
-          </div>
-        </div>`
-      : ''
 
     // 3. Virtual machine support - ComboContainer
     const vmSupportHtml = createComboContainer({
@@ -1669,32 +1584,19 @@ wpeutil.exe reboot`
       expanded: true
     })
 
-    // 4. WDAC - RadioContainer
-    const wdacRadioHtml = createRadioContainer({
-      id: 'wdac-mode-container',
-      name: 'wdac-mode',
+    // 4. WDAC - ComboCard Switch
+    const wdacCardHtml = createComboCard({
+      id: 'wdac-mode-card',
       title: t('isoConfig.advancedSettings.wdac'),
       description: t('isoConfig.advancedSettings.wdacDesc'),
       icon: 'shield-alert',
-      options: [
-        {
-          value: 'skip',
-          label: t('isoConfig.advancedSettings.wdacSkip'),
-          description: ''
-        },
-        {
-          value: 'configure',
-          label: t('isoConfig.advancedSettings.wdacConfigure'),
-          description: ''
-        }
-      ],
-      selectedValue: wdac.mode || 'skip',
-      expanded: true
+      controlType: 'switch',
+      value: wdac.mode === 'configure'
     })
 
-    // 4.1 WDAC Configure模式 - Policy设置
-    const wdacConfigureHtml = wdac.mode === 'configure'
-      ? `${createRadioContainer({
+    // 4.1 WDAC Configure模式 - Policy设置 (独立显示)
+    const wdacEnforcementHtml = wdac.mode === 'configure'
+      ? createRadioContainer({
         id: 'wdac-enforcement-container',
         name: 'wdac-enforcement-mode',
         title: t('isoConfig.advancedSettings.wdacEnforcement'),
@@ -1718,9 +1620,12 @@ wpeutil.exe reboot`
           }
         ],
         selectedValue: wdac.enforcementMode || 'auditOnBootFailure',
-        expanded: false
-      })}
-      ${createRadioContainer({
+        expanded: true
+      })
+      : ''
+
+    const wdacScriptHtml = wdac.mode === 'configure'
+      ? createRadioContainer({
         id: 'wdac-script-enforcement-container',
         name: 'wdac-script-mode',
         title: t('isoConfig.advancedSettings.wdacScriptEnforcement'),
@@ -1739,18 +1644,17 @@ wpeutil.exe reboot`
           }
         ],
         selectedValue: wdac.scriptEnforcement || 'restricted',
-        expanded: false
-      })}`
+        expanded: true
+      })
       : ''
 
     contentDiv.innerHTML = `
       ${compactOSRadioHtml}
       ${peOperationRadioHtml}
-      ${generatedOptionsHtml}
-      ${customScriptHtml}
       ${vmSupportHtml}
-      ${wdacRadioHtml}
-      ${wdacConfigureHtml}
+      ${wdacCardHtml}
+      ${wdacEnforcementHtml}
+      ${wdacScriptHtml}
     `
 
     // === 事件监听设置 ===
@@ -1766,35 +1670,50 @@ wpeutil.exe reboot`
       this.renderAdvancedSettings()
     }, true)
 
-    // 2.1 Generated选项
+    // 2.1 Generated 选项 (嵌套)
     if (pe.mode === 'generated') {
-      const disable8dot3Check = contentDiv.querySelector('#config-pe-disable-8dot3') as any
-      if (disable8dot3Check) {
-        disable8dot3Check.addEventListener('change', () => {
-          this.updateModule('peSettings', { disable8Dot3Names: disable8dot3Check.checked })
-        })
-      }
+      setupComboCard('config-pe-disable-8dot3-card', (value) => {
+        this.updateModule('peSettings', { disable8Dot3Names: value as boolean })
+      })
 
-      const pauseFormattingCheck = contentDiv.querySelector('#config-pe-pause-formatting') as any
-      if (pauseFormattingCheck) {
-        pauseFormattingCheck.addEventListener('change', () => {
-          this.updateModule('peSettings', { pauseBeforeFormatting: pauseFormattingCheck.checked })
-        })
-      }
+      setupComboCard('config-pe-pause-formatting-card', (value) => {
+        this.updateModule('peSettings', { pauseBeforeFormatting: value as boolean })
+      })
 
-      const pauseRebootCheck = contentDiv.querySelector('#config-pe-pause-reboot') as any
-      if (pauseRebootCheck) {
-        pauseRebootCheck.addEventListener('change', () => {
-          this.updateModule('peSettings', { pauseBeforeReboot: pauseRebootCheck.checked })
-        })
-      }
+      setupComboCard('config-pe-pause-reboot-card', (value) => {
+        this.updateModule('peSettings', { pauseBeforeReboot: value as boolean })
+      })
     }
 
-    // 2.2 Custom script
-    const scriptInput = contentDiv.querySelector('#config-pe-custom-script') as any
-    if (scriptInput) {
-      scriptInput.addEventListener('input', (e: any) => {
-        this.updateModule('peSettings', { cmdScript: e.target.value })
+    // 2.2 Custom script (嵌套)
+    if (pe.mode === 'script') {
+      setupTextCard('config-pe-custom-script-card', (value) => {
+        this.updateModule('peSettings', { cmdScript: value })
+      }, async () => {
+        // 导入脚本
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'Script Files', extensions: ['cmd', 'bat', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('config-pe-custom-script-card', content)
+            this.updateModule('peSettings', { cmdScript: content })
+          }
+        }
+      }, async () => {
+        // 导出脚本
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'Batch Files', extensions: ['cmd', 'bat'] }],
+            defaultPath: 'pe-script.cmd'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('config-pe-custom-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
       })
     }
 
@@ -1803,21 +1722,22 @@ wpeutil.exe reboot`
       this.updateModule('vmSupport', values)
     }, true)
 
-    // 4. WDAC
-    setupRadioContainer('wdac-mode-container', 'wdac-mode', (value) => {
-      this.updateModule('wdac', { mode: value as 'skip' | 'configure' })
+    // 4. WDAC Switch
+    setupComboCard('wdac-mode-card', (value) => {
+      const enabled = value as boolean
+      this.updateModule('wdac', { mode: enabled ? 'configure' : 'skip' })
       this.renderAdvancedSettings()
-    }, true)
+    })
 
-    // 4.1 WDAC Configure
+    // 4.1 WDAC Configure (仅在启用时显示)
     if (wdac.mode === 'configure') {
       setupRadioContainer('wdac-enforcement-container', 'wdac-enforcement-mode', (value) => {
         this.updateModule('wdac', { enforcementMode: value as 'audit' | 'auditOnBootFailure' | 'enforcement' })
-      }, false)
+      }, true)
 
       setupRadioContainer('wdac-script-enforcement-container', 'wdac-script-mode', (value) => {
         this.updateModule('wdac', { scriptEnforcement: value as 'restricted' | 'unrestricted' })
-      }, false)
+      }, true)
     }
 
     // 初始化图标
@@ -1833,7 +1753,7 @@ wpeutil.exe reboot`
 
     const part = this.config.partitioning
 
-    // 1. 主要分区模式 - RadioContainer
+    // 1. 主要分区模式 - RadioContainer (带嵌套)
     const partitionModeRadioHtml = createRadioContainer({
       id: 'partitioning-mode-container',
       name: 'partition-mode',
@@ -1849,121 +1769,72 @@ wpeutil.exe reboot`
         {
           value: 'automatic',
           label: t('isoConfig.partitioning.automatic'),
-          description: ''
+          description: '',
+          nestedCards: [
+            // Partition Layout Select
+            {
+              id: 'partition-layout-card',
+              title: t('isoConfig.partitioning.partitionLayout'),
+              description: '',
+              icon: 'layout',
+              controlType: 'select',
+              value: part.layout || 'GPT',
+              options: [
+                { value: 'GPT', label: t('isoConfig.partitioning.gpt') },
+                { value: 'MBR', label: t('isoConfig.partitioning.mbr') }
+              ],
+              borderless: true
+            },
+            // ESP Size (仅GPT显示)
+            ...(part.layout === 'GPT' ? [{
+              id: 'esp-size-card',
+              title: t('isoConfig.partitioning.espSize') + ' (MB)',
+              description: t('isoConfig.partitioning.gptDesc'),
+              controlType: 'text' as const,
+              value: String(part.espSize || 300),
+              placeholder: '300',
+              borderless: true
+            }] : []),
+            // Windows RE Mode Select
+            {
+              id: 'recovery-mode-card',
+              title: t('isoConfig.partitioning.windowsRe'),
+              description: t('isoConfig.partitioning.windowsReDesc'),
+              icon: 'life-buoy',
+              controlType: 'select',
+              value: part.recoveryMode || 'partition',
+              options: [
+                { value: 'partition', label: t('isoConfig.partitioning.rePartition') },
+                { value: 'folder', label: t('isoConfig.partitioning.reFolder') },
+                { value: 'none', label: t('isoConfig.partitioning.reNone') }
+              ],
+              borderless: true
+            },
+            // Recovery Partition Size (总是显示)
+            {
+              id: 'recovery-size-card',
+              title: t('isoConfig.partitioning.recoverySize') + ' (MB)',
+              description: t('isoConfig.partitioning.recoverySizeDesc'),
+              controlType: 'text' as const,
+              value: String(part.recoverySize || 1000),
+              placeholder: '1000',
+              borderless: true
+            }
+          ] as any
         },
         {
           value: 'custom',
           label: t('isoConfig.partitioning.custom'),
-          description: ''
-        }
-      ],
-      selectedValue: part.mode,
-      expanded: true
-    })
-
-    // 2. Automatic模式下的设置
-    let automaticSettingsHtml = ''
-    if (part.mode === 'automatic') {
-      // 2.1 Partition layout - RadioContainer
-      const partitionLayoutRadioHtml = createRadioContainer({
-        id: 'partition-layout-container',
-        name: 'partition-layout',
-        title: t('isoConfig.partitioning.partitionLayout'),
-        description: '',
-        icon: 'layout',
-        options: [
-          {
-            value: 'GPT',
-            label: t('isoConfig.partitioning.gpt'),
-            description: t('isoConfig.partitioning.gptDesc')
-          },
-          {
-            value: 'MBR',
-            label: t('isoConfig.partitioning.mbr'),
-            description: t('isoConfig.partitioning.mbrDesc')
-          }
-        ],
-        selectedValue: part.layout || 'GPT',
-        expanded: true
-      })
-
-      // ESP Size input (只在GPT模式下显示)
-      const espSizeHtml = part.layout === 'GPT'
-        ? `<div class="card">
-            <div class="card-left">
-              <div class="card-content">
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.espSize')}</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <fluent-text-field id="config-esp-size" type="number" value="${part.espSize || 300}" min="100" style="width: 150px;"></fluent-text-field>
-                  <span>MB</span>
-                </div>
-              </div>
-            </div>
-          </div>`
-        : ''
-
-      // 2.2 Windows RE - RadioContainer
-      const recoveryModeRadioHtml = createRadioContainer({
-        id: 'recovery-mode-container',
-        name: 'recovery-mode',
-        title: t('isoConfig.partitioning.windowsRe'),
-        description: t('isoConfig.partitioning.windowsReDesc'),
-        icon: 'life-buoy',
-        options: [
-          {
-            value: 'partition',
-            label: t('isoConfig.partitioning.rePartition'),
-            description: ''
-          },
-          {
-            value: 'folder',
-            label: t('isoConfig.partitioning.reFolder'),
-            description: t('isoConfig.partitioning.reFolderDesc')
-          },
-          {
-            value: 'none',
-            label: t('isoConfig.partitioning.reNone'),
-            description: t('isoConfig.partitioning.reNoneDesc')
-          }
-        ],
-        selectedValue: part.recoveryMode || 'partition',
-        expanded: true
-      })
-
-      // Recovery partition size input (只在partition模式下显示)
-      const recoveryPartitionSizeHtml = part.recoveryMode === 'partition'
-        ? `<div class="card">
-            <div class="card-left">
-              <div class="card-content">
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.recoverySize')}</label>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <fluent-text-field id="config-recovery-size" type="number" value="${part.recoverySize || 1000}" min="300" style="width: 150px;"></fluent-text-field>
-                  <span>MB</span>
-                </div>
-              </div>
-            </div>
-          </div>`
-        : ''
-
-      automaticSettingsHtml = `
-        ${partitionLayoutRadioHtml}
-        ${espSizeHtml}
-        ${recoveryModeRadioHtml}
-        ${recoveryPartitionSizeHtml}
-      `
-    }
-
-    // 3. Custom模式下的设置
-    let customSettingsHtml = ''
-    if (part.mode === 'custom') {
-      // Diskpart script
-      const diskpartScriptHtml = `
-        <div class="card">
-          <div class="card-left">
-            <i data-lucide="code" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.partitioning.diskpartScript')}</div>
-              <fluent-text-area id="config-diskpart-script" style="width: 100%; min-height: 320px; font-family: 'Consolas', 'Monaco', monospace;" rows="18">${part.diskpartScript || `SELECT DISK=0
+          description: '',
+          nestedCards: [
+            // Diskpart Script
+            {
+              id: 'diskpart-script-card',
+              title: t('isoConfig.partitioning.diskpartScript'),
+              description: t('isoConfig.partitioning.diskpartScriptDesc'),
+              icon: 'code',
+              value: part.diskpartScript || '',
+              placeholder: `SELECT DISK=0
 CLEAN
 CONVERT GPT
 CREATE PARTITION EFI SIZE=300
@@ -1978,97 +1849,77 @@ CREATE PARTITION PRIMARY
 FORMAT QUICK FS=NTFS LABEL="Recovery"
 ASSIGN LETTER=R
 SET ID="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
-GPT ATTRIBUTES=0x8000000000000001`}</fluent-text-area>
-              <div class="card-description" style="margin-top: 8px;">${t('isoConfig.partitioning.diskpartScriptDesc')}</div>
-            </div>
-          </div>
-        </div>
-      `
+GPT ATTRIBUTES=0x8000000000000001`,
+              rows: 18,
+              borderless: true,
+              showImportExport: true
+            },
+            // Install To Mode Select
+            {
+              id: 'install-to-mode-card',
+              title: t('isoConfig.partitioning.installTo'),
+              description: '',
+              icon: 'target',
+              controlType: 'select',
+              value: part.installToMode || 'available',
+              options: [
+                { value: 'available', label: t('isoConfig.partitioning.installToAvailable') },
+                { value: 'custom', label: t('isoConfig.partitioning.installToCustom') }
+              ],
+              borderless: true
+            },
+            // Install Disk (无条件显示)
+            {
+              id: 'install-to-disk-card',
+              title: t('isoConfig.partitioning.installDisk'),
+              description: t('isoConfig.partitioning.installDiskDesc'),
+              controlType: 'text' as const,
+              value: String(part.installToDisk || 0),
+              placeholder: '0',
+              borderless: true
+            },
+            // Install Partition (无条件显示)
+            {
+              id: 'install-to-partition-card',
+              title: t('isoConfig.partitioning.installPartition'),
+              description: t('isoConfig.partitioning.installPartitionDesc'),
+              controlType: 'text' as const,
+              value: String(part.installToPartition || 3),
+              placeholder: '3',
+              borderless: true
+            }
+          ] as any
+        }
+      ],
+      selectedValue: part.mode,
+      expanded: true
+    })
 
-      // Install to mode - RadioContainer
-      const installToModeRadioHtml = createRadioContainer({
-        id: 'install-to-mode-container',
-        name: 'install-to-mode',
-        title: t('isoConfig.partitioning.installTo'),
-        description: '',
-        icon: 'target',
-        options: [
-          {
-            value: 'available',
-            label: t('isoConfig.partitioning.installToAvailable'),
-            description: ''
-          },
-          {
-            value: 'custom',
-            label: t('isoConfig.partitioning.installToCustom'),
-            description: ''
-          }
-        ],
-        selectedValue: part.installToMode || 'available',
-        expanded: true
-      })
-
-      // Custom install location (只在custom模式下显示)
-      const customInstallLocationHtml = part.installToMode === 'custom'
-        ? `<div class="card">
-            <div class="card-left">
-              <div class="card-content">
-                <div class="card-title">${t('isoConfig.partitioning.installLocation')}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
-                  <div>
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.disk')}</label>
-                    <fluent-text-field id="config-install-to-disk" type="number" value="${part.installToDisk || 0}" min="0" style="width: 100%;"></fluent-text-field>
-                  </div>
-                  <div>
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.partition')}</label>
-                    <fluent-text-field id="config-install-to-partition" type="number" value="${part.installToPartition || 3}" min="1" style="width: 100%;"></fluent-text-field>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>`
-        : ''
-
-      customSettingsHtml = `
-        ${diskpartScriptHtml}
-        ${installToModeRadioHtml}
-        ${customInstallLocationHtml}
-      `
-    }
-
-    // 4. Disk Assertion - RadioContainer (显示在所有模式下，但主要用于automatic和custom)
-    const diskAssertionRadioHtml = (part.mode === 'automatic' || part.mode === 'custom')
-      ? createRadioContainer({
-        id: 'disk-assertion-container',
-        name: 'disk-assertion-mode',
-        title: t('isoConfig.partitioning.diskAssertion'),
-        description: t('isoConfig.partitioning.diskAssertionDesc'),
-        icon: 'alert-triangle',
-        options: [
-          {
-            value: 'skip',
-            label: t('isoConfig.partitioning.diskAssertionSkip'),
-            description: ''
-          },
-          {
-            value: 'script',
-            label: t('isoConfig.partitioning.diskAssertionScript'),
-            description: ''
-          }
-        ],
-        selectedValue: part.diskAssertionMode || 'skip',
-        expanded: true
-      })
-      : ''
-
-    // Disk assertion script (只在script模式下显示)
-    const diskAssertionScriptHtml = (part.mode === 'automatic' || part.mode === 'custom') && part.diskAssertionMode === 'script'
-      ? `<div class="card">
-          <div class="card-left">
-            <i data-lucide="code" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.partitioning.vbscriptCode')}</div>
-              <fluent-text-area id="config-disk-assertion-script" style="width: 100%; min-height: 240px; font-family: 'Consolas', 'Monaco', monospace;" rows="15">${part.diskAssertionScript || `On Error Resume Next
+    // 2. 磁盘断言 RadioContainer（无条件显示）
+    const diskAssertionRadioHtml = createRadioContainer({
+      id: 'disk-assertion-container',
+      name: 'disk-assertion-mode',
+      title: t('isoConfig.partitioning.diskAssertion'),
+      description: t('isoConfig.partitioning.diskAssertionDesc'),
+      icon: 'alert-triangle',
+      options: [
+        {
+          value: 'skip',
+          label: t('isoConfig.partitioning.diskAssertionSkip'),
+          description: ''
+        },
+        {
+          value: 'script',
+          label: t('isoConfig.partitioning.diskAssertionScript'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'disk-assertion-script-card',
+              title: t('isoConfig.partitioning.vbscriptCode'),
+              description: '',
+              icon: 'code',
+              value: part.diskAssertionScript || '',
+              placeholder: `On Error Resume Next
 Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")
 Set drive = wmi.Get("Win32_DiskDrive.DeviceID='\\\\.\\PHYSICALDRIVE0'")
 If Err.Number <> 0 Then
@@ -2080,18 +1931,21 @@ If drive.InterfaceType = "IDE" Or drive.InterfaceType = "SCSI" Then
 Else
     MsgBox "Assertion failed."
     WScript.Quit 1
-End If`}</fluent-text-area>
-            </div>
-          </div>
-        </div>`
-      : ''
+End If`,
+              rows: 15,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: part.diskAssertionMode || 'skip',
+      expanded: true
+    })
 
     contentDiv.innerHTML = `
       ${partitionModeRadioHtml}
-      ${automaticSettingsHtml}
-      ${customSettingsHtml}
       ${diskAssertionRadioHtml}
-      ${diskAssertionScriptHtml}
     `
 
     // === 事件监听设置 ===
@@ -2102,82 +1956,111 @@ End If`}</fluent-text-area>
       this.renderPartitioning()
     }, true)
 
-    // 2. Automatic模式下的事件
+    // 2. Automatic 模式的嵌套卡片事件
     if (part.mode === 'automatic') {
-      // Partition layout
-      setupRadioContainer('partition-layout-container', 'partition-layout', (value) => {
+      setupComboCard('partition-layout-card', (value) => {
         this.updateModule('partitioning', { layout: value as 'GPT' | 'MBR' })
         this.renderPartitioning()
-      }, true)
+      })
 
-      // ESP size
-      const espSizeInput = contentDiv.querySelector('#config-esp-size') as any
-      if (espSizeInput) {
-        espSizeInput.addEventListener('input', (e: any) => {
-          this.updateModule('partitioning', { espSize: parseInt(e.target.value) || 300 })
+      if (part.layout === 'GPT') {
+        setupComboCard('esp-size-card', (value) => {
+          this.updateModule('partitioning', { espSize: parseInt(value as string) || 300 })
         })
       }
 
-      // Recovery mode
-      setupRadioContainer('recovery-mode-container', 'recovery-mode', (value) => {
+      setupComboCard('recovery-mode-card', (value) => {
         this.updateModule('partitioning', { recoveryMode: value as 'partition' | 'folder' | 'none' })
         this.renderPartitioning()
-      }, true)
+      })
 
-      // Recovery partition size
-      const recoverySizeInput = contentDiv.querySelector('#config-recovery-size') as any
-      if (recoverySizeInput) {
-        recoverySizeInput.addEventListener('input', (e: any) => {
-          this.updateModule('partitioning', { recoverySize: parseInt(e.target.value) || 1000 })
-        })
-      }
+      // Recovery Size (无条件设置)
+      setupComboCard('recovery-size-card', (value) => {
+        this.updateModule('partitioning', { recoverySize: parseInt(value as string) || 1000 })
+      })
     }
 
-    // 3. Custom模式下的事件
+    // 3. Custom 模式的嵌套卡片事件
     if (part.mode === 'custom') {
-      // Diskpart script
-      const scriptInput = contentDiv.querySelector('#config-diskpart-script') as any
-      if (scriptInput) {
-        scriptInput.addEventListener('input', (e: any) => {
-          this.updateModule('partitioning', { diskpartScript: e.target.value })
-        })
-      }
+      setupTextCard('diskpart-script-card', (value) => {
+        this.updateModule('partitioning', { diskpartScript: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'Diskpart Script', extensions: ['txt', 'diskpart'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            this.updateModule('partitioning', { diskpartScript: content })
+            this.renderPartitioning()
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'Diskpart Script', extensions: ['txt'] }],
+            defaultPath: 'diskpart-script.txt'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            // 获取当前值，如果为空则使用placeholder中的默认脚本
+            const currentValue = getTextCardValue('diskpart-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
 
-      // Install to mode
-      setupRadioContainer('install-to-mode-container', 'install-to-mode', (value) => {
+      setupComboCard('install-to-mode-card', (value) => {
         this.updateModule('partitioning', { installToMode: value as 'available' | 'custom' })
         this.renderPartitioning()
-      }, true)
+      })
 
-      // Custom install location
-      const installToDiskInput = contentDiv.querySelector('#config-install-to-disk') as any
-      if (installToDiskInput) {
-        installToDiskInput.addEventListener('input', (e: any) => {
-          this.updateModule('partitioning', { installToDisk: parseInt(e.target.value) || 0 })
-        })
-      }
+      // Install Disk & Partition (无条件设置)
+      setupComboCard('install-to-disk-card', (value) => {
+        this.updateModule('partitioning', { installToDisk: parseInt(value as string) || 0 })
+      })
 
-      const installToPartitionInput = contentDiv.querySelector('#config-install-to-partition') as any
-      if (installToPartitionInput) {
-        installToPartitionInput.addEventListener('input', (e: any) => {
-          this.updateModule('partitioning', { installToPartition: parseInt(e.target.value) || 3 })
-        })
-      }
+      setupComboCard('install-to-partition-card', (value) => {
+        this.updateModule('partitioning', { installToPartition: parseInt(value as string) || 3 })
+      })
     }
 
-    // 4. Disk Assertion事件
-    if (part.mode === 'automatic' || part.mode === 'custom') {
-      setupRadioContainer('disk-assertion-container', 'disk-assertion-mode', (value) => {
-        this.updateModule('partitioning', { diskAssertionMode: value as 'skip' | 'script' })
-        this.renderPartitioning()
-      }, true)
+    // 4. 磁盘断言事件（无条件设置）
+    setupRadioContainer('disk-assertion-container', 'disk-assertion-mode', (value) => {
+      this.updateModule('partitioning', { diskAssertionMode: value as 'skip' | 'script' })
+      this.renderPartitioning()
+    }, true)
 
-      const assertionScriptInput = contentDiv.querySelector('#config-disk-assertion-script') as any
-      if (assertionScriptInput) {
-        assertionScriptInput.addEventListener('input', (e: any) => {
-          this.updateModule('partitioning', { diskAssertionScript: e.target.value })
-        })
-      }
+    if (part.diskAssertionMode === 'script') {
+      setupTextCard('disk-assertion-script-card', (value) => {
+        this.updateModule('partitioning', { diskAssertionScript: value })
+      }, async () => {
+        // 导入脚本
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'VBScript Files', extensions: ['vbs', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('disk-assertion-script-card', content)
+            this.updateModule('partitioning', { diskAssertionScript: content })
+          }
+        }
+      }, async () => {
+        // 导出脚本
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'VBScript Files', extensions: ['vbs'] }],
+            defaultPath: 'disk-assertion.vbs'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            // 获取当前值，如果为空则使用placeholder中的默认脚本
+            const currentValue = getTextCardValue('disk-assertion-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
     }
 
     // 初始化图标
@@ -2195,7 +2078,7 @@ End If`}</fluent-text-area>
     const source = this.config.sourceImage
     const preset = this.getPresetData()
 
-    // 1. Windows Edition Mode - RadioContainer
+    // 1. Windows Edition Mode - RadioContainer (带嵌套)
     const editionModeRadioHtml = createRadioContainer({
       id: 'windows-edition-mode-container',
       name: 'edition-mode',
@@ -2206,12 +2089,34 @@ End If`}</fluent-text-area>
         {
           value: 'generic',
           label: t('isoConfig.windowsEdition.generic'),
-          description: t('isoConfig.windowsEdition.genericDesc')
+          description: t('isoConfig.windowsEdition.genericDesc'),
+          nestedCards: [
+            {
+              id: 'config-windows-edition-card',
+              title: t('isoConfig.windowsEdition.installThisEdition'),
+              icon: 'package',
+              controlType: 'select',
+              options: preset.windowsEditions.map(e => ({ value: e.id, label: e.name })),
+              value: edition.editionName || 'pro',
+              borderless: true
+            }
+          ]
         },
         {
           value: 'custom',
           label: t('isoConfig.windowsEdition.custom'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-product-key-card',
+              title: t('isoConfig.windowsEdition.useThisProductKey'),
+              description: '',
+              controlType: 'text',
+              value: edition.productKey || '',
+              placeholder: 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX',
+              borderless: true
+            }
+          ]
         },
         {
           value: 'interactive',
@@ -2228,31 +2133,7 @@ End If`}</fluent-text-area>
       expanded: true
     })
 
-    // 2. Generic模式 - 选择Windows版本
-    const genericEditionSelectHtml = (edition.mode === 'index' || edition.mode === 'name' || edition.mode === 'generic')
-      ? createComboCard({
-        id: 'config-windows-edition-card',
-        title: t('isoConfig.windowsEdition.installThisEdition'),
-        icon: 'package',
-        controlType: 'select',
-        selectOptions: preset.windowsEditions.map(e => ({ value: e.id, label: e.name })),
-        value: edition.editionName || 'pro'
-      })
-      : ''
-
-    // 3. Custom模式 - 输入产品密钥
-    const customProductKeyHtml = edition.mode === 'key'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.windowsEdition.useThisProductKey')}</label>
-              <fluent-text-field id="config-product-key" value="${edition.productKey || 'VK7JG-NPHTM-C97JM-9MPGT-3V66T'}" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" maxlength="29" pattern="^([A-Z0-9]{5}-){4}[A-Z0-9]{5}$" style="width: 100%;"></fluent-text-field>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // 4. Source Image Mode - RadioContainer
+    // 2. Source Image Mode - RadioContainer (带嵌套)
     const sourceImageModeRadioHtml = createRadioContainer({
       id: 'source-image-mode-container',
       name: 'source-image-mode',
@@ -2268,47 +2149,43 @@ End If`}</fluent-text-area>
         {
           value: 'index',
           label: t('isoConfig.windowsEdition.selectByIndex'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-source-image-index-card',
+              title: t('isoConfig.windowsEdition.selectByIndex'),
+              description: '',
+              controlType: 'text',
+              value: String(source.imageIndex || 1),
+              placeholder: '1',
+              borderless: true
+            }
+          ]
         },
         {
           value: 'name',
           label: t('isoConfig.windowsEdition.selectByName'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-source-image-name-card',
+              title: t('isoConfig.windowsEdition.selectByName'),
+              description: '',
+              controlType: 'text',
+              value: source.imageName || '',
+              placeholder: 'Windows 11 Pro',
+              borderless: true
+            }
+          ]
         }
       ],
       selectedValue: source.mode || 'automatic',
       expanded: true
     })
 
-    // 5. Index模式 - 输入索引
-    const indexInputHtml = source.mode === 'index'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <fluent-text-field id="config-source-image-index" type="number" value="${source.imageIndex || 1}" min="1" style="width: 100%;"></fluent-text-field>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // 6. Name模式 - 输入名称
-    const nameInputHtml = source.mode === 'name'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <fluent-text-field id="config-source-image-name" value="${source.imageName || 'Windows 11 Pro'}" style="width: 100%;"></fluent-text-field>
-            </div>
-          </div>
-        </div>`
-      : ''
-
     contentDiv.innerHTML = `
       ${editionModeRadioHtml}
-      ${genericEditionSelectHtml}
-      ${customProductKeyHtml}
       ${sourceImageModeRadioHtml}
-      ${indexInputHtml}
-      ${nameInputHtml}
     `
 
     // === 事件监听设置 ===
@@ -2328,18 +2205,17 @@ End If`}</fluent-text-area>
       this.renderWindowsEditionAndSource()
     }, true)
 
-    // 2. Generic edition select
+    // 2. Generic edition select (嵌套)
     if (edition.mode === 'index' || edition.mode === 'name' || edition.mode === 'generic') {
       setupComboCard('config-windows-edition-card', (value) => {
         this.updateModule('windowsEdition', { editionName: value as string, mode: 'name' })
       })
     }
 
-    // 3. Custom product key
-    const keyInput = contentDiv.querySelector('#config-product-key') as any
-    if (keyInput) {
-      keyInput.addEventListener('input', (e: any) => {
-        this.updateModule('windowsEdition', { productKey: e.target.value })
+    // 3. Custom product key (嵌套)
+    if (edition.mode === 'key') {
+      setupComboCard('config-product-key-card', (value) => {
+        this.updateModule('windowsEdition', { productKey: value as string })
       })
     }
 
@@ -2349,19 +2225,17 @@ End If`}</fluent-text-area>
       this.renderWindowsEditionAndSource()
     }, true)
 
-    // 5. Image index
-    const indexInput = contentDiv.querySelector('#config-source-image-index') as any
-    if (indexInput) {
-      indexInput.addEventListener('input', (e: any) => {
-        this.updateModule('sourceImage', { imageIndex: parseInt(e.target.value) || 1 })
+    // 5. Source image index (嵌套)
+    if (source.mode === 'index') {
+      setupComboCard('config-source-image-index-card', (value) => {
+        this.updateModule('sourceImage', { imageIndex: parseInt(value as string) || 1 })
       })
     }
 
-    // 6. Image name
-    const nameInput = contentDiv.querySelector('#config-source-image-name') as any
-    if (nameInput) {
-      nameInput.addEventListener('input', (e: any) => {
-        this.updateModule('sourceImage', { imageName: e.target.value })
+    // 6. Source image name (嵌套)
+    if (source.mode === 'name') {
+      setupComboCard('config-source-image-name-card', (value) => {
+        this.updateModule('sourceImage', { imageName: value as string })
       })
     }
 
@@ -3110,7 +2984,7 @@ End If`}</fluent-text-area>
 
     const wifi = this.config.wifi
 
-    // 1. Wi-Fi Mode - RadioContainer
+    // 1. Wi-Fi Mode - RadioContainer (带嵌套)
     const wifiModeRadioHtml = createRadioContainer({
       id: 'wifi-mode-container',
       name: 'wifi-mode',
@@ -3131,63 +3005,61 @@ End If`}</fluent-text-area>
         {
           value: 'unattended',
           label: t('isoConfig.wifi.unattended'),
-          description: ''
+          description: `${t('isoConfig.wifi.wpa3Note')}\n${t('isoConfig.wifi.passwordNote')}`,
+          nestedCards: [
+            {
+              id: 'config-wifi-ssid-card',
+              title: t('isoConfig.wifi.ssid'),
+              description: '',
+              controlType: 'text',
+              value: wifi.ssid || '',
+              placeholder: 'WLAN-123456',
+              borderless: true
+            },
+            {
+              id: 'config-wifi-auth-card',
+              title: t('isoConfig.wifi.authentication'),
+              description: '',
+              controlType: 'select',
+              value: wifi.authentication || 'Open',
+              options: [
+                { value: 'Open', label: t('isoConfig.wifi.authOpen') },
+                { value: 'WPA2PSK', label: t('isoConfig.wifi.authWPA2') },
+                { value: 'WPA3SAE', label: t('isoConfig.wifi.authWPA3') }
+              ],
+              borderless: true
+            },
+            {
+              id: 'config-wifi-password-card',
+              title: t('isoConfig.nameAccount.password'),
+              description: '',
+              controlType: 'text',
+              value: wifi.password || '00000000',
+              placeholder: 'password',
+              borderless: true
+            },
+            {
+              id: 'config-wifi-non-broadcast-card',
+              title: t('isoConfig.wifi.nonBroadcast'),
+              description: '',
+              controlType: 'checkbox',
+              value: wifi.nonBroadcast || false,
+              borderless: true
+            }
+          ]
         },
         {
           value: 'fromProfile',
           label: t('isoConfig.wifi.fromProfile'),
-          description: ''
-        }
-      ],
-      selectedValue: wifi.mode || 'interactive',
-      expanded: true
-    })
-
-    // 2. Unattended模式 - 显示配置选项
-    const unattendedSettingsHtml = wifi.mode === 'unattended'
-      ? `<div class="card">
-          <div class="card-left">
-            <i data-lucide="settings" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.wifi.networkSettings')}</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
-                <div style="grid-column: 1 / -1;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.wifi.ssid')}</label>
-                  <fluent-text-field id="config-wifi-ssid" value="${wifi.ssid || ''}" maxlength="32" style="width: 100%;"></fluent-text-field>
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.wifi.authentication')}</label>
-                  <fluent-select id="config-wifi-auth" style="width: 100%;">
-                    <fluent-option value="Open" ${wifi.authentication === 'Open' || !wifi.authentication ? 'selected' : ''}>${t('isoConfig.wifi.authOpen')}</fluent-option>
-                    <fluent-option value="WPA2PSK" ${wifi.authentication === 'WPA2PSK' ? 'selected' : ''}>${t('isoConfig.wifi.authWPA2')}</fluent-option>
-                    <fluent-option value="WPA3SAE" ${wifi.authentication === 'WPA3SAE' ? 'selected' : ''}>${t('isoConfig.wifi.authWPA3')}</fluent-option>
-                  </fluent-select>
-                </div>
-                <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.password')}</label>
-                  <fluent-text-field id="config-wifi-password" type="password" value="${wifi.password || '00000000'}" maxlength="63" ${wifi.authentication === 'Open' ? 'disabled' : ''} style="width: 100%;"></fluent-text-field>
-                </div>
-              </div>
-              <div style="margin-top: 12px;">
-                <fluent-checkbox id="config-wifi-non-broadcast" ${wifi.nonBroadcast ? 'checked' : ''}>${t('isoConfig.wifi.nonBroadcast')}</fluent-checkbox>
-              </div>
-              <div class="card-description" style="margin-top: 12px;">
-                <p>${t('isoConfig.wifi.wpa3Note')}</p>
-                <p>${t('isoConfig.wifi.passwordNote')}</p>
-              </div>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // 3. FromProfile模式 - XML输入
-    const fromProfileHtml = wifi.mode === 'fromProfile'
-      ? `<div class="card">
-          <div class="card-left">
-            <i data-lucide="code" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.wifi.profileXml')}</div>
-              <fluent-text-area id="config-wifi-profile-xml" style="width: 100%; min-height: 480px; font-family: 'Consolas', 'Monaco', monospace;" rows="29">${wifi.profileXml || `<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-wifi-profile-xml-card',
+              title: t('isoConfig.wifi.profileXml'),
+              description: '',
+              icon: 'code',
+              value: wifi.profileXml || '',
+              placeholder: `<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
   <name>WLAN-123456</name>
   <SSIDConfig>
     <SSID>
@@ -3213,16 +3085,20 @@ End If`}</fluent-text-area>
       </sharedKey>
     </security>
   </MSM>
-</WLANProfile>`}</fluent-text-area>
-            </div>
-          </div>
-        </div>`
-      : ''
+</WLANProfile>`,
+              rows: 29,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: wifi.mode || 'interactive',
+      expanded: true
+    })
 
     contentDiv.innerHTML = `
       ${wifiModeRadioHtml}
-      ${unattendedSettingsHtml}
-      ${fromProfileHtml}
     `
 
     // === 事件监听设置 ===
@@ -3233,43 +3109,54 @@ End If`}</fluent-text-area>
       this.renderWifi()
     }, true)
 
-    // 2. Unattended设置
+    // 2. Unattended 设置 (嵌套)
     if (wifi.mode === 'unattended') {
-      const ssidInput = contentDiv.querySelector('#config-wifi-ssid') as any
-      if (ssidInput) {
-        ssidInput.addEventListener('input', (e: any) => {
-          this.updateModule('wifi', { ssid: e.target.value })
-        })
-      }
+      setupComboCard('config-wifi-ssid-card', (value) => {
+        this.updateModule('wifi', { ssid: value as string })
+      })
 
-      const authSelect = contentDiv.querySelector('#config-wifi-auth') as any
-      if (authSelect) {
-        authSelect.addEventListener('change', (e: any) => {
-          this.updateModule('wifi', { authentication: e.target.value })
-          this.renderWifi() // 重新渲染以启用/禁用密码字段
-        })
-      }
+      setupComboCard('config-wifi-auth-card', (value) => {
+        this.updateModule('wifi', { authentication: value as 'Open' | 'WPA2PSK' | 'WPA3SAE' })
+      })
 
-      const passwordInput = contentDiv.querySelector('#config-wifi-password') as any
-      if (passwordInput) {
-        passwordInput.addEventListener('input', (e: any) => {
-          this.updateModule('wifi', { password: e.target.value })
-        })
-      }
+      setupComboCard('config-wifi-password-card', (value) => {
+        this.updateModule('wifi', { password: value as string })
+      })
 
-      const nonBroadcastCheck = contentDiv.querySelector('#config-wifi-non-broadcast') as any
-      if (nonBroadcastCheck) {
-        nonBroadcastCheck.addEventListener('change', () => {
-          this.updateModule('wifi', { nonBroadcast: nonBroadcastCheck.checked })
-        })
-      }
+      setupComboCard('config-wifi-non-broadcast-card', (value) => {
+        this.updateModule('wifi', { nonBroadcast: value as boolean })
+      })
     }
 
-    // 3. FromProfile XML
-    const profileXmlInput = contentDiv.querySelector('#config-wifi-profile-xml') as any
-    if (profileXmlInput) {
-      profileXmlInput.addEventListener('input', (e: any) => {
-        this.updateModule('wifi', { profileXml: e.target.value })
+    // 3. FromProfile 设置 (嵌套)
+    if (wifi.mode === 'fromProfile') {
+      setupTextCard('config-wifi-profile-xml-card', (value) => {
+        this.updateModule('wifi', { profileXml: value })
+      }, async () => {
+        // 导入 XML
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('config-wifi-profile-xml-card', content)
+            this.updateModule('wifi', { profileXml: content })
+          }
+        }
+      }, async () => {
+        // 导出 XML
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml'] }],
+            defaultPath: 'wlan-profile.xml'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('config-wifi-profile-xml-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
       })
     }
 

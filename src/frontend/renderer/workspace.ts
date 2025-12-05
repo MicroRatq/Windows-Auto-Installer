@@ -3,6 +3,8 @@
  * 提供Radio容器和Combo容器的创建和事件处理函数
  */
 
+import { t } from './i18n'
+
 // ========================================
 // 类型定义
 // ========================================
@@ -11,6 +13,7 @@ export interface RadioContainerOption {
     value: string
     label: string
     description?: string
+    nestedCards?: ComboCardConfig[] // 嵌套的 ComboCard
 }
 
 export interface RadioContainerConfig {
@@ -25,7 +28,7 @@ export interface RadioContainerConfig {
 }
 
 // Combo容器选项类型
-export type ComboControlType = 'checkbox' | 'select' | 'switch'
+export type ComboControlType = 'checkbox' | 'select' | 'switch' | 'text'
 
 export interface ComboSelectOption {
     value: string
@@ -61,28 +64,30 @@ export interface ComboCardConfig {
     id: string
     title: string
     description?: string
-    icon: string // 图标必填
+    icon?: string // 图标改为可选
     controlType: ComboControlType
-    // 当controlType为'select'时，必须提供selectOptions
-    selectOptions?: ComboSelectOption[]
-    // 当前值：boolean (checkbox/switch) 或 string (select)
+    // 当controlType为'select'时，必须提供options
+    options?: ComboSelectOption[]
+    // 当前值：boolean (checkbox/switch) 或 string (select/text)
     value: boolean | string
+    borderless?: boolean // 是否无边框模式（仅保留内容）
+    placeholder?: string // 文本输入框的占位符（用于text类型）
 }
 
 // ========================================
-// ComboCard容器控件（单个card，右侧控件）
+// TextCard 容器控件（多行文本输入，带导入导出）
 // ========================================
 
-export interface ComboCardConfig {
+export interface TextCardConfig {
     id: string
     title: string
     description?: string
-    icon: string // 图标必填
-    controlType: ComboControlType
-    // 当controlType为'select'时，必须提供selectOptions
-    selectOptions?: ComboSelectOption[]
-    // 当前值：boolean (checkbox/switch) 或 string (select)
-    value: boolean | string
+    icon?: string // 图标可选
+    value: string
+    placeholder?: string
+    rows?: number // 文本区域行数，默认5
+    borderless?: boolean // 是否无边框模式
+    showImportExport?: boolean // 是否显示导入导出按钮，默认true
 }
 
 // ========================================
@@ -114,12 +119,26 @@ export function createRadioContainer(config: RadioContainerConfig): string {
             ? `<div class="radio-container-item-description ${opt.description ? '' : 'hidden'}">${opt.description}</div>`
             : ''
 
+        // 嵌套的 ComboCard/TextCard HTML
+        const nestedCardsHtml = (opt.nestedCards && opt.nestedCards.length > 0)
+            ? `<div class="radio-container-nested-cards">
+                ${opt.nestedCards.map(cardConfig => {
+                // 检查是否为 TextCard 配置（根据特有属性判断）
+                if ('rows' in cardConfig || 'showImportExport' in cardConfig) {
+                    return createTextCard(cardConfig as any)
+                }
+                return createComboCard(cardConfig)
+            }).join('<div class="radio-container-nested-divider"></div>')}
+               </div>`
+            : ''
+
         return `
       <div class="radio-container-item" data-value="${opt.value}" data-selected="${isSelected ? 'true' : 'false'}">
         <fluent-radio name="${name}" value="${opt.value}" ${isSelected ? 'checked' : ''}></fluent-radio>
         <div class="radio-container-item-content">
           <div class="radio-container-item-title">${opt.label}</div>
           ${optDescriptionHtml}
+          ${nestedCardsHtml}
         </div>
       </div>
     `
@@ -203,6 +222,11 @@ export function setupRadioContainer(
         item.addEventListener('click', (e: any) => {
             // 如果点击的是radio本身，不处理（避免重复触发）
             if (e.target.closest('fluent-radio')) return
+
+            // 如果点击的是嵌套卡片内部（输入框、按钮等），不处理
+            if (e.target.closest('.radio-container-nested-cards')) return
+            if (e.target.closest('.combo-card-borderless')) return
+            if (e.target.closest('.text-card-borderless')) return
 
             const radio = item.querySelector('fluent-radio') as any
             if (radio) {
@@ -471,7 +495,7 @@ export function setupComboContainer(
  * 创建ComboCard HTML
  */
 export function createComboCard(config: ComboCardConfig): string {
-    const { id, title, description, icon, controlType, selectOptions, value } = config
+    const { id, title, description, icon, controlType, options, value, borderless = false, placeholder = '' } = config
 
     // 图标HTML（可选）
     const iconHtml = icon ? `<i data-lucide="${icon}" class="card-icon"></i>` : ''
@@ -491,10 +515,31 @@ export function createComboCard(config: ComboCardConfig): string {
         controlHtml = `<fluent-switch id="${id}-control" ${isChecked ? 'checked' : ''}></fluent-switch>`
     } else if (controlType === 'select') {
         const selectedVal = typeof value === 'string' ? value : ''
-        const selectOptionsHtml = (selectOptions || []).map(selOpt =>
+        const selectOptionsHtml = (options || []).map(selOpt =>
             `<fluent-option value="${selOpt.value}" ${selectedVal === selOpt.value ? 'selected' : ''}>${selOpt.label}</fluent-option>`
         ).join('')
         controlHtml = `<fluent-select id="${id}-control" style="min-width: 150px; max-width: none; width: auto;">${selectOptionsHtml}</fluent-select>`
+    } else if (controlType === 'text') {
+        const textVal = typeof value === 'string' ? value : ''
+        controlHtml = `<fluent-text-field id="${id}-control" value="${textVal}" placeholder="${placeholder}" style="min-width: 150px; max-width: 300px; width: auto;"></fluent-text-field>`
+    }
+
+    // 无边框模式
+    if (borderless) {
+        return `
+        <div class="combo-card-borderless" id="${id}">
+          <div class="card-left">
+            ${iconHtml}
+            <div class="card-content">
+              <div class="card-title">${title}</div>
+              ${descriptionHtml}
+            </div>
+          </div>
+          <div class="card-right">
+            ${controlHtml}
+          </div>
+        </div>
+      `
     }
 
     return `
@@ -538,6 +583,149 @@ export function setupComboCard(
             const target = e.target as any
             onValueChange(target.value || '')
         })
+    } else if (controlType === 'fluent-text-field') {
+        control.addEventListener('input', (e: any) => {
+            const target = e.target as any
+            onValueChange(target.value || '')
+        })
+    }
+}
+
+// ========================================
+// TextCard 容器控件（多行文本输入，带导入导出）
+// ========================================
+
+/**
+ * 创建TextCard HTML
+ */
+export function createTextCard(config: TextCardConfig): string {
+    const { id, title, description, icon, value, placeholder = '', rows = 5, borderless = false, showImportExport = true } = config
+
+    // 图标HTML（可选）
+    const iconHtml = icon ? `<i data-lucide="${icon}" class="card-icon"></i>` : ''
+
+    // 描述HTML
+    const descriptionHtml = description
+        ? `<div class="card-description">${description}</div>`
+        : ''
+
+    // 导入导出按钮HTML
+    const importExportHtml = showImportExport
+        ? `<div class="text-card-actions">
+            <fluent-button id="${id}-import-btn" appearance="accent">${t('common.importFile')}</fluent-button>
+            <fluent-button id="${id}-export-btn" appearance="accent">${t('common.exportFile')}</fluent-button>
+          </div>`
+        : ''
+
+    // 文本区域HTML (placeholder 需要转义换行符)
+    const escapedPlaceholder = placeholder.replace(/\n/g, '&#10;').replace(/"/g, '&quot;')
+    const textareaHtml = `<fluent-text-area id="${id}-textarea" placeholder="${escapedPlaceholder}" rows="${rows}" style="width: 100%; min-height: ${rows * 24}px;">${value || ''}</fluent-text-area>`
+
+    // 无边框模式
+    if (borderless) {
+        return `
+        <div class="text-card-borderless" id="${id}">
+          <div class="text-card-header">
+            <div class="text-card-header-left">
+              ${iconHtml}
+              <div class="text-card-header-content">
+                <div class="card-title">${title}</div>
+                ${descriptionHtml}
+              </div>
+            </div>
+            ${importExportHtml}
+          </div>
+          <div class="text-card-body">
+            ${textareaHtml}
+          </div>
+        </div>
+      `
+    }
+
+    return `
+    <div class="card text-card" id="${id}">
+      <div class="text-card-header">
+        <div class="text-card-header-left">
+          ${iconHtml}
+          <div class="text-card-header-content">
+            <div class="card-title">${title}</div>
+            ${descriptionHtml}
+          </div>
+        </div>
+        ${importExportHtml}
+      </div>
+      <div class="text-card-body">
+        ${textareaHtml}
+      </div>
+    </div>
+  `
+}
+
+/**
+ * 设置TextCard事件监听
+ */
+export function setupTextCard(
+    cardId: string,
+    onValueChange: (value: string) => void,
+    onImport?: () => void,
+    onExport?: () => void
+): void {
+    const card = document.querySelector(`#${cardId}`) as HTMLElement
+    if (!card) return
+
+    const textarea = card.querySelector(`#${cardId}-textarea`) as any
+    if (textarea) {
+        textarea.addEventListener('input', (e: any) => {
+            const target = e.target as any
+            onValueChange(target.value || '')
+        })
+    }
+
+    // 导入按钮
+    const importBtn = card.querySelector(`#${cardId}-import-btn`) as HTMLElement
+    if (importBtn && onImport) {
+        importBtn.addEventListener('click', onImport)
+    }
+
+    // 导出按钮
+    const exportBtn = card.querySelector(`#${cardId}-export-btn`) as HTMLElement
+    if (exportBtn && onExport) {
+        exportBtn.addEventListener('click', onExport)
+    }
+}
+
+/**
+ * 获取TextCard的当前值，如果为空则返回placeholder
+ */
+export function getTextCardValue(cardId: string, usePlaceholderIfEmpty: boolean = false): string {
+    const card = document.querySelector(`#${cardId}`) as HTMLElement
+    if (!card) return ''
+
+    const textarea = card.querySelector(`#${cardId}-textarea`) as any
+    if (!textarea) return ''
+
+    const value = textarea.value || ''
+
+    // 如果值为空且需要使用placeholder作为默认值
+    if (usePlaceholderIfEmpty && !value && textarea.placeholder) {
+        // placeholder中的HTML实体需要解码
+        const placeholder = textarea.placeholder
+        return placeholder.replace(/&#10;/g, '\n').replace(/&quot;/g, '"')
+    }
+
+    return value
+}
+
+/**
+ * 设置TextCard的值
+ */
+export function setTextCardValue(cardId: string, value: string): void {
+    const card = document.querySelector(`#${cardId}`) as HTMLElement
+    if (!card) return
+
+    const textarea = card.querySelector(`#${cardId}-textarea`) as any
+    if (textarea) {
+        textarea.value = value
     }
 }
 

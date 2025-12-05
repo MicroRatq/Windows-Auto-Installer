@@ -614,7 +614,6 @@ async function init() {
 function updateSectionTitles() {
   const sectionTitles: Record<string, string> = {
     'config-region-language': t('isoConfig.regionLanguage.title'),
-    'config-processor-arch': t('isoConfig.processorArch.title'),
     'config-setup-settings': t('isoConfig.setupSettings.title'),
     'config-name-account': t('isoConfig.nameAccount.title'),
     'config-partitioning': t('isoConfig.partitioning.title'),
