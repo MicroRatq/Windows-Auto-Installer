@@ -26,6 +26,8 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
-    "@fluentui/web-components": "^2.5.17"
+    "@fluentui/web-components": "^2.5.17",
+    "i18next": "^23.7.0",
+    "i18next-browser-languagedetector": "^7.2.0"
   }
 }

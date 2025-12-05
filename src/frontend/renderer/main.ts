@@ -14,10 +14,14 @@ import {
   fluentSwitch
 } from '@fluentui/web-components'
 
+// 导入i18n模块
+import { t, addLanguageChangeListener, waitForI18nInit } from './i18n'
 // 导入镜像缓存模块
 import { initIsoCache } from './iso-cache'
 // 导入镜像配置模块
 import { initIsoConfig } from './iso-config'
+// 导入设置模块
+import { settingsManager } from './settings'
 
 // 注册 Fluent UI 组件
 provideFluentDesignSystem()
@@ -318,6 +322,27 @@ function startResize(e: MouseEvent) {
 // 打开设置
 function openSettings() {
   console.log('打开设置')
+
+  // 隐藏所有工作区面板
+  const allPanels = document.querySelectorAll('.workspace-panel')
+  allPanels.forEach(panel => {
+    panel.classList.remove('active')
+      ; (panel as HTMLElement).style.display = 'none'
+  })
+
+  // 显示设置面板
+  const settingsPanel = document.getElementById('workspace-settings')
+  if (settingsPanel) {
+    settingsPanel.classList.add('active')
+    settingsPanel.style.display = 'block'
+    settingsManager.show()
+  }
+
+  // 更新标题
+  const titleEl = document.getElementById('workspace-title')
+  if (titleEl) {
+    titleEl.textContent = '设置'
+  }
 }
 
 // 切换侧边栏折叠状态
@@ -392,7 +417,10 @@ function toggleCollapse() {
 }
 
 // 初始化
-function init() {
+async function init() {
+  // 等待 i18n 初始化完成
+  await waitForI18nInit()
+
   // 获取DOM元素
   sidebarEl = document.getElementById('sidebar')
   sidebarResizerEl = document.getElementById('sidebar-resizer')
@@ -568,7 +596,45 @@ function init() {
     initIsoConfig()
   }
 
+  // 初始化设置页面
+  settingsManager.init()
+
+  // 监听语言切换事件，更新section标题
+  addLanguageChangeListener(() => {
+    updateSectionTitles()
+  })
+
+  // 初始化section标题
+  updateSectionTitles()
+
   console.log('应用初始化完成')
+}
+
+// 更新所有section标题
+function updateSectionTitles() {
+  const sectionTitles: Record<string, string> = {
+    'config-region-language': t('isoConfig.regionLanguage.title'),
+    'config-processor-arch': t('isoConfig.processorArch.title'),
+    'config-setup-settings': t('isoConfig.setupSettings.title'),
+    'config-name-account': t('isoConfig.nameAccount.title'),
+    'config-partitioning': t('isoConfig.partitioning.title'),
+    'config-windows-edition': t('isoConfig.windowsEdition.title'),
+    'config-ui-personalization': t('isoConfig.uiPersonalization.title'),
+    'config-wifi': t('isoConfig.wifi.title'),
+    'config-accessibility': t('isoConfig.accessibility.title'),
+    'config-system-optimization': t('isoConfig.systemOptimization.title'),
+    'config-advanced-settings': t('isoConfig.advancedSettings.title')
+  }
+
+  Object.entries(sectionTitles).forEach(([sectionId, title]) => {
+    const sectionEl = document.getElementById(sectionId)
+    if (sectionEl) {
+      const titleEl = sectionEl.querySelector('.section-title')
+      if (titleEl) {
+        titleEl.textContent = title
+      }
+    }
+  })
 }
 
 // 等待DOM加载完成

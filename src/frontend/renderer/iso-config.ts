@@ -11,6 +11,7 @@ import {
   createComboContainer,
   setupComboContainer
 } from './workspace'
+import { t } from './i18n'
 
 // ========================================
 // 配置数据结构定义
@@ -621,7 +622,7 @@ class UnattendConfigManager {
   }
 
   // 渲染所有模块
-  private renderAllModules() {
+  public renderAllModules() {
     if (!this.panel) return
 
     // 1. Region, Language and Time Zone (合并模块1和6)
@@ -739,18 +740,18 @@ class UnattendConfigManager {
     const languageModeRadioHtml = createRadioContainer({
       id: 'language-mode-container',
       name: 'language-mode',
-      title: 'Language mode',
+      title: t('isoConfig.regionLanguage.languageMode'),
       description: '',
       icon: 'globe',
       options: [
         {
           value: 'interactive',
-          label: 'Select language settings interactively during Windows Setup',
+          label: t('isoConfig.regionLanguage.selectInteractively'),
           description: ''
         },
         {
           value: 'unattended',
-          label: 'Install Windows using these language settings',
+          label: t('isoConfig.regionLanguage.installWithSettings'),
           description: ''
         }
       ],
@@ -762,8 +763,8 @@ class UnattendConfigManager {
     const uiLanguageCardHtml = lang.mode === 'unattended'
       ? createComboCard({
         id: 'config-ui-language-card',
-        title: 'Windows display language',
-        description: 'Windows features like Settings and File Explorer will appear in this language. It must match the language of your Windows 10/11 .iso file.',
+        title: t('isoConfig.regionLanguage.uiLanguageTitle'),
+        description: t('isoConfig.regionLanguage.uiLanguageDesc'),
         icon: 'globe',
         controlType: 'select',
         selectOptions: preset.languages.map(l => ({ value: l.id, label: l.name })),
@@ -775,8 +776,8 @@ class UnattendConfigManager {
     const firstLanguageCardHtml = lang.mode === 'unattended'
       ? createComboCard({
         id: 'config-first-language-card',
-        title: 'First language',
-        description: 'The first language will also determine the initial regional format, which defines how numbers, dates, times and currency are formatted.',
+        title: t('isoConfig.regionLanguage.firstLanguageTitle'),
+        description: t('isoConfig.regionLanguage.firstLanguageDesc'),
         icon: 'languages',
         controlType: 'select',
         selectOptions: preset.locales.map(l => ({ value: l.id, label: l.name })),
@@ -788,7 +789,7 @@ class UnattendConfigManager {
     const firstKeyboardCardHtml = lang.mode === 'unattended'
       ? createComboCard({
         id: 'config-first-keyboard-card',
-        title: 'First keyboard layout',
+        title: t('isoConfig.regionLanguage.firstKeyboardTitle'),
         description: '',
         icon: 'keyboard',
         controlType: 'select',
@@ -801,19 +802,19 @@ class UnattendConfigManager {
     const timezoneModeRadioHtml = createRadioContainer({
       id: 'timezone-container',
       name: 'timezone-mode',
-      title: 'Time zone',
+      title: t('isoConfig.regionLanguage.timeZoneTitle'),
       description: '',
       icon: 'clock',
       options: [
         {
           value: 'implicit',
-          label: 'Let Windows determine your time zone based on language and region settings',
+          label: t('isoConfig.regionLanguage.timeZoneImplicit'),
           description: ''
         },
         {
           value: 'explicit',
-          label: 'Set your time zone explicitly',
-          description: 'This is useful when your country or region spans multiple time zones, like Australia or the United States.'
+          label: t('isoConfig.regionLanguage.timeZoneExplicit'),
+          description: t('isoConfig.regionLanguage.timeZoneExplicitDesc')
         }
       ],
       selectedValue: tz.mode,
@@ -824,7 +825,7 @@ class UnattendConfigManager {
     const timezoneSelectCardHtml = tz.mode === 'explicit'
       ? createComboCard({
         id: 'config-timezone-card',
-        title: 'Use this time zone',
+        title: t('isoConfig.regionLanguage.useThisTimeZone'),
         description: '',
         icon: 'map-pin',
         controlType: 'select',
@@ -903,19 +904,19 @@ class UnattendConfigManager {
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">Processor architectures</div>
+            <div class="card-title">${t('isoConfig.processorArch.title')}</div>
             <div style="display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap;">
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" value="x86" ${archs.includes('x86') ? 'checked' : ''}>
-                <span>Intel / AMD 32-bit</span>
+                <span>${t('isoConfig.processorArch.x86')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" value="amd64" ${archs.includes('amd64') ? 'checked' : ''}>
-                <span>Intel / AMD 64-bit</span>
+                <span>${t('isoConfig.processorArch.amd64')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" value="arm64" ${archs.includes('arm64') ? 'checked' : ''}>
-                <span>Windows on Arm64</span>
+                <span>${t('isoConfig.processorArch.arm64')}</span>
               </label>
             </div>
           </div>
@@ -948,8 +949,8 @@ class UnattendConfigManager {
     // 使用 ComboCard 为每个设置创建独立的卡片
     const bypassRequirementsCardHtml = createComboCard({
       id: 'config-bypass-requirements-card',
-      title: 'Bypass Windows 11 requirements check',
-      description: 'Bypass TPM, Secure Boot, RAM, and CPU requirements for Windows 11 installation.',
+      title: t('isoConfig.setupSettings.bypassRequirements'),
+      description: t('isoConfig.setupSettings.bypassRequirementsDesc'),
       icon: 'shield-off',
       controlType: 'switch',
       value: settings.bypassRequirementsCheck
@@ -957,8 +958,8 @@ class UnattendConfigManager {
 
     const bypassNetworkCardHtml = createComboCard({
       id: 'config-bypass-network-card',
-      title: 'Allow Windows 11 without internet connection',
-      description: 'Only check this if your computer really does not have internet access. You will still need to click "I don\'t have internet" during Setup. If you just want to create local accounts, use the User accounts section instead.',
+      title: t('isoConfig.setupSettings.bypassNetwork'),
+      description: t('isoConfig.setupSettings.bypassNetworkDesc'),
       icon: 'wifi-off',
       controlType: 'switch',
       value: settings.bypassNetworkCheck
@@ -966,8 +967,8 @@ class UnattendConfigManager {
 
     const useConfigurationSetCardHtml = createComboCard({
       id: 'config-use-configuration-set-card',
-      title: 'Use a distribution share / configuration set',
-      description: 'Windows Setup will look for a folder named $OEM$ in the root of the drive where autounattend.xml is located and copy its contents to the target partition.',
+      title: t('isoConfig.setupSettings.useConfigurationSet'),
+      description: t('isoConfig.setupSettings.useConfigurationSetDesc'),
       icon: 'folder-tree',
       controlType: 'switch',
       value: settings.useConfigurationSet
@@ -975,8 +976,8 @@ class UnattendConfigManager {
 
     const hidePowerShellWindowsCardHtml = createComboCard({
       id: 'config-hide-powershell-card',
-      title: 'Hide any PowerShell windows during Setup',
-      description: 'PowerShell scripts will run with the -WindowStyle Hidden switch. Do not enable if you use interactive prompts (like Read-Host) in your scripts, as you won\'t be able to answer them without a visible window.',
+      title: t('isoConfig.setupSettings.hidePowerShell'),
+      description: t('isoConfig.setupSettings.hidePowerShellDesc'),
       icon: 'eye-off',
       controlType: 'switch',
       value: settings.hidePowerShellWindows
@@ -984,8 +985,8 @@ class UnattendConfigManager {
 
     const keepSensitiveFilesCardHtml = createComboCard({
       id: 'config-keep-sensitive-files-card',
-      title: 'Keep sensitive files',
-      description: 'By default, files like unattend.xml and Wifi.xml which may contain sensitive data will be deleted once Windows Setup finishes. Enable this to keep those files.',
+      title: t('isoConfig.setupSettings.keepSensitiveFiles'),
+      description: t('isoConfig.setupSettings.keepSensitiveFilesDesc'),
       icon: 'file-lock',
       controlType: 'switch',
       value: settings.keepSensitiveFiles
@@ -993,8 +994,8 @@ class UnattendConfigManager {
 
     const useNarratorCardHtml = createComboCard({
       id: 'config-use-narrator-card',
-      title: 'Automatically start Narrator',
-      description: 'Narrator is a built-in screen reader that speaks out loud what is on your screen. It will start during Windows Setup and after logon.',
+      title: t('isoConfig.setupSettings.useNarrator'),
+      description: t('isoConfig.setupSettings.useNarratorDesc'),
       icon: 'volume-2',
       controlType: 'switch',
       value: settings.useNarrator
@@ -1054,23 +1055,23 @@ class UnattendConfigManager {
     const computerNameRadioHtml = createRadioContainer({
       id: 'computer-name-container',
       name: 'computer-name-mode',
-      title: 'Computer name',
+      title: t('isoConfig.nameAccount.computerName'),
       description: '',
       icon: 'monitor',
       options: [
         {
           value: 'random',
-          label: 'Let Windows generate a random computer name like DESKTOP-ZFAH8Z2',
+          label: t('isoConfig.nameAccount.computerNameRandom'),
           description: ''
         },
         {
           value: 'custom',
-          label: 'Choose a computer name yourself',
+          label: t('isoConfig.nameAccount.computerNameCustom'),
           description: ''
         },
         {
           value: 'script',
-          label: 'Provide a Windows PowerShell script to set the computer name dynamically',
+          label: t('isoConfig.nameAccount.computerNameScript'),
           description: ''
         }
       ],
@@ -1083,8 +1084,8 @@ class UnattendConfigManager {
       ? `<div class="card">
           <div class="card-left">
             <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">Use this name:</label>
-              <fluent-text-field id="config-computer-name-input" value="${cn.name || ''}" placeholder="Enter computer name (max 15 chars)" maxlength="15" style="width: 100%;"></fluent-text-field>
+              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.useThisName')}</label>
+              <fluent-text-field id="config-computer-name-input" value="${cn.name || ''}" maxlength="15" style="width: 100%;"></fluent-text-field>
             </div>
           </div>
         </div>`
@@ -1095,9 +1096,8 @@ class UnattendConfigManager {
       ? `<div class="card">
           <div class="card-left">
             <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">PowerShell script:</label>
+              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.powerShellScript')}</label>
               <fluent-text-area id="config-computer-name-script" style="width: 100%; min-height: 120px;" rows="5">${cn.script || "return 'DESKTOP-{0:D3}' -f ( Get-Random -Minimum 0 -Maximum 999 );"}</fluent-text-area>
-              <div class="card-description" style="margin-top: 8px;">Your script will be evaluated during Windows Setup. The script must return a single string, which must be a valid computer name. You can use interactive prompts like <code>return Read-Host -Prompt 'Enter computer name';</code></div>
             </div>
           </div>
         </div>`
@@ -1107,23 +1107,23 @@ class UnattendConfigManager {
     const userAccountsRadioHtml = createRadioContainer({
       id: 'user-accounts-container',
       name: 'account-mode',
-      title: 'User accounts',
+      title: t('isoConfig.nameAccount.userAccounts'),
       description: '',
       icon: 'users',
       options: [
         {
           value: 'unattended',
-          label: 'Let Windows Setup create the following local ("offline") accounts',
+          label: t('isoConfig.nameAccount.userAccountsUnattended'),
           description: ''
         },
         {
           value: 'interactive-microsoft',
-          label: 'Add a Microsoft ("online") user account interactively during Windows Setup',
+          label: t('isoConfig.nameAccount.userAccountsInteractiveMicrosoft'),
           description: ''
         },
         {
           value: 'interactive-local',
-          label: 'Add a local ("offline") user account interactively during Windows Setup',
+          label: t('isoConfig.nameAccount.userAccountsInteractiveLocal'),
           description: ''
         }
       ],
@@ -1137,36 +1137,36 @@ class UnattendConfigManager {
           <div class="card-expandable-header">
             <div class="card-expandable-header-left">
               <i data-lucide="user-plus" class="card-icon"></i>
-              <div class="card-expandable-title">Account list</div>
+              <div class="card-expandable-title">${t('isoConfig.nameAccount.accountList')}</div>
             </div>
             <div class="card-expandable-arrow">
               <i data-lucide="chevron-down"></i>
             </div>
           </div>
           <div class="card-expandable-content">
-            <div class="card-description" style="margin-bottom: 12px;">Leave <strong>Display name</strong> empty unless you want it to be different from <strong>Account name</strong>.</div>
+            <div class="card-description" style="margin-bottom: 12px;">${t('isoConfig.nameAccount.accountListDesc')}</div>
             <div id="config-accounts-list" style="display: flex; flex-direction: column; gap: 12px;">
               ${(accounts.accounts || []).map((acc, idx) => `
                 <div class="card" style="background: var(--bg-primary);">
                   <div class="card-content" style="width: 100%;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: end;">
                       <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">Account name:</label>
+                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.accountName')}</label>
                         <fluent-text-field class="account-name" data-index="${idx}" value="${acc.name}" maxlength="20" style="width: 100%;"></fluent-text-field>
                       </div>
                       <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">Display name:</label>
+                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.displayName')}</label>
                         <fluent-text-field class="account-display-name" data-index="${idx}" value="${acc.displayName}" maxlength="256" style="width: 100%;"></fluent-text-field>
                       </div>
                       <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">Password:</label>
+                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.password')}</label>
                         <fluent-text-field class="account-password" data-index="${idx}" type="password" value="${acc.password}" style="width: 100%;"></fluent-text-field>
                       </div>
                       <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">Group:</label>
+                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.group')}</label>
                         <fluent-select class="account-group" data-index="${idx}" style="width: 100%;">
-                          <fluent-option value="Administrators" ${acc.group === 'Administrators' ? 'selected' : ''}>Administrators</fluent-option>
-                          <fluent-option value="Users" ${acc.group === 'Users' ? 'selected' : ''}>Users</fluent-option>
+                          <fluent-option value="Administrators" ${acc.group === 'Administrators' ? 'selected' : ''}>${t('isoConfig.nameAccount.administrators')}</fluent-option>
+                          <fluent-option value="Users" ${acc.group === 'Users' ? 'selected' : ''}>${t('isoConfig.nameAccount.users')}</fluent-option>
                         </fluent-select>
                       </div>
                       <fluent-button class="account-remove" data-index="${idx}" appearance="stealth">
@@ -1179,7 +1179,7 @@ class UnattendConfigManager {
             </div>
             <div style="margin-top: 12px;">
               <fluent-button id="config-add-account" appearance="outline">
-                <i data-lucide="plus"></i> Add account
+                <i data-lucide="plus"></i> ${t('common.add')}
               </fluent-button>
             </div>
           </div>
@@ -1191,24 +1191,24 @@ class UnattendConfigManager {
       ? createRadioContainer({
         id: 'first-logon-container',
         name: 'auto-logon-mode',
-        title: 'First logon',
-        description: 'Several settings will only be applied when an administrator logs on for the first time. Choose which account to use for this.',
+        title: t('isoConfig.nameAccount.firstLogon'),
+        description: t('isoConfig.nameAccount.firstLogonDesc'),
         icon: 'log-in',
         options: [
           {
             value: 'own',
-            label: 'Logon to the first administrator account created above',
+            label: t('isoConfig.nameAccount.logonOwnAccount'),
             description: ''
           },
           {
             value: 'builtin',
-            label: 'Activate built-in account "Administrator" and logon to this account',
+            label: t('isoConfig.nameAccount.logonBuiltinAdmin'),
             description: ''
           },
           {
             value: 'none',
-            label: 'Do not logon',
-            description: 'The installation ends with the sign-in screen being shown. Not recommended.'
+            label: t('isoConfig.nameAccount.logonNone'),
+            description: t('isoConfig.nameAccount.logonNoneDesc')
           }
         ],
         selectedValue: accounts.autoLogonMode || 'none',
@@ -1221,8 +1221,8 @@ class UnattendConfigManager {
       ? `<div class="card">
           <div class="card-left">
             <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">Set built-in Administrator password to:</label>
-              <fluent-text-field id="config-auto-logon-password" type="password" value="${accounts.autoLogonPassword || ''}" placeholder="Enter password" style="width: 100%;"></fluent-text-field>
+              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.builtinAdminPassword')}</label>
+              <fluent-text-field id="config-auto-logon-password" type="password" value="${accounts.autoLogonPassword || ''}" style="width: 100%;"></fluent-text-field>
             </div>
           </div>
         </div>`
@@ -1232,8 +1232,8 @@ class UnattendConfigManager {
     const obscurePasswordsCardHtml = accounts.mode === 'unattended'
       ? createComboCard({
         id: 'config-obscure-passwords-card',
-        title: 'Obscure all account passwords with Base64',
-        description: 'Encode passwords in your autounattend.xml file with Base64 encoding for basic obfuscation.',
+        title: t('isoConfig.nameAccount.obscurePasswords'),
+        description: t('isoConfig.nameAccount.obscurePasswordsDesc'),
         icon: 'eye-off',
         controlType: 'switch',
         value: accounts.obscurePasswords || false
@@ -1244,23 +1244,23 @@ class UnattendConfigManager {
     const passwordExpirationRadioHtml = createRadioContainer({
       id: 'password-expiration-container',
       name: 'password-expiration-mode',
-      title: 'Password expiration',
-      description: 'These settings only apply to local accounts. The password of the built-in "Administrator" account never expires.',
+      title: t('isoConfig.nameAccount.passwordExpiration'),
+      description: t('isoConfig.nameAccount.passwordExpirationDesc'),
       icon: 'shield',
       options: [
         {
           value: 'unlimited',
-          label: 'Passwords do not expire',
-          description: 'This is in accordance to NIST guidelines that no longer recommend password expiration.'
+          label: t('isoConfig.nameAccount.passwordUnlimited'),
+          description: t('isoConfig.nameAccount.passwordUnlimitedDesc')
         },
         {
           value: 'default',
-          label: 'Use Windows default',
-          description: 'Passwords expire after 42 days.'
+          label: t('isoConfig.nameAccount.passwordDefault'),
+          description: t('isoConfig.nameAccount.passwordDefaultDesc')
         },
         {
           value: 'custom',
-          label: 'Use custom password expiration',
+          label: t('isoConfig.nameAccount.passwordCustom'),
           description: ''
         }
       ],
@@ -1273,7 +1273,7 @@ class UnattendConfigManager {
       ? `<div class="card">
           <div class="card-left">
             <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">Passwords expire after (days):</label>
+              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.passwordExpireAfter')}</label>
               <fluent-text-field id="config-password-max-age" type="number" value="${pe.maxAge || 42}" min="1" max="999" placeholder="42" style="width: 100%;"></fluent-text-field>
             </div>
           </div>
@@ -1284,23 +1284,23 @@ class UnattendConfigManager {
     const accountLockoutRadioHtml = createRadioContainer({
       id: 'account-lockout-container',
       name: 'lockout-mode',
-      title: 'Account Lockout policy',
+      title: t('isoConfig.nameAccount.accountLockout'),
       description: '',
       icon: 'lock',
       options: [
         {
           value: 'default',
-          label: 'Use default policy',
-          description: 'Windows will lock out an account after 10 failed logon attempts within 10 minutes. After 10 minutes, the account is unlocked automatically.'
+          label: t('isoConfig.nameAccount.lockoutDefault'),
+          description: t('isoConfig.nameAccount.lockoutDefaultDesc')
         },
         {
           value: 'disabled',
-          label: 'Disable policy',
-          description: 'Warning: Disabling Account Lockout might leave your computer vulnerable to brute-force attacks.'
+          label: t('isoConfig.nameAccount.lockoutDisabled'),
+          description: t('isoConfig.nameAccount.lockoutDisabledDesc')
         },
         {
           value: 'custom',
-          label: 'Use custom policy',
+          label: t('isoConfig.nameAccount.lockoutCustom'),
           description: ''
         }
       ],
@@ -1313,22 +1313,22 @@ class UnattendConfigManager {
       ? `<div class="card">
           <div class="card-left">
             <div class="card-content">
-              <div class="card-description" style="margin-bottom: 12px;">Configure custom account lockout policy:</div>
+              <div class="card-description" style="margin-bottom: 12px;">${t('isoConfig.nameAccount.lockoutCustomDesc')}</div>
               <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
                 <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Lockout threshold:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.lockoutThreshold')}</label>
                   <fluent-text-field id="config-lockout-threshold" type="number" value="${lockout.lockoutThreshold || 10}" min="0" max="999" placeholder="10" style="width: 100%;"></fluent-text-field>
-                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">Failed attempts</div>
+                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">${t('isoConfig.nameAccount.failedAttempts')}</div>
                 </div>
                 <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Lockout window:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.lockoutWindow')}</label>
                   <fluent-text-field id="config-lockout-window" type="number" value="${lockout.resetLockoutCounter || 10}" min="1" max="99999" placeholder="10" style="width: 100%;"></fluent-text-field>
-                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">Minutes</div>
+                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">${t('isoConfig.nameAccount.minutes')}</div>
                 </div>
                 <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Lockout duration:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.lockoutDuration')}</label>
                   <fluent-text-field id="config-lockout-duration" type="number" value="${lockout.lockoutDuration || 10}" min="1" max="99999" placeholder="10" style="width: 100%;"></fluent-text-field>
-                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">Minutes</div>
+                  <div class="card-description" style="margin-top: 4px; font-size: 11px;">${t('isoConfig.nameAccount.minutes')}</div>
                 </div>
               </div>
             </div>
@@ -1504,23 +1504,23 @@ class UnattendConfigManager {
     const compactOSRadioHtml = createRadioContainer({
       id: 'compact-os-container',
       name: 'compact-os-mode',
-      title: 'Compact OS',
+      title: t('isoConfig.advancedSettings.compactOS'),
       description: '',
       icon: 'archive',
       options: [
         {
           value: 'default',
-          label: 'Let Windows decide whether to use Compact OS',
+          label: t('isoConfig.advancedSettings.compactOSDefault'),
           description: ''
         },
         {
           value: 'enabled',
-          label: 'Use Compact OS',
+          label: t('isoConfig.advancedSettings.compactOSEnabled'),
           description: ''
         },
         {
           value: 'disabled',
-          label: 'Do not use Compact OS',
+          label: t('isoConfig.advancedSettings.compactOSDisabled'),
           description: ''
         }
       ],
@@ -1532,23 +1532,23 @@ class UnattendConfigManager {
     const peOperationRadioHtml = createRadioContainer({
       id: 'pe-operation-container',
       name: 'pe-mode',
-      title: 'Windows PE operation',
+      title: t('isoConfig.advancedSettings.peOperation'),
       description: '',
       icon: 'terminal',
       options: [
         {
           value: 'default',
-          label: 'Let Windows Setup (setup.exe) handle the Windows PE stage as usual',
+          label: t('isoConfig.advancedSettings.peDefault'),
           description: ''
         },
         {
           value: 'generated',
-          label: 'Generate a .cmd script using the form\'s other settings and also these options',
+          label: t('isoConfig.advancedSettings.peGenerated'),
           description: ''
         },
         {
           value: 'script',
-          label: 'Use a custom .cmd script to handle the Windows PE stage',
+          label: t('isoConfig.advancedSettings.peScript'),
           description: ''
         }
       ],
@@ -1562,14 +1562,14 @@ class UnattendConfigManager {
           <div class="card-left">
             <i data-lucide="settings" class="card-icon"></i>
             <div class="card-content">
-              <div class="card-title">Generated script options</div>
+              <div class="card-title">${t('isoConfig.advancedSettings.generatedOptions')}</div>
               <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
                 <div>
-                  <fluent-checkbox id="config-pe-disable-8dot3" ${pe.disable8Dot3Names ? 'checked' : ''}>Disable 8.3 file names</fluent-checkbox>
-                  <div class="card-description" style="margin-left: 24px; margin-top: 4px;">This removes all existing short file names such as PROGRA~1 and disables the creation of new ones.</div>
+                  <fluent-checkbox id="config-pe-disable-8dot3" ${pe.disable8Dot3Names ? 'checked' : ''}>${t('isoConfig.advancedSettings.disable8dot3')}</fluent-checkbox>
+                  <div class="card-description" style="margin-left: 24px; margin-top: 4px;">${t('isoConfig.advancedSettings.disable8dot3Desc')}</div>
                 </div>
-                <fluent-checkbox id="config-pe-pause-formatting" ${pe.pauseBeforeFormatting ? 'checked' : ''}>Pause before disk is partitioned and formatted</fluent-checkbox>
-                <fluent-checkbox id="config-pe-pause-reboot" ${pe.pauseBeforeReboot ? 'checked' : ''}>Pause before Windows Setup reboots at the end of the Windows PE stage</fluent-checkbox>
+                <fluent-checkbox id="config-pe-pause-formatting" ${pe.pauseBeforeFormatting ? 'checked' : ''}>${t('isoConfig.advancedSettings.pauseFormatting')}</fluent-checkbox>
+                <fluent-checkbox id="config-pe-pause-reboot" ${pe.pauseBeforeReboot ? 'checked' : ''}>${t('isoConfig.advancedSettings.pauseReboot')}</fluent-checkbox>
               </div>
             </div>
           </div>
@@ -1619,9 +1619,9 @@ wpeutil.exe reboot`
           <div class="card-left">
             <i data-lucide="code" class="card-icon"></i>
             <div class="card-content">
-              <div class="card-title">Custom PE script</div>
+              <div class="card-title">${t('isoConfig.advancedSettings.customPeScript')}</div>
               <fluent-text-area id="config-pe-custom-script" style="width: 100%; min-height: 400px; font-family: 'Consolas', 'Monaco', monospace;" rows="25">${pe.cmdScript || customScriptDefaultValue}</fluent-text-area>
-              <div class="card-description" style="margin-top: 8px;">Your script has to partition and format the disk, copy a Windows image to it and make it bootable. Note that PowerShell is usually not available in Windows PE.</div>
+              <div class="card-description" style="margin-top: 8px;">${t('isoConfig.advancedSettings.customPeScriptDesc')}</div>
             </div>
           </div>
         </div>`
@@ -1631,31 +1631,31 @@ wpeutil.exe reboot`
     const vmSupportHtml = createComboContainer({
       id: 'vm-support-container',
       name: 'vm-support',
-      title: 'Virtual machine support',
-      description: 'Make sure to check the usage notes for how to properly configure your VM.',
+      title: t('isoConfig.advancedSettings.vmSupport'),
+      description: t('isoConfig.advancedSettings.vmSupportDesc'),
       icon: 'box',
       options: [
         {
           value: 'vBoxGuestAdditions',
-          label: 'Install Oracle VirtualBox Guest Additions',
+          label: t('isoConfig.advancedSettings.vboxGuestAdditions'),
           description: '',
           controlType: 'checkbox'
         },
         {
           value: 'vmwareTools',
-          label: 'Install VMware Tools',
+          label: t('isoConfig.advancedSettings.vmwareTools'),
           description: '',
           controlType: 'checkbox'
         },
         {
           value: 'virtIoGuestTools',
-          label: 'Install VirtIO Guest Tools and QEMU Guest Agent (e.g. for Proxmox VE)',
+          label: t('isoConfig.advancedSettings.virtioGuestTools'),
           description: '',
           controlType: 'checkbox'
         },
         {
           value: 'parallelsTools',
-          label: 'Install Parallels Tools for Parallels Desktop',
+          label: t('isoConfig.advancedSettings.parallelsTools'),
           description: '',
           controlType: 'checkbox'
         }
@@ -1673,18 +1673,18 @@ wpeutil.exe reboot`
     const wdacRadioHtml = createRadioContainer({
       id: 'wdac-mode-container',
       name: 'wdac-mode',
-      title: 'Windows Defender Application Control',
-      description: 'Applications in C:\\Windows, C:\\Program Files and C:\\Program Files (x86) are allowed to run. Applications stored elsewhere and those in known user-writable folders are not allowed to run. To disable this WDAC policy later, simply delete the file C:\\Windows\\System32\\CodeIntegrity\\CiPolicies\\Active\\{d26bff32-33a2-48a3-b037-10357ee48427}.cip and reboot.',
+      title: t('isoConfig.advancedSettings.wdac'),
+      description: t('isoConfig.advancedSettings.wdacDesc'),
       icon: 'shield-alert',
       options: [
         {
           value: 'skip',
-          label: 'Do not configure WDAC policy',
+          label: t('isoConfig.advancedSettings.wdacSkip'),
           description: ''
         },
         {
           value: 'configure',
-          label: 'Configure a basic WDAC policy using these settings',
+          label: t('isoConfig.advancedSettings.wdacConfigure'),
           description: ''
         }
       ],
@@ -1697,24 +1697,24 @@ wpeutil.exe reboot`
       ? `${createRadioContainer({
         id: 'wdac-enforcement-container',
         name: 'wdac-enforcement-mode',
-        title: 'Choose how to enforce the policy',
+        title: t('isoConfig.advancedSettings.wdacEnforcement'),
         description: '',
         icon: 'shield',
         options: [
           {
             value: 'audit',
-            label: 'Auditing mode',
-            description: 'Logs drivers and applications that would have been blocked.'
+            label: t('isoConfig.advancedSettings.wdacAudit'),
+            description: t('isoConfig.advancedSettings.wdacAuditDesc')
           },
           {
             value: 'auditOnBootFailure',
-            label: 'Auditing mode on boot failure',
-            description: 'When the policy blocks a system driver and thus would prevent Windows from booting, use audit mode. Otherwise, use enforcement mode.'
+            label: t('isoConfig.advancedSettings.wdacAuditBootFailure'),
+            description: t('isoConfig.advancedSettings.wdacAuditBootFailureDesc')
           },
           {
             value: 'enforcement',
-            label: 'Enforcement mode',
-            description: 'Drivers and applications will be blocked unless allowed by the policy.'
+            label: t('isoConfig.advancedSettings.wdacEnforcementMode'),
+            description: t('isoConfig.advancedSettings.wdacEnforcementDesc')
           }
         ],
         selectedValue: wdac.enforcementMode || 'auditOnBootFailure',
@@ -1723,18 +1723,18 @@ wpeutil.exe reboot`
       ${createRadioContainer({
         id: 'wdac-script-enforcement-container',
         name: 'wdac-script-mode',
-        title: 'Choose script enforcement',
+        title: t('isoConfig.advancedSettings.wdacScriptEnforcement'),
         description: '',
         icon: 'file-code',
         options: [
           {
             value: 'restricted',
-            label: 'Restricted',
-            description: 'PowerShell will run in Constrained Language Mode.'
+            label: t('isoConfig.advancedSettings.wdacScriptRestricted'),
+            description: t('isoConfig.advancedSettings.wdacScriptRestrictedDesc')
           },
           {
             value: 'unrestricted',
-            label: 'Unrestricted',
+            label: t('isoConfig.advancedSettings.wdacScriptUnrestricted'),
             description: ''
           }
         ],
@@ -1837,23 +1837,23 @@ wpeutil.exe reboot`
     const partitionModeRadioHtml = createRadioContainer({
       id: 'partitioning-mode-container',
       name: 'partition-mode',
-      title: 'Partitioning and formatting',
+      title: t('isoConfig.partitioning.title'),
       description: '',
       icon: 'hard-drive',
       options: [
         {
           value: 'interactive',
-          label: 'Partition the disk interactively during Windows Setup',
+          label: t('isoConfig.partitioning.interactive'),
           description: ''
         },
         {
           value: 'automatic',
-          label: 'Let Windows Setup wipe, partition and format your hard drive (more specifically, disk 0) using these settings',
+          label: t('isoConfig.partitioning.automatic'),
           description: ''
         },
         {
           value: 'custom',
-          label: 'Use a custom diskpart script to configure your disk(s)',
+          label: t('isoConfig.partitioning.custom'),
           description: ''
         }
       ],
@@ -1868,19 +1868,19 @@ wpeutil.exe reboot`
       const partitionLayoutRadioHtml = createRadioContainer({
         id: 'partition-layout-container',
         name: 'partition-layout',
-        title: 'Choose partition layout',
+        title: t('isoConfig.partitioning.partitionLayout'),
         description: '',
         icon: 'layout',
         options: [
           {
             value: 'GPT',
-            label: 'GPT',
-            description: 'The GPT partition layout must be used for UEFI systems.'
+            label: t('isoConfig.partitioning.gpt'),
+            description: t('isoConfig.partitioning.gptDesc')
           },
           {
             value: 'MBR',
-            label: 'MBR',
-            description: 'The MBR-based partition layout must be used for legacy BIOS systems.'
+            label: t('isoConfig.partitioning.mbr'),
+            description: t('isoConfig.partitioning.mbrDesc')
           }
         ],
         selectedValue: part.layout || 'GPT',
@@ -1892,7 +1892,7 @@ wpeutil.exe reboot`
         ? `<div class="card">
             <div class="card-left">
               <div class="card-content">
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">EFI System Partition (ESP) size:</label>
+                <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.espSize')}</label>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <fluent-text-field id="config-esp-size" type="number" value="${part.espSize || 300}" min="100" style="width: 150px;"></fluent-text-field>
                   <span>MB</span>
@@ -1906,24 +1906,24 @@ wpeutil.exe reboot`
       const recoveryModeRadioHtml = createRadioContainer({
         id: 'recovery-mode-container',
         name: 'recovery-mode',
-        title: 'Choose how to install Windows RE',
-        description: 'Windows 24H2 seems to ignore this setting and will always create a recovery partition with a minimum size of 600 MB.',
+        title: t('isoConfig.partitioning.windowsRe'),
+        description: t('isoConfig.partitioning.windowsReDesc'),
         icon: 'life-buoy',
         options: [
           {
             value: 'partition',
-            label: 'Install on recovery partition',
+            label: t('isoConfig.partitioning.rePartition'),
             description: ''
           },
           {
             value: 'folder',
-            label: 'Install on Windows partition',
-            description: 'This will install Windows RE in C:\\Recovery. No recovery partition will be created.'
+            label: t('isoConfig.partitioning.reFolder'),
+            description: t('isoConfig.partitioning.reFolderDesc')
           },
           {
             value: 'none',
-            label: 'Remove Windows RE',
-            description: 'This will delete the C:\\Recovery folder and thus free about 600 MB of disk space. No recovery partition will be created.'
+            label: t('isoConfig.partitioning.reNone'),
+            description: t('isoConfig.partitioning.reNoneDesc')
           }
         ],
         selectedValue: part.recoveryMode || 'partition',
@@ -1935,7 +1935,7 @@ wpeutil.exe reboot`
         ? `<div class="card">
             <div class="card-left">
               <div class="card-content">
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">Recovery partition size:</label>
+                <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.recoverySize')}</label>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <fluent-text-field id="config-recovery-size" type="number" value="${part.recoverySize || 1000}" min="300" style="width: 150px;"></fluent-text-field>
                   <span>MB</span>
@@ -1962,7 +1962,7 @@ wpeutil.exe reboot`
           <div class="card-left">
             <i data-lucide="code" class="card-icon"></i>
             <div class="card-content">
-              <div class="card-title">Diskpart script</div>
+              <div class="card-title">${t('isoConfig.partitioning.diskpartScript')}</div>
               <fluent-text-area id="config-diskpart-script" style="width: 100%; min-height: 320px; font-family: 'Consolas', 'Monaco', monospace;" rows="18">${part.diskpartScript || `SELECT DISK=0
 CLEAN
 CONVERT GPT
@@ -1979,7 +1979,7 @@ FORMAT QUICK FS=NTFS LABEL="Recovery"
 ASSIGN LETTER=R
 SET ID="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
 GPT ATTRIBUTES=0x8000000000000001`}</fluent-text-area>
-              <div class="card-description" style="margin-top: 8px;">Drive letter assignments in the script (e.g. <code>ASSIGN LETTER=W</code>) solely affect the Windows PE stage of Windows Setup; these assignments do not persist to the new installation.</div>
+              <div class="card-description" style="margin-top: 8px;">${t('isoConfig.partitioning.diskpartScriptDesc')}</div>
             </div>
           </div>
         </div>
@@ -1989,18 +1989,18 @@ GPT ATTRIBUTES=0x8000000000000001`}</fluent-text-area>
       const installToModeRadioHtml = createRadioContainer({
         id: 'install-to-mode-container',
         name: 'install-to-mode',
-        title: 'Choose partition to install Windows to',
+        title: t('isoConfig.partitioning.installTo'),
         description: '',
         icon: 'target',
         options: [
           {
             value: 'available',
-            label: 'Install Windows to the first available partition that has enough space and does not already contain an installation of Windows',
+            label: t('isoConfig.partitioning.installToAvailable'),
             description: ''
           },
           {
             value: 'custom',
-            label: 'Install to another partition',
+            label: t('isoConfig.partitioning.installToCustom'),
             description: ''
           }
         ],
@@ -2013,14 +2013,14 @@ GPT ATTRIBUTES=0x8000000000000001`}</fluent-text-area>
         ? `<div class="card">
             <div class="card-left">
               <div class="card-content">
-                <div class="card-title">Install location</div>
+                <div class="card-title">${t('isoConfig.partitioning.installLocation')}</div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
                   <div>
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">Disk (0-based):</label>
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.disk')}</label>
                     <fluent-text-field id="config-install-to-disk" type="number" value="${part.installToDisk || 0}" min="0" style="width: 100%;"></fluent-text-field>
                   </div>
                   <div>
-                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">Partition (1-based):</label>
+                    <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.partitioning.partition')}</label>
                     <fluent-text-field id="config-install-to-partition" type="number" value="${part.installToPartition || 3}" min="1" style="width: 100%;"></fluent-text-field>
                   </div>
                 </div>
@@ -2041,18 +2041,18 @@ GPT ATTRIBUTES=0x8000000000000001`}</fluent-text-area>
       ? createRadioContainer({
         id: 'disk-assertion-container',
         name: 'disk-assertion-mode',
-        title: 'Disk assertion',
-        description: 'When you let Windows Setup partition your disks unattendedly, there is a risk they were assigned unexpected index numbers. In rare cases, disk 0 does not refer to your primary hard drive, but rather your USB thumb drive. You can provide VBScript code to check the assigned disk index numbers. If your script returns with WScript.Quit 1, Windows Setup will halt to avoid data loss.',
+        title: t('isoConfig.partitioning.diskAssertion'),
+        description: t('isoConfig.partitioning.diskAssertionDesc'),
         icon: 'alert-triangle',
         options: [
           {
             value: 'skip',
-            label: 'Do not run a script',
+            label: t('isoConfig.partitioning.diskAssertionSkip'),
             description: ''
           },
           {
             value: 'script',
-            label: 'Run this VBScript code to check disk layout',
+            label: t('isoConfig.partitioning.diskAssertionScript'),
             description: ''
           }
         ],
@@ -2067,7 +2067,7 @@ GPT ATTRIBUTES=0x8000000000000001`}</fluent-text-area>
           <div class="card-left">
             <i data-lucide="code" class="card-icon"></i>
             <div class="card-content">
-              <div class="card-title">VBScript code</div>
+              <div class="card-title">${t('isoConfig.partitioning.vbscriptCode')}</div>
               <fluent-text-area id="config-disk-assertion-script" style="width: 100%; min-height: 240px; font-family: 'Consolas', 'Monaco', monospace;" rows="15">${part.diskAssertionScript || `On Error Resume Next
 Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")
 Set drive = wmi.Get("Win32_DiskDrive.DeviceID='\\\\.\\PHYSICALDRIVE0'")
@@ -2199,29 +2199,29 @@ End If`}</fluent-text-area>
     const editionModeRadioHtml = createRadioContainer({
       id: 'windows-edition-mode-container',
       name: 'edition-mode',
-      title: 'Windows edition',
+      title: t('isoConfig.windowsEdition.title'),
       description: '',
       icon: 'key',
       options: [
         {
           value: 'generic',
-          label: 'Use a generic product key',
-          description: 'Such a key can be used to install Windows, but will not activate it. You can change the product key later.'
+          label: t('isoConfig.windowsEdition.generic'),
+          description: t('isoConfig.windowsEdition.genericDesc')
         },
         {
           value: 'custom',
-          label: 'Enter another product key',
+          label: t('isoConfig.windowsEdition.custom'),
           description: ''
         },
         {
           value: 'interactive',
-          label: 'Enter a product key interactively during Windows Setup',
-          description: 'You can also enter your key in the autounattend.xml file yourself to avoid disclosing it. To do so, find the <Key>00000-00000-00000-00000-00000</Key> element and replace the text with your own key.'
+          label: t('isoConfig.windowsEdition.interactive'),
+          description: t('isoConfig.windowsEdition.interactiveDesc')
         },
         {
           value: 'firmware',
-          label: 'Use product key stored in BIOS/UEFI firmware',
-          description: 'Choose this if your computer came pre-installed with Windows and you want to reuse that license.'
+          label: t('isoConfig.windowsEdition.firmware'),
+          description: t('isoConfig.windowsEdition.firmwareDesc')
         }
       ],
       selectedValue: edition.mode === 'key' ? 'custom' : edition.mode === 'index' || edition.mode === 'name' ? 'generic' : edition.mode,
@@ -2232,7 +2232,7 @@ End If`}</fluent-text-area>
     const genericEditionSelectHtml = (edition.mode === 'index' || edition.mode === 'name' || edition.mode === 'generic')
       ? createComboCard({
         id: 'config-windows-edition-card',
-        title: 'Install this edition of Windows',
+        title: t('isoConfig.windowsEdition.installThisEdition'),
         icon: 'package',
         controlType: 'select',
         selectOptions: preset.windowsEditions.map(e => ({ value: e.id, label: e.name })),
@@ -2245,7 +2245,7 @@ End If`}</fluent-text-area>
       ? `<div class="card">
           <div class="card-left">
             <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">Use this product key:</label>
+              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.windowsEdition.useThisProductKey')}</label>
               <fluent-text-field id="config-product-key" value="${edition.productKey || 'VK7JG-NPHTM-C97JM-9MPGT-3V66T'}" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" maxlength="29" pattern="^([A-Z0-9]{5}-){4}[A-Z0-9]{5}$" style="width: 100%;"></fluent-text-field>
             </div>
           </div>
@@ -2256,23 +2256,23 @@ End If`}</fluent-text-area>
     const sourceImageModeRadioHtml = createRadioContainer({
       id: 'source-image-mode-container',
       name: 'source-image-mode',
-      title: 'Source image',
-      description: 'Run Get-WindowsImage -ImagePath "…\\install.wim" in PowerShell to learn the name and index of an image inside a .wim file.',
+      title: t('isoConfig.windowsEdition.sourceImage'),
+      description: t('isoConfig.windowsEdition.sourceImageDesc'),
       icon: 'disc',
       options: [
         {
           value: 'automatic',
-          label: 'Select image according to the product key',
+          label: t('isoConfig.windowsEdition.selectByKey'),
           description: ''
         },
         {
           value: 'index',
-          label: 'Select image with this index',
+          label: t('isoConfig.windowsEdition.selectByIndex'),
           description: ''
         },
         {
           value: 'name',
-          label: 'Select image with this name',
+          label: t('isoConfig.windowsEdition.selectByName'),
           description: ''
         }
       ],
@@ -2675,45 +2675,45 @@ End If`}</fluent-text-area>
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">File Explorer tweaks</div>
+            <div class="card-title">${t('isoConfig.uiPersonalization.fileExplorer')}</div>
             <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.showFileExtensions ? 'checked' : ''}>
-                <span>Show file extensions</span>
+                <span>${t('isoConfig.uiPersonalization.showFileExtensions')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.showAllTrayIcons ? 'checked' : ''}>
-                <span>Show all tray icons</span>
+                <span>${t('isoConfig.uiPersonalization.showAllTrayIcons')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.hideEdgeFre ? 'checked' : ''}>
-                <span>Hide Edge FRE</span>
+                <span>${t('isoConfig.uiPersonalization.hideEdgeFre')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.disableEdgeStartupBoost ? 'checked' : ''}>
-                <span>Disable Edge startup boost</span>
+                <span>${t('isoConfig.uiPersonalization.disableEdgeStartupBoost')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.makeEdgeUninstallable ? 'checked' : ''}>
-                <span>Make Edge uninstallable</span>
+                <span>${t('isoConfig.uiPersonalization.makeEdgeUninstallable')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.deleteEdgeDesktopIcon ? 'checked' : ''}>
-                <span>Delete Edge desktop icon</span>
+                <span>${t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.launchToThisPC ? 'checked' : ''}>
-                <span>Launch to This PC</span>
+                <span>${t('isoConfig.uiPersonalization.launchToThisPC')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" ${fe.disableBingResults ? 'checked' : ''}>
-                <span>Disable Bing results</span>
+                <span>${t('isoConfig.uiPersonalization.disableBingResults')}</span>
               </label>
               <div>
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">Hide files:</label>
+                <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.hideFiles')}</label>
                 <fluent-select id="config-hide-files" style="width: 100%;">
-                  <fluent-option value="hidden" ${fe.hideFiles === 'hidden' ? 'selected' : ''}>Hidden</fluent-option>
-                  <fluent-option value="show" ${fe.hideFiles === 'show' ? 'selected' : ''}>Show</fluent-option>
+                  <fluent-option value="hidden" ${fe.hideFiles === 'hidden' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.hidden')}</fluent-option>
+                  <fluent-option value="show" ${fe.hideFiles === 'show' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.show')}</fluent-option>
                 </fluent-select>
               </div>
             </div>
@@ -2753,7 +2753,7 @@ End If`}</fluent-text-area>
       <div class="card-expandable expanded">
         <div class="card-expandable-header">
           <div class="card-expandable-header-left">
-            <div class="card-expandable-title">Start menu and taskbar</div>
+            <div class="card-expandable-title">${t('isoConfig.uiPersonalization.startTaskbar')}</div>
           </div>
           <div class="card-expandable-arrow">
             <i data-lucide="chevron-down"></i>
@@ -2763,19 +2763,19 @@ End If`}</fluent-text-area>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" ${st.leftTaskbar ? 'checked' : ''}>
-              <span>Left taskbar</span>
+              <span>${t('isoConfig.uiPersonalization.leftTaskbar')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" ${st.hideTaskViewButton ? 'checked' : ''}>
-              <span>Hide Task View button</span>
+              <span>${t('isoConfig.uiPersonalization.hideTaskViewButton')}</span>
             </label>
             <div>
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">Taskbar search:</label>
+              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.taskbarSearch')}</label>
               <fluent-select id="config-taskbar-search" style="width: 100%;">
-                <fluent-option value="hide" ${st.taskbarSearch === 'hide' ? 'selected' : ''}>Hide</fluent-option>
-                <fluent-option value="icon" ${st.taskbarSearch === 'icon' ? 'selected' : ''}>Icon</fluent-option>
-                <fluent-option value="box" ${st.taskbarSearch === 'box' ? 'selected' : ''}>Box</fluent-option>
-                <fluent-option value="label" ${st.taskbarSearch === 'label' ? 'selected' : ''}>Label</fluent-option>
+                <fluent-option value="hide" ${st.taskbarSearch === 'hide' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchHide')}</fluent-option>
+                <fluent-option value="icon" ${st.taskbarSearch === 'icon' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchIcon')}</fluent-option>
+                <fluent-option value="box" ${st.taskbarSearch === 'box' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchBox')}</fluent-option>
+                <fluent-option value="label" ${st.taskbarSearch === 'label' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchLabel')}</fluent-option>
               </fluent-select>
             </div>
           </div>
@@ -2825,7 +2825,7 @@ End If`}</fluent-text-area>
         <div class="card-expandable-header">
           <div class="card-expandable-header-left">
             <i data-lucide="settings" class="card-icon"></i>
-            <div class="card-expandable-title">System tweaks</div>
+            <div class="card-expandable-title">${t('isoConfig.systemOptimization.systemTweaks')}</div>
           </div>
           <div class="card-expandable-arrow">
             <i data-lucide="chevron-down"></i>
@@ -2835,95 +2835,95 @@ End If`}</fluent-text-area>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="enableLongPaths" ${tweaks.enableLongPaths ? 'checked' : ''}>
-              <span>Enable long paths</span>
+              <span>${t('isoConfig.systemOptimization.enableLongPaths')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="enableRemoteDesktop" ${tweaks.enableRemoteDesktop ? 'checked' : ''}>
-              <span>Enable Remote Desktop</span>
+              <span>${t('isoConfig.systemOptimization.enableRemoteDesktop')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="hardenSystemDriveAcl" ${tweaks.hardenSystemDriveAcl ? 'checked' : ''}>
-              <span>Harden system drive ACL</span>
+              <span>${t('isoConfig.systemOptimization.hardenSystemDriveAcl')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="deleteJunctions" ${tweaks.deleteJunctions ? 'checked' : ''}>
-              <span>Delete junctions</span>
+              <span>${t('isoConfig.systemOptimization.deleteJunctions')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="allowPowerShellScripts" ${tweaks.allowPowerShellScripts ? 'checked' : ''}>
-              <span>Allow PowerShell scripts</span>
+              <span>${t('isoConfig.systemOptimization.allowPowerShellScripts')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableLastAccess" ${tweaks.disableLastAccess ? 'checked' : ''}>
-              <span>Disable last access</span>
+              <span>${t('isoConfig.systemOptimization.disableLastAccess')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="preventAutomaticReboot" ${tweaks.preventAutomaticReboot ? 'checked' : ''}>
-              <span>Prevent automatic reboot</span>
+              <span>${t('isoConfig.systemOptimization.preventAutomaticReboot')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableDefender" ${tweaks.disableDefender ? 'checked' : ''}>
-              <span>Disable Defender</span>
+              <span>${t('isoConfig.systemOptimization.disableDefender')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableSac" ${tweaks.disableSac ? 'checked' : ''}>
-              <span>Disable SAC</span>
+              <span>${t('isoConfig.systemOptimization.disableSac')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableUac" ${tweaks.disableUac ? 'checked' : ''}>
-              <span>Disable UAC</span>
+              <span>${t('isoConfig.systemOptimization.disableUac')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableSmartScreen" ${tweaks.disableSmartScreen ? 'checked' : ''}>
-              <span>Disable SmartScreen</span>
+              <span>${t('isoConfig.systemOptimization.disableSmartScreen')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableSystemRestore" ${tweaks.disableSystemRestore ? 'checked' : ''}>
-              <span>Disable System Restore</span>
+              <span>${t('isoConfig.systemOptimization.disableSystemRestore')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableFastStartup" ${tweaks.disableFastStartup ? 'checked' : ''}>
-              <span>Disable fast startup</span>
+              <span>${t('isoConfig.systemOptimization.disableFastStartup')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="turnOffSystemSounds" ${tweaks.turnOffSystemSounds ? 'checked' : ''}>
-              <span>Turn off system sounds</span>
+              <span>${t('isoConfig.systemOptimization.turnOffSystemSounds')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableAppSuggestions" ${tweaks.disableAppSuggestions ? 'checked' : ''}>
-              <span>Disable app suggestions</span>
+              <span>${t('isoConfig.systemOptimization.disableAppSuggestions')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableWidgets" ${tweaks.disableWidgets ? 'checked' : ''}>
-              <span>Disable widgets</span>
+              <span>${t('isoConfig.systemOptimization.disableWidgets')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="preventDeviceEncryption" ${tweaks.preventDeviceEncryption ? 'checked' : ''}>
-              <span>Prevent device encryption</span>
+              <span>${t('isoConfig.systemOptimization.preventDeviceEncryption')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="classicContextMenu" ${tweaks.classicContextMenu ? 'checked' : ''}>
-              <span>Classic context menu</span>
+              <span>${t('isoConfig.systemOptimization.classicContextMenu')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableWindowsUpdate" ${tweaks.disableWindowsUpdate ? 'checked' : ''}>
-              <span>Disable Windows Update</span>
+              <span>${t('isoConfig.systemOptimization.disableWindowsUpdate')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disablePointerPrecision" ${tweaks.disablePointerPrecision ? 'checked' : ''}>
-              <span>Disable pointer precision</span>
+              <span>${t('isoConfig.systemOptimization.disablePointerPrecision')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="deleteWindowsOld" ${tweaks.deleteWindowsOld ? 'checked' : ''}>
-              <span>Delete Windows.old</span>
+              <span>${t('isoConfig.systemOptimization.deleteWindowsOld')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="disableCoreIsolation" ${tweaks.disableCoreIsolation ? 'checked' : ''}>
-              <span>Disable Core Isolation</span>
+              <span>${t('isoConfig.systemOptimization.disableCoreIsolation')}</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" class="tweak-checkbox" data-key="showEndTask" ${tweaks.showEndTask ? 'checked' : ''}>
-              <span>Show End Task</span>
+              <span>${t('isoConfig.systemOptimization.showEndTask')}</span>
             </label>
           </div>
         </div>
@@ -2933,7 +2933,7 @@ End If`}</fluent-text-area>
         <div class="card-expandable-header">
           <div class="card-expandable-header-left">
             <i data-lucide="trash-2" class="card-icon"></i>
-            <div class="card-expandable-title">Remove bloatware</div>
+            <div class="card-expandable-title">${t('isoConfig.systemOptimization.removeBloatware')}</div>
           </div>
           <div class="card-expandable-arrow">
             <i data-lucide="chevron-down"></i>
@@ -2941,8 +2941,8 @@ End If`}</fluent-text-area>
         </div>
         <div class="card-expandable-content">
           <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-            <fluent-button id="config-bloatware-select-all" appearance="outline">Select all</fluent-button>
-            <fluent-button id="config-bloatware-deselect-all" appearance="outline">Deselect all</fluent-button>
+            <fluent-button id="config-bloatware-select-all" appearance="outline">${t('common.selectAll')}</fluent-button>
+            <fluent-button id="config-bloatware-deselect-all" appearance="outline">${t('common.deselectAll')}</fluent-button>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
             ${preset.bloatwareItems.map(item => `
@@ -2959,19 +2959,19 @@ End If`}</fluent-text-area>
         <div class="card-left">
           <i data-lucide="shield-check" class="card-icon"></i>
           <div class="card-content">
-            <div class="card-title">Express settings</div>
+            <div class="card-title">${t('isoConfig.systemOptimization.expressSettings')}</div>
             <div style="display: flex; gap: 20px; margin-top: 10px;">
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="express-settings-mode" value="interactive" ${express === 'interactive' ? 'checked' : ''}>
-                <span>Interactive</span>
+                <span>${t('isoConfig.systemOptimization.expressInteractive')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="express-settings-mode" value="enableAll" ${express === 'enableAll' ? 'checked' : ''}>
-                <span>Enable all</span>
+                <span>${t('isoConfig.systemOptimization.expressEnableAll')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="express-settings-mode" value="disableAll" ${express === 'disableAll' ? 'checked' : ''}>
-                <span>Disable all</span>
+                <span>${t('isoConfig.systemOptimization.expressDisableAll')}</span>
               </label>
             </div>
           </div>
@@ -3042,8 +3042,8 @@ End If`}</fluent-text-area>
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">Visual effects</div>
-            <div class="card-description" style="margin-top: 8px;">Visual effects configuration (TODO: implement detailed options)</div>
+            <div class="card-title">${t('isoConfig.uiPersonalization.visualEffects')}</div>
+            <div class="card-description" style="margin-top: 8px;">${t('isoConfig.uiPersonalization.visualEffectsDesc')}</div>
           </div>
         </div>
       </div>
@@ -3061,15 +3061,15 @@ End If`}</fluent-text-area>
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">Desktop icons</div>
+            <div class="card-title">${t('isoConfig.uiPersonalization.desktopIcons')}</div>
             <div style="display: flex; gap: 20px; margin-top: 10px;">
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="desktop-icons-mode" value="default" ${icons.mode === 'default' ? 'checked' : ''}>
-                <span>Default desktop icons</span>
+                <span>${t('isoConfig.uiPersonalization.defaultIcons')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="desktop-icons-mode" value="custom" ${icons.mode === 'custom' ? 'checked' : ''}>
-                <span>Custom desktop icons</span>
+                <span>${t('isoConfig.uiPersonalization.customIcons')}</span>
               </label>
             </div>
           </div>
@@ -3095,8 +3095,8 @@ End If`}</fluent-text-area>
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">Folders on Start</div>
-            <div class="card-description" style="margin-top: 8px;">Start menu folders configuration (TODO: implement folder selection)</div>
+            <div class="card-title">${t('isoConfig.uiPersonalization.foldersStart')}</div>
+            <div class="card-description" style="margin-top: 8px;">${t('isoConfig.uiPersonalization.foldersStartDesc')}</div>
           </div>
         </div>
       </div>
@@ -3114,28 +3114,28 @@ End If`}</fluent-text-area>
     const wifiModeRadioHtml = createRadioContainer({
       id: 'wifi-mode-container',
       name: 'wifi-mode',
-      title: 'WLAN / Wi-Fi setup',
+      title: t('isoConfig.wifi.title'),
       description: '',
       icon: 'wifi',
       options: [
         {
           value: 'interactive',
-          label: 'Configure Wi-Fi interactively during Windows Setup',
+          label: t('isoConfig.wifi.interactive'),
           description: ''
         },
         {
           value: 'skip',
-          label: 'Skip Wi-Fi configuration',
-          description: 'Choose this if you have a wired connection to the internet.'
+          label: t('isoConfig.wifi.skip'),
+          description: t('isoConfig.wifi.skipDesc')
         },
         {
           value: 'unattended',
-          label: 'Configure Wi-Fi using these settings',
+          label: t('isoConfig.wifi.unattended'),
           description: ''
         },
         {
           value: 'fromProfile',
-          label: 'Configure Wi-Fi using an XML file created by netsh.exe wlan export profile key=clear on another computer',
+          label: t('isoConfig.wifi.fromProfile'),
           description: ''
         }
       ],
@@ -3149,31 +3149,31 @@ End If`}</fluent-text-area>
           <div class="card-left">
             <i data-lucide="settings" class="card-icon"></i>
             <div class="card-content">
-              <div class="card-title">Wi-Fi Network Settings</div>
+              <div class="card-title">${t('isoConfig.wifi.networkSettings')}</div>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
                 <div style="grid-column: 1 / -1;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Network name (SSID):</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.wifi.ssid')}</label>
                   <fluent-text-field id="config-wifi-ssid" value="${wifi.ssid || ''}" maxlength="32" style="width: 100%;"></fluent-text-field>
                 </div>
                 <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Authentication:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.wifi.authentication')}</label>
                   <fluent-select id="config-wifi-auth" style="width: 100%;">
-                    <fluent-option value="Open" ${wifi.authentication === 'Open' || !wifi.authentication ? 'selected' : ''}>Open</fluent-option>
-                    <fluent-option value="WPA2PSK" ${wifi.authentication === 'WPA2PSK' ? 'selected' : ''}>WPA2-Personal AES</fluent-option>
-                    <fluent-option value="WPA3SAE" ${wifi.authentication === 'WPA3SAE' ? 'selected' : ''}>WPA3-Personal AES</fluent-option>
+                    <fluent-option value="Open" ${wifi.authentication === 'Open' || !wifi.authentication ? 'selected' : ''}>${t('isoConfig.wifi.authOpen')}</fluent-option>
+                    <fluent-option value="WPA2PSK" ${wifi.authentication === 'WPA2PSK' ? 'selected' : ''}>${t('isoConfig.wifi.authWPA2')}</fluent-option>
+                    <fluent-option value="WPA3SAE" ${wifi.authentication === 'WPA3SAE' ? 'selected' : ''}>${t('isoConfig.wifi.authWPA3')}</fluent-option>
                   </fluent-select>
                 </div>
                 <div>
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Password:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.password')}</label>
                   <fluent-text-field id="config-wifi-password" type="password" value="${wifi.password || '00000000'}" maxlength="63" ${wifi.authentication === 'Open' ? 'disabled' : ''} style="width: 100%;"></fluent-text-field>
                 </div>
               </div>
               <div style="margin-top: 12px;">
-                <fluent-checkbox id="config-wifi-non-broadcast" ${wifi.nonBroadcast ? 'checked' : ''}>Connect even if not broadcasting</fluent-checkbox>
+                <fluent-checkbox id="config-wifi-non-broadcast" ${wifi.nonBroadcast ? 'checked' : ''}>${t('isoConfig.wifi.nonBroadcast')}</fluent-checkbox>
               </div>
               <div class="card-description" style="margin-top: 12px;">
-                <p>If both your Wi-Fi router and your computer's Wi-Fi adapter support it, make sure to select WPA3. Otherwise, Windows Setup will try to switch from WPA2 to WPA3 and require manual interaction.</p>
-                <p>You should not enter your actual Wi-Fi password here. Once you have downloaded the autounattend.xml file, find the password enclosed in &lt;keyMaterial&gt;…&lt;/keyMaterial&gt; and adjust it.</p>
+                <p>${t('isoConfig.wifi.wpa3Note')}</p>
+                <p>${t('isoConfig.wifi.passwordNote')}</p>
               </div>
             </div>
           </div>
@@ -3186,7 +3186,7 @@ End If`}</fluent-text-area>
           <div class="card-left">
             <i data-lucide="code" class="card-icon"></i>
             <div class="card-content">
-              <div class="card-title">WLAN Profile XML</div>
+              <div class="card-title">${t('isoConfig.wifi.profileXml')}</div>
               <fluent-text-area id="config-wifi-profile-xml" style="width: 100%; min-height: 480px; font-family: 'Consolas', 'Monaco', monospace;" rows="29">${wifi.profileXml || `<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
   <name>WLAN-123456</name>
   <SSIDConfig>
@@ -3290,15 +3290,15 @@ End If`}</fluent-text-area>
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">Lock key settings</div>
+            <div class="card-title">${t('isoConfig.accessibility.lockKeys')}</div>
             <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="lock-keys-mode" value="skip" ${lockKeys.mode === 'skip' ? 'checked' : ''}>
-                <span>Do not configure lock keys</span>
+                <span>${t('isoConfig.accessibility.lockKeysSkip')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="lock-keys-mode" value="configure" ${lockKeys.mode === 'configure' ? 'checked' : ''}>
-                <span>Configure lock keys</span>
+                <span>${t('isoConfig.accessibility.lockKeysConfigure')}</span>
               </label>
             </div>
           </div>
@@ -3308,14 +3308,14 @@ End If`}</fluent-text-area>
         <div class="card-expandable expanded">
           <div class="card-expandable-header">
             <div class="card-expandable-header-left">
-              <div class="card-expandable-title">Lock key configuration</div>
+              <div class="card-expandable-title">${t('isoConfig.accessibility.lockKeyConfig')}</div>
             </div>
             <div class="card-expandable-arrow">
               <i data-lucide="chevron-down"></i>
             </div>
           </div>
           <div class="card-expandable-content">
-            <div class="card-description">Lock key settings (TODO: implement key list editor)</div>
+            <div class="card-description">${t('isoConfig.accessibility.lockKeyConfigDesc')}</div>
           </div>
         </div>
       ` : ''}
@@ -3344,19 +3344,19 @@ End If`}</fluent-text-area>
       <div class="card">
         <div class="card-left">
           <div class="card-content">
-            <div class="card-title">Sticky keys</div>
+            <div class="card-title">${t('isoConfig.accessibility.stickyKeys')}</div>
             <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="sticky-keys-mode" value="default" ${sticky.mode === 'default' ? 'checked' : ''}>
-                <span>Default sticky keys</span>
+                <span>${t('isoConfig.accessibility.stickyKeysDefault')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="sticky-keys-mode" value="disabled" ${sticky.mode === 'disabled' ? 'checked' : ''}>
-                <span>Disabled sticky keys</span>
+                <span>${t('isoConfig.accessibility.stickyKeysDisabled')}</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="radio" name="sticky-keys-mode" value="custom" ${sticky.mode === 'custom' ? 'checked' : ''}>
-                <span>Custom sticky keys</span>
+                <span>${t('isoConfig.accessibility.stickyKeysCustom')}</span>
               </label>
             </div>
           </div>
@@ -3382,7 +3382,7 @@ End If`}</fluent-text-area>
       <div class="card-expandable expanded">
         <div class="card-expandable-header">
           <div class="card-expandable-header-left">
-            <div class="card-expandable-title">Personalization settings</div>
+            <div class="card-expandable-title">${t('isoConfig.uiPersonalization.personalization')}</div>
           </div>
           <div class="card-expandable-arrow">
             <i data-lucide="chevron-down"></i>
@@ -3391,68 +3391,68 @@ End If`}</fluent-text-area>
         <div class="card-expandable-content">
           <div style="display: flex; flex-direction: column; gap: 16px;">
             <div>
-              <div class="card-title">Wallpaper</div>
+              <div class="card-title">${t('isoConfig.uiPersonalization.wallpaper')}</div>
               <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="wallpaper-mode" value="default" ${pers.wallpaperMode === 'default' ? 'checked' : ''}>
-                  <span>Default wallpaper</span>
+                  <span>${t('isoConfig.uiPersonalization.wallpaperDefault')}</span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="wallpaper-mode" value="solid" ${pers.wallpaperMode === 'solid' ? 'checked' : ''}>
-                  <span>Solid color wallpaper</span>
+                  <span>${t('isoConfig.uiPersonalization.wallpaperSolid')}</span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="wallpaper-mode" value="script" ${pers.wallpaperMode === 'script' ? 'checked' : ''}>
-                  <span>Use PowerShell script to load wallpaper</span>
+                  <span>${t('isoConfig.uiPersonalization.wallpaperScript')}</span>
                 </label>
               </div>
               ${pers.wallpaperMode === 'solid' ? `
                 <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Color (hex):</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.wallpaperColor')}</label>
                   <fluent-text-field id="config-wallpaper-color" value="${pers.wallpaperColor || '#000000'}" placeholder="#000000" style="width: 100%;"></fluent-text-field>
                 </div>
               ` : ''}
               ${pers.wallpaperMode === 'script' ? `
                 <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">PowerShell script:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.wallpaperPsScript')}</label>
                   <textarea id="config-wallpaper-script" style="width: 100%; min-height: 100px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${pers.wallpaperScript || ''}</textarea>
                 </div>
               ` : ''}
             </div>
             <div>
-              <div class="card-title">Lock screen</div>
+              <div class="card-title">${t('isoConfig.uiPersonalization.lockScreen')}</div>
               <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="lockscreen-mode" value="default" ${pers.lockScreenMode === 'default' ? 'checked' : ''}>
-                  <span>Default lock screen</span>
+                  <span>${t('isoConfig.uiPersonalization.lockScreenDefault')}</span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="lockscreen-mode" value="script" ${pers.lockScreenMode === 'script' ? 'checked' : ''}>
-                  <span>Use PowerShell script to load lock screen image</span>
+                  <span>${t('isoConfig.uiPersonalization.lockScreenScript')}</span>
                 </label>
               </div>
               ${pers.lockScreenMode === 'script' ? `
                 <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">PowerShell script:</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.lockScreenPsScript')}</label>
                   <textarea id="config-lockscreen-script" style="width: 100%; min-height: 100px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${pers.lockScreenScript || ''}</textarea>
                 </div>
               ` : ''}
             </div>
             <div>
-              <div class="card-title">Color</div>
+              <div class="card-title">${t('isoConfig.uiPersonalization.color')}</div>
               <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="color-mode" value="default" ${pers.colorMode === 'default' ? 'checked' : ''}>
-                  <span>Default color</span>
+                  <span>${t('isoConfig.uiPersonalization.colorDefault')}</span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px;">
                   <input type="radio" name="color-mode" value="custom" ${pers.colorMode === 'custom' ? 'checked' : ''}>
-                  <span>Custom accent color</span>
+                  <span>${t('isoConfig.uiPersonalization.colorCustom')}</span>
                 </label>
               </div>
               ${pers.colorMode === 'custom' ? `
                 <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">Accent color (hex):</label>
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.accentColor')}</label>
                   <fluent-text-field id="config-accent-color" value="${pers.accentColor || '#0078d4'}" placeholder="#0078d4" style="width: 100%;"></fluent-text-field>
                 </div>
               ` : ''}
@@ -3994,6 +3994,14 @@ export function initIsoConfig() {
   if (!configManager) {
     configManager = new UnattendConfigManager()
     configManager.init('workspace-iso-config')
+
+    // 监听语言切换事件，重新渲染所有模块
+    window.addEventListener('language-changed', () => {
+      console.log('Language changed, re-rendering ISO config modules')
+      if (configManager) {
+        configManager.renderAllModules()
+      }
+    })
   }
   return configManager
 }
