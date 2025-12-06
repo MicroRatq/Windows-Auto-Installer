@@ -7,7 +7,9 @@
     "selectAll": "全选",
     "deselectAll": "取消全选",
     "importFile": "导入",
-    "exportFile": "导出"
+    "exportFile": "导出",
+    "addItem": "添加项",
+    "removeItem": "删除"
   },
   "isoConfig": {
     "regionLanguage": {
@@ -382,6 +384,31 @@
       "stickyKeysTriState": "连续按两次时锁定快捷键",
       "stickyKeysTwoKeysOff": "同时按下两个键时关闭粘滞键",
       "stickyKeysDesc": "这将影响所有用户以及登录屏幕。"
+    },
+    "customScripts": {
+      "title": "运行自定义脚本",
+      "systemScripts": "系统脚本",
+      "systemScriptsDesc": "这些脚本将在系统上下文中运行，在创建用户账户之前。",
+      "defaultUserScripts": "默认用户脚本",
+      "defaultUserScriptsDesc": "使用这些脚本来修改默认用户的注册表配置单元。",
+      "firstLogonScripts": "首次登录脚本",
+      "firstLogonScriptsDesc": "这些脚本将在 Windows 安装后第一个用户登录时运行。",
+      "userOnceScripts": "用户首次登录脚本",
+      "userOnceScriptsDesc": "这些脚本将在用户首次登录时运行。",
+      "scriptType": "脚本类型",
+      "scriptContent": "脚本内容",
+      "scriptContentDesc": "在此输入您的脚本内容",
+      "scriptContentPlaceholder": "在此输入您的脚本内容",
+      "restartExplorer": "脚本运行后重启文件资源管理器"
+    },
+    "xmlMarkup": {
+      "title": "更多组件的 XML 标记",
+      "description": "您可以为所有可用组件添加设置，以添加此生成器尚未涵盖的功能。",
+      "component": "组件",
+      "componentPlaceholder": "Microsoft-Windows-...",
+      "pass": "阶段",
+      "xmlMarkup": "XML 标记",
+      "addComponent": "添加组件"
     }
   },
   "settings": {

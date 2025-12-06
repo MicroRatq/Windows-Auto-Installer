@@ -14,7 +14,11 @@ import {
   setupMultiColumnCheckboxContainer,
   setupTextCard,
   getTextCardValue,
-  setTextCardValue
+  setTextCardValue,
+  createDynamicListContainer,
+  setupDynamicListContainer,
+  type DynamicListItem,
+  type ComboContainerConfig
 } from './workspace'
 import { t } from './i18n'
 
@@ -109,6 +113,7 @@ interface PESettings {
 
 // 用户账户设置
 interface Account {
+  id: string // UUID
   name: string
   displayName: string
   password: string
@@ -311,11 +316,17 @@ interface BloatwareSettings {
 }
 
 // 自定义脚本
+interface ScriptItem {
+  id: string // UUID
+  type: string
+  content: string
+}
+
 interface ScriptSettings {
-  system: Array<{ type: string; content: string }>
-  defaultUser: Array<{ type: string; content: string }>
-  firstLogon: Array<{ type: string; content: string }>
-  userOnce: Array<{ type: string; content: string }>
+  system: ScriptItem[]
+  defaultUser: ScriptItem[]
+  firstLogon: ScriptItem[]
+  userOnce: ScriptItem[]
   restartExplorer: boolean
 }
 
@@ -327,12 +338,15 @@ interface WdacSettings {
 }
 
 // XML标记
+interface XmlMarkupComponent {
+  id: string // UUID
+  component: string
+  pass: string
+  markup: string
+}
+
 interface XmlMarkupSettings {
-  components: Array<{
-    component: string
-    pass: string
-    markup: string
-  }>
+  components: XmlMarkupComponent[]
 }
 
 // 完整配置对象
@@ -1090,7 +1104,7 @@ class UnattendConfigManager {
       expanded: false
     })
 
-    // 2. User accounts - RadioContainer
+    // 2. User accounts - RadioContainer（将 firstLogon 和 builtinAdminPassword 嵌入到 unattended 选项中）
     const userAccountsRadioHtml = createRadioContainer({
       id: 'user-accounts-container',
       name: 'account-mode',
@@ -1101,7 +1115,39 @@ class UnattendConfigManager {
         {
           value: 'unattended',
           label: t('isoConfig.nameAccount.userAccountsUnattended'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-first-logon-card',
+              title: t('isoConfig.nameAccount.firstLogon'),
+              description: t('isoConfig.nameAccount.firstLogonDesc'),
+              controlType: 'select',
+              options: [
+                { value: 'own', label: t('isoConfig.nameAccount.logonOwnAccount') },
+                { value: 'builtin', label: t('isoConfig.nameAccount.logonBuiltinAdmin') },
+                { value: 'none', label: t('isoConfig.nameAccount.logonNone') }
+              ],
+              value: accounts.autoLogonMode || 'none',
+              borderless: true
+            },
+            {
+              id: 'config-auto-logon-password-card',
+              title: t('isoConfig.nameAccount.builtinAdminPassword'),
+              description: '',
+              controlType: 'text',
+              value: accounts.autoLogonPassword || '',
+              borderless: true,
+              placeholder: ''
+            },
+            {
+              id: 'config-obscure-passwords-card',
+              title: t('isoConfig.nameAccount.obscurePasswords'),
+              description: t('isoConfig.nameAccount.obscurePasswordsDesc'),
+              controlType: 'switch',
+              value: accounts.obscurePasswords || false,
+              borderless: true
+            }
+          ]
         },
         {
           value: 'interactive-microsoft',
@@ -1118,114 +1164,123 @@ class UnattendConfigManager {
       expanded: false
     })
 
-    // User accounts list (只在 unattended 模式下显示)
-    const userAccountsListHtml = accounts.mode === 'unattended'
-      ? `<div class="card-expandable expanded">
-          <div class="card-expandable-header">
-            <div class="card-expandable-header-left">
-              <i data-lucide="user-plus" class="card-icon"></i>
-              <div class="card-expandable-title">${t('isoConfig.nameAccount.accountList')}</div>
-            </div>
-            <div class="card-expandable-arrow">
-              <i data-lucide="chevron-down"></i>
-            </div>
-          </div>
-          <div class="card-expandable-content">
-            <div class="card-description" style="margin-bottom: 12px;">${t('isoConfig.nameAccount.accountListDesc')}</div>
-            <div id="config-accounts-list" style="display: flex; flex-direction: column; gap: 12px;">
-              ${(accounts.accounts || []).map((acc, idx) => `
-                <div class="card" style="background: var(--bg-primary);">
-                  <div class="card-content" style="width: 100%;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: end;">
-                      <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.accountName')}</label>
-                        <fluent-text-field class="account-name" data-index="${idx}" value="${acc.name}" maxlength="20" style="width: 100%;"></fluent-text-field>
-                      </div>
-                      <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.displayName')}</label>
-                        <fluent-text-field class="account-display-name" data-index="${idx}" value="${acc.displayName}" maxlength="256" style="width: 100%;"></fluent-text-field>
-                      </div>
-                      <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.password')}</label>
-                        <fluent-text-field class="account-password" data-index="${idx}" type="password" value="${acc.password}" style="width: 100%;"></fluent-text-field>
-                      </div>
-                      <div>
-                        <label style="display: block; margin-bottom: 6px; font-size: 12px;">${t('isoConfig.nameAccount.group')}</label>
-                        <fluent-select class="account-group" data-index="${idx}" style="width: 100%;">
-                          <fluent-option value="Administrators" ${acc.group === 'Administrators' ? 'selected' : ''}>${t('isoConfig.nameAccount.administrators')}</fluent-option>
-                          <fluent-option value="Users" ${acc.group === 'Users' ? 'selected' : ''}>${t('isoConfig.nameAccount.users')}</fluent-option>
-                        </fluent-select>
-                      </div>
-                      <fluent-button class="account-remove" data-index="${idx}" appearance="stealth">
-                        <i data-lucide="trash-2"></i>
-                      </fluent-button>
-                    </div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-            <div style="margin-top: 12px;">
-              <fluent-button id="config-add-account" appearance="outline">
-                <i data-lucide="plus"></i> ${t('common.add')}
-              </fluent-button>
-            </div>
-          </div>
-        </div>`
-      : ''
-
-    // First logon - RadioContainer (只在 unattended 模式下显示)
-    const firstLogonRadioHtml = accounts.mode === 'unattended'
-      ? createRadioContainer({
-        id: 'first-logon-container',
-        name: 'auto-logon-mode',
-        title: t('isoConfig.nameAccount.firstLogon'),
-        description: t('isoConfig.nameAccount.firstLogonDesc'),
-        icon: 'log-in',
-        options: [
+    // 3. Account list - DynamicListContainer (始终显示)
+    const accountItems: DynamicListItem[] = (accounts.accounts || []).map(acc => {
+      const comboContainerConfig: ComboContainerConfig = {
+        id: `config-account-${acc.id}`,
+        name: `account-${acc.id}`,
+        title: '',
+        description: '',
+        icon: 'user',
+        nestedCards: [
           {
-            value: 'own',
-            label: t('isoConfig.nameAccount.logonOwnAccount'),
-            description: ''
+            id: `config-account-name-${acc.id}`,
+            title: t('isoConfig.nameAccount.accountName'),
+            controlType: 'text',
+            value: acc.name,
+            borderless: true,
+            placeholder: ''
           },
           {
-            value: 'builtin',
-            label: t('isoConfig.nameAccount.logonBuiltinAdmin'),
-            description: ''
+            id: `config-account-display-name-${acc.id}`,
+            title: t('isoConfig.nameAccount.displayName'),
+            controlType: 'text',
+            value: acc.displayName,
+            borderless: true,
+            placeholder: ''
           },
           {
-            value: 'none',
-            label: t('isoConfig.nameAccount.logonNone'),
-            description: t('isoConfig.nameAccount.logonNoneDesc')
+            id: `config-account-password-${acc.id}`,
+            title: t('isoConfig.nameAccount.password'),
+            controlType: 'text',
+            value: acc.password,
+            borderless: true,
+            placeholder: ''
+          },
+          {
+            id: `config-account-group-${acc.id}`,
+            title: t('isoConfig.nameAccount.group'),
+            controlType: 'select',
+            options: [
+              { value: 'Administrators', label: t('isoConfig.nameAccount.administrators') },
+              { value: 'Users', label: t('isoConfig.nameAccount.users') }
+            ],
+            value: acc.group,
+            borderless: true
           }
         ],
-        selectedValue: accounts.autoLogonMode || 'none',
-        expanded: false
-      })
-      : ''
+        showHeader: false,
+        borderless: true
+      }
 
-    // Built-in Administrator password (只在 builtin 模式下显示)
-    const builtinAdminPasswordHtml = accounts.mode === 'unattended' && accounts.autoLogonMode === 'builtin'
-      ? `<div class="card">
-          <div class="card-left">
-            <div class="card-content">
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.nameAccount.builtinAdminPassword')}</label>
-              <fluent-text-field id="config-auto-logon-password" type="password" value="${accounts.autoLogonPassword || ''}" style="width: 100%;"></fluent-text-field>
-            </div>
-          </div>
-        </div>`
-      : ''
+      return {
+        id: acc.id,
+        cardType: 'comboContainer',
+        cardConfig: comboContainerConfig
+      }
+    })
 
-    // Obscure passwords - ComboCard
-    const obscurePasswordsCardHtml = accounts.mode === 'unattended'
-      ? createComboCard({
-        id: 'config-obscure-passwords-card',
-        title: t('isoConfig.nameAccount.obscurePasswords'),
-        description: t('isoConfig.nameAccount.obscurePasswordsDesc'),
-        icon: 'eye-off',
-        controlType: 'switch',
-        value: accounts.obscurePasswords || false
-      })
-      : ''
+    const accountListHtml = createDynamicListContainer({
+      id: 'config-accounts-list',
+      name: 'accounts-list',
+      title: t('isoConfig.nameAccount.accountList'),
+      description: t('isoConfig.nameAccount.accountListDesc'),
+      icon: 'user-plus',
+      itemCardType: 'comboContainer',
+      items: accountItems,
+      expanded: true,
+      showHeader: true,
+      embedded: false,
+      defaultCardConfig: () => {
+        const newId = this.generateUUID()
+        return {
+          id: `config-account-${newId}`,
+          name: `account-${newId}`,
+          title: '',
+          description: '',
+          icon: 'user',
+          nestedCards: [
+            {
+              id: `config-account-name-${newId}`,
+              title: t('isoConfig.nameAccount.accountName'),
+              controlType: 'text',
+              value: '',
+              borderless: true,
+              placeholder: ''
+            },
+            {
+              id: `config-account-display-name-${newId}`,
+              title: t('isoConfig.nameAccount.displayName'),
+              controlType: 'text',
+              value: '',
+              borderless: true,
+              placeholder: ''
+            },
+            {
+              id: `config-account-password-${newId}`,
+              title: t('isoConfig.nameAccount.password'),
+              controlType: 'text',
+              value: '',
+              borderless: true,
+              placeholder: ''
+            },
+            {
+              id: `config-account-group-${newId}`,
+              title: t('isoConfig.nameAccount.group'),
+              controlType: 'select',
+              options: [
+                { value: 'Administrators', label: t('isoConfig.nameAccount.administrators') },
+                { value: 'Users', label: t('isoConfig.nameAccount.users') }
+              ],
+              value: 'Users',
+              borderless: true
+            }
+          ],
+          showHeader: false,
+          borderless: true
+        }
+      }
+    })
 
     // 3. Password expiration - RadioContainer（带嵌套 ComboCard）
     const passwordExpirationRadioHtml = createRadioContainer({
@@ -1326,10 +1381,7 @@ class UnattendConfigManager {
     contentDiv.innerHTML = `
       ${computerNameRadioHtml}
       ${userAccountsRadioHtml}
-      ${userAccountsListHtml}
-      ${firstLogonRadioHtml}
-      ${builtinAdminPasswordHtml}
-      ${obscurePasswordsCardHtml}
+      ${accountListHtml}
       ${passwordExpirationRadioHtml}
       ${accountLockoutRadioHtml}
     `
@@ -1390,70 +1442,136 @@ class UnattendConfigManager {
       this.renderNameAndAccount()
     }, true)
 
+    // 设置嵌套的 firstLogon ComboCard 事件（仅在 unattended 模式下）
     if (accounts.mode === 'unattended') {
-      // 添加账户
-      const addBtn = contentDiv.querySelector('#config-add-account')
-      if (addBtn) {
-        addBtn.addEventListener('click', () => {
-          const accs = accounts.accounts || []
-          accs.push({ name: '', displayName: '', password: '', group: 'Users' })
-          this.updateModule('accountSettings', { accounts: accs })
-          this.renderNameAndAccount()
-        })
-      }
-
-      // 移除账户
-      contentDiv.querySelectorAll('.account-remove').forEach(btn => {
-        btn.addEventListener('click', (e: any) => {
-          const idx = parseInt(e.target.closest('[data-index]').dataset.index)
-          const accs = [...(accounts.accounts || [])]
-          accs.splice(idx, 1)
-          this.updateModule('accountSettings', { accounts: accs })
-          this.renderNameAndAccount()
-        })
-      })
-
-      // 更新账户字段
-      contentDiv.querySelectorAll('.account-name, .account-display-name, .account-password').forEach(field => {
-        field.addEventListener('input', (e: any) => {
-          const idx = parseInt(e.target.dataset.index)
-          const accs = [...(accounts.accounts || [])]
-          const fieldType = e.target.classList.contains('account-name') ? 'name' :
-            e.target.classList.contains('account-display-name') ? 'displayName' : 'password'
-          accs[idx] = { ...accs[idx], [fieldType]: e.target.value }
-          this.updateModule('accountSettings', { accounts: accs })
-        })
-      })
-
-      // 更新账户组
-      contentDiv.querySelectorAll('.account-group').forEach(select => {
-        select.addEventListener('change', (e: any) => {
-          const idx = parseInt(e.target.dataset.index)
-          const accs = [...(accounts.accounts || [])]
-          accs[idx] = { ...accs[idx], group: e.target.value }
-          this.updateModule('accountSettings', { accounts: accs })
-        })
-      })
-
-      // First logon 事件
-      setupRadioContainer('first-logon-container', 'auto-logon-mode', (value) => {
+      // First logon select
+      setupComboCard('config-first-logon-card', (value) => {
         this.updateModule('accountSettings', { autoLogonMode: value as 'none' | 'builtin' | 'own' })
         this.renderNameAndAccount()
-      }, true)
+      })
 
-      // Built-in Administrator password
-      const autoLogonPwd = contentDiv.querySelector('#config-auto-logon-password') as any
-      if (autoLogonPwd) {
-        autoLogonPwd.addEventListener('input', (e: any) => {
-          this.updateModule('accountSettings', { autoLogonPassword: e.target.value })
-        })
-      }
+      // Built-in Administrator password (始终显示，但仅在 builtin 模式下有意义)
+      setupComboCard('config-auto-logon-password-card', (value) => {
+        this.updateModule('accountSettings', { autoLogonPassword: value as string })
+      })
 
       // Obscure passwords
       setupComboCard('config-obscure-passwords-card', (value) => {
         this.updateModule('accountSettings', { obscurePasswords: value as boolean })
       })
     }
+
+    // 3. Account list 事件 - DynamicListContainer
+    setupDynamicListContainer(
+      'config-accounts-list',
+      {
+        id: 'config-accounts-list',
+        name: 'accounts-list',
+        title: t('isoConfig.nameAccount.accountList'),
+        description: t('isoConfig.nameAccount.accountListDesc'),
+        icon: 'user-plus',
+        itemCardType: 'comboContainer',
+        items: accountItems,
+        expanded: true,
+        showHeader: true,
+        embedded: false,
+        defaultCardConfig: () => {
+          const newId = this.generateUUID()
+          return {
+            id: `config-account-${newId}`,
+            name: `account-${newId}`,
+            title: '',
+            description: '',
+            icon: 'user',
+            nestedCards: [
+              {
+                id: `config-account-name-${newId}`,
+                title: t('isoConfig.nameAccount.accountName'),
+                controlType: 'text',
+                value: '',
+                borderless: true,
+                placeholder: ''
+              },
+              {
+                id: `config-account-display-name-${newId}`,
+                title: t('isoConfig.nameAccount.displayName'),
+                controlType: 'text',
+                value: '',
+                borderless: true,
+                placeholder: ''
+              },
+              {
+                id: `config-account-password-${newId}`,
+                title: t('isoConfig.nameAccount.password'),
+                controlType: 'text',
+                value: '',
+                borderless: true,
+                placeholder: ''
+              },
+              {
+                id: `config-account-group-${newId}`,
+                title: t('isoConfig.nameAccount.group'),
+                controlType: 'select',
+                options: [
+                  { value: 'Administrators', label: t('isoConfig.nameAccount.administrators') },
+                  { value: 'Users', label: t('isoConfig.nameAccount.users') }
+                ],
+                value: 'Users',
+                borderless: true
+              }
+            ],
+            showHeader: false,
+            borderless: true
+          }
+        }
+      },
+      (_newItem: DynamicListItem) => {
+        // 添加新账户
+        const newAccount: Account = {
+          id: this.generateUUID(),
+          name: '',
+          displayName: '',
+          password: '',
+          group: 'Users'
+        }
+        const accs = [...(accounts.accounts || []), newAccount]
+        this.updateModule('accountSettings', { accounts: accs })
+        this.renderNameAndAccount()
+      },
+      (itemId: string) => {
+        // 删除账户
+        const accs = (accounts.accounts || []).filter(acc => acc.id !== itemId)
+        this.updateModule('accountSettings', { accounts: accs })
+        this.renderNameAndAccount()
+      },
+      (itemId: string, values: any) => {
+        // 更新账户 - values 是从 ComboContainer 收集的值对象
+        const accs = [...(accounts.accounts || [])]
+        const account = accs.find(acc => acc.id === itemId)
+
+        if (account) {
+          // 从 values 中提取 name、displayName、password 和 group
+          const nameKey = Object.keys(values).find(k => k.includes('name') && !k.includes('display'))
+          const displayNameKey = Object.keys(values).find(k => k.includes('display'))
+          const passwordKey = Object.keys(values).find(k => k.includes('password'))
+          const groupKey = Object.keys(values).find(k => k.includes('group'))
+
+          if (nameKey) {
+            account.name = (values[nameKey] as string) || ''
+          }
+          if (displayNameKey) {
+            account.displayName = (values[displayNameKey] as string) || ''
+          }
+          if (passwordKey) {
+            account.password = (values[passwordKey] as string) || ''
+          }
+          if (groupKey) {
+            account.group = (values[groupKey] as 'Administrators' | 'Users') || 'Users'
+          }
+          this.updateModule('accountSettings', { accounts: accs })
+        }
+      }
+    )
 
     // 3. Password expiration 事件
     setupRadioContainer('password-expiration-container', 'password-expiration-mode', (value) => {
@@ -1607,45 +1725,43 @@ pause`,
     })
 
 
-    // 3. Virtual machine support - ComboContainer
+    // 3. Virtual machine support - ComboContainer (使用嵌套的 ComboCard)
     const vmSupportHtml = createComboContainer({
       id: 'vm-support-container',
       name: 'vm-support',
       title: t('isoConfig.advancedSettings.vmSupport'),
       description: t('isoConfig.advancedSettings.vmSupportDesc'),
       icon: 'box',
-      options: [
+      nestedCards: [
         {
-          value: 'vBoxGuestAdditions',
-          label: t('isoConfig.advancedSettings.vboxGuestAdditions'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'vm-support-vbox',
+          title: t('isoConfig.advancedSettings.vboxGuestAdditions'),
+          controlType: 'checkbox',
+          value: vm.vBoxGuestAdditions || false,
+          borderless: true
         },
         {
-          value: 'vmwareTools',
-          label: t('isoConfig.advancedSettings.vmwareTools'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'vm-support-vmware',
+          title: t('isoConfig.advancedSettings.vmwareTools'),
+          controlType: 'checkbox',
+          value: vm.vmwareTools || false,
+          borderless: true
         },
         {
-          value: 'virtIoGuestTools',
-          label: t('isoConfig.advancedSettings.virtioGuestTools'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'vm-support-virtio',
+          title: t('isoConfig.advancedSettings.virtioGuestTools'),
+          controlType: 'checkbox',
+          value: vm.virtIoGuestTools || false,
+          borderless: true
         },
         {
-          value: 'parallelsTools',
-          label: t('isoConfig.advancedSettings.parallelsTools'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'vm-support-parallels',
+          title: t('isoConfig.advancedSettings.parallelsTools'),
+          controlType: 'checkbox',
+          value: vm.parallelsTools || false,
+          borderless: true
         }
       ],
-      values: {
-        vBoxGuestAdditions: vm.vBoxGuestAdditions || false,
-        vmwareTools: vm.vmwareTools || false,
-        virtIoGuestTools: vm.virtIoGuestTools || false,
-        parallelsTools: vm.parallelsTools || false
-      },
       expanded: false
     })
 
@@ -1784,8 +1900,30 @@ pause`,
 
     // 3. Virtual machine support
     setupComboContainer('vm-support-container', 'vm-support', (values) => {
-      this.updateModule('vmSupport', values)
-    }, true)
+      // 从嵌套卡片的值中提取各个选项
+      const vboxKey = Object.keys(values).find(k => k.includes('vbox'))
+      const vmwareKey = Object.keys(values).find(k => k.includes('vmware'))
+      const virtioKey = Object.keys(values).find(k => k.includes('virtio'))
+      const parallelsKey = Object.keys(values).find(k => k.includes('parallels'))
+      this.updateModule('vmSupport', {
+        vBoxGuestAdditions: vboxKey ? (values[vboxKey] as boolean) : false,
+        vmwareTools: vmwareKey ? (values[vmwareKey] as boolean) : false,
+        virtIoGuestTools: virtioKey ? (values[virtioKey] as boolean) : false,
+        parallelsTools: parallelsKey ? (values[parallelsKey] as boolean) : false
+      })
+    }, true, {
+      id: 'vm-support-container',
+      name: 'vm-support',
+      title: t('isoConfig.advancedSettings.vmSupport'),
+      description: t('isoConfig.advancedSettings.vmSupportDesc'),
+      icon: 'box',
+      nestedCards: [
+        { id: 'vm-support-vbox', title: '', controlType: 'checkbox', value: false, borderless: true },
+        { id: 'vm-support-vmware', title: '', controlType: 'checkbox', value: false, borderless: true },
+        { id: 'vm-support-virtio', title: '', controlType: 'checkbox', value: false, borderless: true },
+        { id: 'vm-support-parallels', title: '', controlType: 'checkbox', value: false, borderless: true }
+      ]
+    })
 
     // 4. WDAC Switch
     setupComboCard('wdac-mode-card', (value) => {
@@ -2412,7 +2550,7 @@ End If`,
       if (addBtn) {
         addBtn.addEventListener('click', () => {
           const accs = accounts.accounts || []
-          accs.push({ name: '', displayName: '', password: '', group: 'Users' })
+          accs.push({ id: this.generateUUID(), name: '', displayName: '', password: '', group: 'Users' })
           this.updateModule('accountSettings', { accounts: accs })
           this.renderUserAccounts()
         })
@@ -2638,89 +2776,89 @@ End If`,
       expanded: false
     })
 
-    // 2. File Explorer Options - ComboContainer
-    const fileExplorerOptionsHtml = createComboContainer({
+    // 2. File Explorer Options - ComboContainer (使用嵌套的 ComboCard)
+    const fileExplorerOptionsConfig: ComboContainerConfig = {
       id: 'file-explorer-options-container',
       name: 'file-explorer-options',
       title: t('isoConfig.uiPersonalization.fileExplorer'),
       description: '',
       icon: 'folder',
-      options: [
+      nestedCards: [
         {
-          value: 'showFileExtensions',
-          label: t('isoConfig.uiPersonalization.showFileExtensions'),
+          id: 'file-explorer-show-extensions',
+          title: t('isoConfig.uiPersonalization.showFileExtensions'),
           description: t('isoConfig.uiPersonalization.showFileExtensionsDesc'),
-          controlType: 'checkbox'
+          controlType: 'checkbox',
+          value: fe.showFileExtensions || false,
+          borderless: true
         },
         {
-          value: 'showAllTrayIcons',
-          label: t('isoConfig.uiPersonalization.showAllTrayIcons'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-show-tray-icons',
+          title: t('isoConfig.uiPersonalization.showAllTrayIcons'),
+          controlType: 'checkbox',
+          value: fe.showAllTrayIcons || false,
+          borderless: true
         },
         {
-          value: 'classicContextMenu',
-          label: t('isoConfig.uiPersonalization.classicContextMenu'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-classic-context',
+          title: t('isoConfig.uiPersonalization.classicContextMenu'),
+          controlType: 'checkbox',
+          value: fe.classicContextMenu || false,
+          borderless: true
         },
         {
-          value: 'launchToThisPC',
-          label: t('isoConfig.uiPersonalization.launchToThisPC'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-launch-this-pc',
+          title: t('isoConfig.uiPersonalization.launchToThisPC'),
+          controlType: 'checkbox',
+          value: fe.launchToThisPC || false,
+          borderless: true
         },
         {
-          value: 'showEndTask',
-          label: t('isoConfig.uiPersonalization.showEndTask'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-show-end-task',
+          title: t('isoConfig.uiPersonalization.showEndTask'),
+          controlType: 'checkbox',
+          value: fe.showEndTask || false,
+          borderless: true
         },
         {
-          value: 'hideEdgeFre',
-          label: t('isoConfig.uiPersonalization.hideEdgeFre'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-hide-edge-fre',
+          title: t('isoConfig.uiPersonalization.hideEdgeFre'),
+          controlType: 'checkbox',
+          value: fe.hideEdgeFre || false,
+          borderless: true
         },
         {
-          value: 'disableEdgeStartupBoost',
-          label: t('isoConfig.uiPersonalization.disableEdgeStartupBoost'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-disable-edge-startup',
+          title: t('isoConfig.uiPersonalization.disableEdgeStartupBoost'),
+          controlType: 'checkbox',
+          value: fe.disableEdgeStartupBoost || false,
+          borderless: true
         },
         {
-          value: 'makeEdgeUninstallable',
-          label: t('isoConfig.uiPersonalization.makeEdgeUninstallable'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-make-edge-uninstallable',
+          title: t('isoConfig.uiPersonalization.makeEdgeUninstallable'),
+          controlType: 'checkbox',
+          value: fe.makeEdgeUninstallable || false,
+          borderless: true
         },
         {
-          value: 'deleteEdgeDesktopIcon',
-          label: t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-delete-edge-icon',
+          title: t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon'),
+          controlType: 'checkbox',
+          value: fe.deleteEdgeDesktopIcon || false,
+          borderless: true
         },
         {
-          value: 'disableBingResults',
-          label: t('isoConfig.uiPersonalization.disableBingResults'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'file-explorer-disable-bing',
+          title: t('isoConfig.uiPersonalization.disableBingResults'),
+          controlType: 'checkbox',
+          value: fe.disableBingResults || false,
+          borderless: true
         }
       ],
-      values: {
-        showFileExtensions: fe.showFileExtensions || false,
-        showAllTrayIcons: fe.showAllTrayIcons || false,
-        classicContextMenu: fe.classicContextMenu || false,
-        launchToThisPC: fe.launchToThisPC || false,
-        showEndTask: fe.showEndTask || false,
-        hideEdgeFre: fe.hideEdgeFre || false,
-        disableEdgeStartupBoost: fe.disableEdgeStartupBoost || false,
-        makeEdgeUninstallable: fe.makeEdgeUninstallable || false,
-        deleteEdgeDesktopIcon: fe.deleteEdgeDesktopIcon || false,
-        disableBingResults: fe.disableBingResults || false
-      },
       expanded: false
-    })
+    }
+    const fileExplorerOptionsHtml = createComboContainer(fileExplorerOptionsConfig)
 
     contentDiv.innerHTML = `
       ${hideFilesRadioHtml}
@@ -2736,8 +2874,33 @@ End If`,
 
     // 2. File Explorer options
     setupComboContainer('file-explorer-options-container', 'file-explorer-options', (values) => {
-      this.updateModule('fileExplorerTweaks', values as Partial<FileExplorerTweaks>)
-    }, true)
+      // 从嵌套卡片的值中提取各个选项
+      // key 格式为：show_extensions, show_tray_icons 等（最后两部分）
+      const updates: Partial<FileExplorerTweaks> = {}
+      const keyMap: Record<string, keyof FileExplorerTweaks> = {
+        'show_extensions': 'showFileExtensions',
+        'show_tray_icons': 'showAllTrayIcons',
+        'classic_context': 'classicContextMenu',
+        'launch_this_pc': 'launchToThisPC',
+        'show_end_task': 'showEndTask',
+        'hide_edge_fre': 'hideEdgeFre',
+        'disable_edge_startup': 'disableEdgeStartupBoost',
+        'make_edge_uninstallable': 'makeEdgeUninstallable',
+        'delete_edge_icon': 'deleteEdgeDesktopIcon',
+        'disable_bing': 'disableBingResults'
+      }
+      Object.keys(values).forEach(key => {
+        // 查找匹配的 key（key 可能是 show_extensions 或 show_extensions_xxx 格式）
+        const matchedKey = Object.keys(keyMap).find(k => key === k || key.startsWith(k + '_'))
+        if (matchedKey && keyMap[matchedKey]) {
+          const value = values[key]
+          if (typeof value === 'boolean') {
+            (updates as any)[keyMap[matchedKey]] = value
+          }
+        }
+      })
+      this.updateModule('fileExplorerTweaks', updates)
+    }, true, fileExplorerOptionsConfig)
 
     // 初始化图标
     if (window.lucide) {
@@ -2752,40 +2915,39 @@ End If`,
 
     const st = this.config.startMenuTaskbar
 
-    // 1. Taskbar Options - ComboContainer
-    const taskbarOptionsHtml = createComboContainer({
+    // 1. Taskbar Options - ComboContainer (使用嵌套的 ComboCard)
+    const taskbarOptionsConfig: ComboContainerConfig = {
       id: 'taskbar-options-container',
       name: 'taskbar-options',
       title: t('isoConfig.uiPersonalization.startTaskbar'),
       description: '',
       icon: 'layout-grid',
-      options: [
+      nestedCards: [
         {
-          value: 'leftTaskbar',
-          label: t('isoConfig.uiPersonalization.leftTaskbar'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'taskbar-left',
+          title: t('isoConfig.uiPersonalization.leftTaskbar'),
+          controlType: 'checkbox',
+          value: st.leftTaskbar || false,
+          borderless: true
         },
         {
-          value: 'hideTaskViewButton',
-          label: t('isoConfig.uiPersonalization.hideTaskViewButton'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'taskbar-hide-taskview',
+          title: t('isoConfig.uiPersonalization.hideTaskViewButton'),
+          controlType: 'checkbox',
+          value: st.hideTaskViewButton || false,
+          borderless: true
         },
         {
-          value: 'disableWidgets',
-          label: t('isoConfig.uiPersonalization.disableWidgets'),
-          description: '',
-          controlType: 'checkbox'
+          id: 'taskbar-disable-widgets',
+          title: t('isoConfig.uiPersonalization.disableWidgets'),
+          controlType: 'checkbox',
+          value: st.disableWidgets || false,
+          borderless: true
         }
       ],
-      values: {
-        leftTaskbar: st.leftTaskbar || false,
-        hideTaskViewButton: st.hideTaskViewButton || false,
-        disableWidgets: st.disableWidgets || false
-      },
       expanded: false
-    })
+    }
+    const taskbarOptionsHtml = createComboContainer(taskbarOptionsConfig)
 
     // 2. Taskbar Search - ComboCard select
     const taskbarSearchCardHtml = createComboCard({
@@ -2914,8 +3076,24 @@ End If`,
 
     // 1. Taskbar options
     setupComboContainer('taskbar-options-container', 'taskbar-options', (values) => {
-      this.updateModule('startMenuTaskbar', values as Partial<StartMenuTaskbarSettings>)
-    }, true)
+      // 从嵌套卡片的值中提取各个选项
+      const updates: Partial<StartMenuTaskbarSettings> = {}
+      const keyMap: Record<string, keyof StartMenuTaskbarSettings> = {
+        'left': 'leftTaskbar',
+        'hide_taskview': 'hideTaskViewButton',
+        'disable_widgets': 'disableWidgets'
+      }
+      Object.keys(values).forEach(key => {
+        const matchedKey = Object.keys(keyMap).find(k => key === k || key.startsWith(k + '_'))
+        if (matchedKey && keyMap[matchedKey]) {
+          const value = values[key]
+          if (typeof value === 'boolean') {
+            (updates as any)[keyMap[matchedKey]] = value
+          }
+        }
+      })
+      this.updateModule('startMenuTaskbar', updates)
+    }, true, taskbarOptionsConfig)
 
     // 2. Taskbar search
     setupComboCard('taskbar-search-card', (value) => {
@@ -3274,7 +3452,7 @@ End If`,
       value: icons.deleteEdgeDesktopIcon || false
     })
 
-    // 2. Desktop Icons Mode - RadioContainer (嵌套)
+    // 2. Desktop Icons Mode - RadioContainer (嵌套 MultiColumnCheckboxContainer)
     const desktopIconsRadioHtml = createRadioContainer({
       id: 'desktop-icons-container',
       name: 'desktop-icons-mode',
@@ -3290,59 +3468,58 @@ End If`,
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.customIcons'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              type: 'multiColumnCheckbox',
+              config: {
+                id: 'desktop-icons-options-container',
+                name: 'desktop-icons-options',
+                options: [
+                  { value: 'iconControlPanel', label: t('isoConfig.uiPersonalization.iconControlPanel') },
+                  { value: 'iconDesktop', label: t('isoConfig.uiPersonalization.iconDesktop') },
+                  { value: 'iconDocuments', label: t('isoConfig.uiPersonalization.iconDocuments') },
+                  { value: 'iconDownloads', label: t('isoConfig.uiPersonalization.iconDownloads') },
+                  { value: 'iconGallery', label: t('isoConfig.uiPersonalization.iconGallery') },
+                  { value: 'iconHome', label: t('isoConfig.uiPersonalization.iconHome') },
+                  { value: 'iconMusic', label: t('isoConfig.uiPersonalization.iconMusic') },
+                  { value: 'iconNetwork', label: t('isoConfig.uiPersonalization.iconNetwork') },
+                  { value: 'iconPictures', label: t('isoConfig.uiPersonalization.iconPictures') },
+                  { value: 'iconRecycleBin', label: t('isoConfig.uiPersonalization.iconRecycleBin') },
+                  { value: 'iconThisPC', label: t('isoConfig.uiPersonalization.iconThisPC') },
+                  { value: 'iconUserFiles', label: t('isoConfig.uiPersonalization.iconUserFiles') },
+                  { value: 'iconVideos', label: t('isoConfig.uiPersonalization.iconVideos') }
+                ],
+                values: {
+                  iconControlPanel: icons.iconControlPanel || false,
+                  iconDesktop: icons.iconDesktop || false,
+                  iconDocuments: icons.iconDocuments || false,
+                  iconDownloads: icons.iconDownloads || false,
+                  iconGallery: icons.iconGallery || false,
+                  iconHome: icons.iconHome || false,
+                  iconMusic: icons.iconMusic || false,
+                  iconNetwork: icons.iconNetwork || false,
+                  iconPictures: icons.iconPictures || false,
+                  iconRecycleBin: icons.iconRecycleBin || false,
+                  iconThisPC: icons.iconThisPC || false,
+                  iconUserFiles: icons.iconUserFiles || false,
+                  iconVideos: icons.iconVideos || false
+                },
+                showHeader: false, // 嵌入模式，隐藏头部
+                minColumnWidth: 140,
+                maxColumns: 3
+              }
+            }
+          ]
         }
       ],
       selectedValue: icons.mode || 'default',
       expanded: false
     })
 
-    // 3. Custom Desktop Icons - ComboContainer (仅在custom模式下显示)
-    const customIconsHtml = icons.mode === 'custom'
-      ? createComboContainer({
-        id: 'desktop-icons-options-container',
-        name: 'desktop-icons-options',
-        title: '',
-        description: '',
-        icon: '',
-        options: [
-          { value: 'iconControlPanel', label: t('isoConfig.uiPersonalization.iconControlPanel'), description: '', controlType: 'checkbox' },
-          { value: 'iconDesktop', label: t('isoConfig.uiPersonalization.iconDesktop'), description: '', controlType: 'checkbox' },
-          { value: 'iconDocuments', label: t('isoConfig.uiPersonalization.iconDocuments'), description: '', controlType: 'checkbox' },
-          { value: 'iconDownloads', label: t('isoConfig.uiPersonalization.iconDownloads'), description: '', controlType: 'checkbox' },
-          { value: 'iconGallery', label: t('isoConfig.uiPersonalization.iconGallery'), description: '', controlType: 'checkbox' },
-          { value: 'iconHome', label: t('isoConfig.uiPersonalization.iconHome'), description: '', controlType: 'checkbox' },
-          { value: 'iconMusic', label: t('isoConfig.uiPersonalization.iconMusic'), description: '', controlType: 'checkbox' },
-          { value: 'iconNetwork', label: t('isoConfig.uiPersonalization.iconNetwork'), description: '', controlType: 'checkbox' },
-          { value: 'iconPictures', label: t('isoConfig.uiPersonalization.iconPictures'), description: '', controlType: 'checkbox' },
-          { value: 'iconRecycleBin', label: t('isoConfig.uiPersonalization.iconRecycleBin'), description: '', controlType: 'checkbox' },
-          { value: 'iconThisPC', label: t('isoConfig.uiPersonalization.iconThisPC'), description: '', controlType: 'checkbox' },
-          { value: 'iconUserFiles', label: t('isoConfig.uiPersonalization.iconUserFiles'), description: '', controlType: 'checkbox' },
-          { value: 'iconVideos', label: t('isoConfig.uiPersonalization.iconVideos'), description: '', controlType: 'checkbox' }
-        ],
-        values: {
-          iconControlPanel: icons.iconControlPanel || false,
-          iconDesktop: icons.iconDesktop || false,
-          iconDocuments: icons.iconDocuments || false,
-          iconDownloads: icons.iconDownloads || false,
-          iconGallery: icons.iconGallery || false,
-          iconHome: icons.iconHome || false,
-          iconMusic: icons.iconMusic || false,
-          iconNetwork: icons.iconNetwork || false,
-          iconPictures: icons.iconPictures || false,
-          iconRecycleBin: icons.iconRecycleBin || false,
-          iconThisPC: icons.iconThisPC || false,
-          iconUserFiles: icons.iconUserFiles || false,
-          iconVideos: icons.iconVideos || false
-        },
-        expanded: false
-      })
-      : ''
-
     contentDiv.innerHTML = `
       ${deleteEdgeIconCardHtml}
       ${desktopIconsRadioHtml}
-      ${customIconsHtml}
     `
 
     // === 事件监听设置 ===
@@ -3360,9 +3537,9 @@ End If`,
 
     // 3. Custom icons options (仅在custom模式下设置)
     if (icons.mode === 'custom') {
-      setupComboContainer('desktop-icons-options-container', 'desktop-icons-options', (values) => {
+      setupMultiColumnCheckboxContainer('desktop-icons-options-container', 'desktop-icons-options', (values) => {
         this.updateModule('desktopIcons', values as Partial<DesktopIconSettings>)
-      }, true)
+      }, false) // 不更新头部值（因为已隐藏头部）
     }
 
     // 初始化图标
@@ -3378,7 +3555,7 @@ End If`,
 
     const folders = this.config.startFolders
 
-    // Folders on Start Mode - RadioContainer (嵌套)
+    // Folders on Start Mode - RadioContainer (嵌套 MultiColumnCheckboxContainer)
     const foldersStartRadioHtml = createRadioContainer({
       id: 'folders-start-container',
       name: 'folders-start-mode',
@@ -3394,50 +3571,49 @@ End If`,
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.foldersStartCustom'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              type: 'multiColumnCheckbox',
+              config: {
+                id: 'folders-start-options-container',
+                name: 'folders-start-options',
+                options: [
+                  { value: 'startFolderDocuments', label: t('isoConfig.uiPersonalization.startFolderDocuments') },
+                  { value: 'startFolderDownloads', label: t('isoConfig.uiPersonalization.startFolderDownloads') },
+                  { value: 'startFolderFileExplorer', label: t('isoConfig.uiPersonalization.startFolderFileExplorer') },
+                  { value: 'startFolderMusic', label: t('isoConfig.uiPersonalization.startFolderMusic') },
+                  { value: 'startFolderNetwork', label: t('isoConfig.uiPersonalization.startFolderNetwork') },
+                  { value: 'startFolderPersonalFolder', label: t('isoConfig.uiPersonalization.startFolderPersonalFolder') },
+                  { value: 'startFolderPictures', label: t('isoConfig.uiPersonalization.startFolderPictures') },
+                  { value: 'startFolderSettings', label: t('isoConfig.uiPersonalization.startFolderSettings') },
+                  { value: 'startFolderVideos', label: t('isoConfig.uiPersonalization.startFolderVideos') }
+                ],
+                values: {
+                  startFolderDocuments: folders.startFolderDocuments || false,
+                  startFolderDownloads: folders.startFolderDownloads || false,
+                  startFolderFileExplorer: folders.startFolderFileExplorer || false,
+                  startFolderMusic: folders.startFolderMusic || false,
+                  startFolderNetwork: folders.startFolderNetwork || false,
+                  startFolderPersonalFolder: folders.startFolderPersonalFolder || false,
+                  startFolderPictures: folders.startFolderPictures || false,
+                  startFolderSettings: folders.startFolderSettings || false,
+                  startFolderVideos: folders.startFolderVideos || false
+                },
+                showHeader: false, // 嵌入模式，隐藏头部
+                minColumnWidth: 140,
+                maxColumns: 3
+              }
+            }
+          ]
         }
       ],
       selectedValue: folders.mode || 'default',
       expanded: false
     })
 
-    // Custom Folders - ComboContainer (仅在custom模式下显示)
-    const customFoldersHtml = folders.mode === 'custom'
-      ? createComboContainer({
-        id: 'folders-start-options-container',
-        name: 'folders-start-options',
-        title: '',
-        description: '',
-        icon: '',
-        options: [
-          { value: 'startFolderDocuments', label: t('isoConfig.uiPersonalization.startFolderDocuments'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderDownloads', label: t('isoConfig.uiPersonalization.startFolderDownloads'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderFileExplorer', label: t('isoConfig.uiPersonalization.startFolderFileExplorer'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderMusic', label: t('isoConfig.uiPersonalization.startFolderMusic'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderNetwork', label: t('isoConfig.uiPersonalization.startFolderNetwork'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderPersonalFolder', label: t('isoConfig.uiPersonalization.startFolderPersonalFolder'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderPictures', label: t('isoConfig.uiPersonalization.startFolderPictures'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderSettings', label: t('isoConfig.uiPersonalization.startFolderSettings'), description: '', controlType: 'checkbox' },
-          { value: 'startFolderVideos', label: t('isoConfig.uiPersonalization.startFolderVideos'), description: '', controlType: 'checkbox' }
-        ],
-        values: {
-          startFolderDocuments: folders.startFolderDocuments || false,
-          startFolderDownloads: folders.startFolderDownloads || false,
-          startFolderFileExplorer: folders.startFolderFileExplorer || false,
-          startFolderMusic: folders.startFolderMusic || false,
-          startFolderNetwork: folders.startFolderNetwork || false,
-          startFolderPersonalFolder: folders.startFolderPersonalFolder || false,
-          startFolderPictures: folders.startFolderPictures || false,
-          startFolderSettings: folders.startFolderSettings || false,
-          startFolderVideos: folders.startFolderVideos || false
-        },
-        expanded: false
-      })
-      : ''
-
     contentDiv.innerHTML = `
       ${foldersStartRadioHtml}
-      ${customFoldersHtml}
     `
 
     // === 事件监听设置 ===
@@ -3450,9 +3626,9 @@ End If`,
 
     // 2. Custom folders options (仅在custom模式下设置)
     if (folders.mode === 'custom') {
-      setupComboContainer('folders-start-options-container', 'folders-start-options', (values) => {
+      setupMultiColumnCheckboxContainer('folders-start-options-container', 'folders-start-options', (values) => {
         this.updateModule('startFolders', values as Partial<StartFolderSettings>)
-      }, true)
+      }, false) // 不更新头部值（因为已隐藏头部）
     }
 
     // 初始化图标
@@ -3657,7 +3833,7 @@ End If`,
 
     const lockKeys = this.config.lockKeys
 
-    // Lock Keys Mode - RadioContainer
+    // Lock Keys Mode - RadioContainer（将配置嵌入到 configure 选项中）
     const lockKeysRadioHtml = createRadioContainer({
       id: 'lock-keys-container',
       name: 'lock-keys-mode',
@@ -3673,85 +3849,80 @@ End If`,
         {
           value: 'configure',
           label: t('isoConfig.accessibility.lockKeysConfigure'),
-          description: ''
+          description: t('isoConfig.accessibility.lockKeyConfigDesc'),
+          nestedCards: [
+            // Caps Lock
+            {
+              id: 'config-caps-lock-initial-card',
+              title: `${t('isoConfig.accessibility.lockKeyCapsLock')} - ${t('isoConfig.accessibility.lockKeyInitialState')}`,
+              description: '',
+              controlType: 'switch',
+              value: lockKeys.capsLockInitial === 'on',
+              borderless: true
+            },
+            {
+              id: 'config-caps-lock-behavior-card',
+              title: `${t('isoConfig.accessibility.lockKeyCapsLock')} - ${t('isoConfig.accessibility.lockKeyBehavior')}`,
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'toggle', label: t('isoConfig.accessibility.lockKeyToggle') },
+                { value: 'ignore', label: t('isoConfig.accessibility.lockKeyIgnore') }
+              ],
+              value: lockKeys.capsLockBehavior || 'toggle',
+              borderless: true
+            },
+            // Num Lock
+            {
+              id: 'config-num-lock-initial-card',
+              title: `${t('isoConfig.accessibility.lockKeyNumLock')} - ${t('isoConfig.accessibility.lockKeyInitialState')}`,
+              description: '',
+              controlType: 'switch',
+              value: lockKeys.numLockInitial === 'on',
+              borderless: true
+            },
+            {
+              id: 'config-num-lock-behavior-card',
+              title: `${t('isoConfig.accessibility.lockKeyNumLock')} - ${t('isoConfig.accessibility.lockKeyBehavior')}`,
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'toggle', label: t('isoConfig.accessibility.lockKeyToggle') },
+                { value: 'ignore', label: t('isoConfig.accessibility.lockKeyIgnore') }
+              ],
+              value: lockKeys.numLockBehavior || 'toggle',
+              borderless: true
+            },
+            // Scroll Lock
+            {
+              id: 'config-scroll-lock-initial-card',
+              title: `${t('isoConfig.accessibility.lockKeyScrollLock')} - ${t('isoConfig.accessibility.lockKeyInitialState')}`,
+              description: '',
+              controlType: 'switch',
+              value: lockKeys.scrollLockInitial === 'on',
+              borderless: true
+            },
+            {
+              id: 'config-scroll-lock-behavior-card',
+              title: `${t('isoConfig.accessibility.lockKeyScrollLock')} - ${t('isoConfig.accessibility.lockKeyBehavior')}`,
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'toggle', label: t('isoConfig.accessibility.lockKeyToggle') },
+                { value: 'ignore', label: t('isoConfig.accessibility.lockKeyIgnore') }
+              ],
+              value: lockKeys.scrollLockBehavior || 'toggle',
+              borderless: true
+            }
+          ]
         }
       ],
       selectedValue: lockKeys.mode || 'skip',
       expanded: false
     })
 
-    // Lock Keys Configuration Table (使用HTML，因为需要表格布局)
-    const lockKeysTableHtml = lockKeys.mode === 'configure'
-      ? `<div class="card">
-          <div class="card-left">
-            <i data-lucide="settings" class="card-icon"></i>
-            <div class="card-content">
-              <div class="card-title">${t('isoConfig.accessibility.lockKeyConfig')}</div>
-              <div class="card-description" style="margin-top: 8px; margin-bottom: 12px;">${t('isoConfig.accessibility.lockKeyConfigDesc')}</div>
-              <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
-                <thead>
-                  <tr style="border-bottom: 1px solid var(--border-color);">
-                    <th style="text-align: left; padding: 8px; font-weight: 600;">${t('isoConfig.accessibility.lockKeyKey')}</th>
-                    <th style="text-align: left; padding: 8px; font-weight: 600;">${t('isoConfig.accessibility.lockKeyInitialState')}</th>
-                    <th style="text-align: left; padding: 8px; font-weight: 600;">${t('isoConfig.accessibility.lockKeyBehavior')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style="border-bottom: 1px solid var(--border-color);">
-                    <td style="padding: 8px;">${t('isoConfig.accessibility.lockKeyCapsLock')}</td>
-                    <td style="padding: 8px;">
-                      <fluent-select id="config-caps-lock-initial" style="width: 100%;">
-                        <fluent-option value="off" ${lockKeys.capsLockInitial === 'off' || !lockKeys.capsLockInitial ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOff')}</fluent-option>
-                        <fluent-option value="on" ${lockKeys.capsLockInitial === 'on' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOn')}</fluent-option>
-                      </fluent-select>
-                    </td>
-                    <td style="padding: 8px;">
-                      <fluent-select id="config-caps-lock-behavior" style="width: 100%;">
-                        <fluent-option value="toggle" ${lockKeys.capsLockBehavior === 'toggle' || !lockKeys.capsLockBehavior ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyToggle')}</fluent-option>
-                        <fluent-option value="ignore" ${lockKeys.capsLockBehavior === 'ignore' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyIgnore')}</fluent-option>
-                      </fluent-select>
-                    </td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid var(--border-color);">
-                    <td style="padding: 8px;">${t('isoConfig.accessibility.lockKeyNumLock')}</td>
-                    <td style="padding: 8px;">
-                      <fluent-select id="config-num-lock-initial" style="width: 100%;">
-                        <fluent-option value="off" ${lockKeys.numLockInitial === 'off' || !lockKeys.numLockInitial ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOff')}</fluent-option>
-                        <fluent-option value="on" ${lockKeys.numLockInitial === 'on' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOn')}</fluent-option>
-                      </fluent-select>
-                    </td>
-                    <td style="padding: 8px;">
-                      <fluent-select id="config-num-lock-behavior" style="width: 100%;">
-                        <fluent-option value="toggle" ${lockKeys.numLockBehavior === 'toggle' || !lockKeys.numLockBehavior ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyToggle')}</fluent-option>
-                        <fluent-option value="ignore" ${lockKeys.numLockBehavior === 'ignore' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyIgnore')}</fluent-option>
-                      </fluent-select>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 8px;">${t('isoConfig.accessibility.lockKeyScrollLock')}</td>
-                    <td style="padding: 8px;">
-                      <fluent-select id="config-scroll-lock-initial" style="width: 100%;">
-                        <fluent-option value="off" ${lockKeys.scrollLockInitial === 'off' || !lockKeys.scrollLockInitial ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOff')}</fluent-option>
-                        <fluent-option value="on" ${lockKeys.scrollLockInitial === 'on' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOn')}</fluent-option>
-                      </fluent-select>
-                    </td>
-                    <td style="padding: 8px;">
-                      <fluent-select id="config-scroll-lock-behavior" style="width: 100%;">
-                        <fluent-option value="toggle" ${lockKeys.scrollLockBehavior === 'toggle' || !lockKeys.scrollLockBehavior ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyToggle')}</fluent-option>
-                        <fluent-option value="ignore" ${lockKeys.scrollLockBehavior === 'ignore' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyIgnore')}</fluent-option>
-                      </fluent-select>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>`
-      : ''
-
     contentDiv.innerHTML = `
       ${lockKeysRadioHtml}
-      ${lockKeysTableHtml}
     `
 
     // === 事件监听设置 ===
@@ -3764,47 +3935,35 @@ End If`,
 
     // 2. Lock Keys configuration (仅在configure模式下设置)
     if (lockKeys.mode === 'configure') {
-      const capsLockInitial = contentDiv.querySelector('#config-caps-lock-initial') as any
-      if (capsLockInitial) {
-        capsLockInitial.addEventListener('change', (e: any) => {
-          this.updateModule('lockKeys', { capsLockInitial: e.target.value as 'off' | 'on' })
-        })
-      }
+      // Caps Lock - Initial State (switch)
+      setupComboCard('config-caps-lock-initial-card', (value) => {
+        this.updateModule('lockKeys', { capsLockInitial: (value as boolean) ? 'on' : 'off' })
+      })
 
-      const capsLockBehavior = contentDiv.querySelector('#config-caps-lock-behavior') as any
-      if (capsLockBehavior) {
-        capsLockBehavior.addEventListener('change', (e: any) => {
-          this.updateModule('lockKeys', { capsLockBehavior: e.target.value as 'toggle' | 'ignore' })
-        })
-      }
+      // Caps Lock - Behavior (select)
+      setupComboCard('config-caps-lock-behavior-card', (value) => {
+        this.updateModule('lockKeys', { capsLockBehavior: value as 'toggle' | 'ignore' })
+      })
 
-      const numLockInitial = contentDiv.querySelector('#config-num-lock-initial') as any
-      if (numLockInitial) {
-        numLockInitial.addEventListener('change', (e: any) => {
-          this.updateModule('lockKeys', { numLockInitial: e.target.value as 'off' | 'on' })
-        })
-      }
+      // Num Lock - Initial State (switch)
+      setupComboCard('config-num-lock-initial-card', (value) => {
+        this.updateModule('lockKeys', { numLockInitial: (value as boolean) ? 'on' : 'off' })
+      })
 
-      const numLockBehavior = contentDiv.querySelector('#config-num-lock-behavior') as any
-      if (numLockBehavior) {
-        numLockBehavior.addEventListener('change', (e: any) => {
-          this.updateModule('lockKeys', { numLockBehavior: e.target.value as 'toggle' | 'ignore' })
-        })
-      }
+      // Num Lock - Behavior (select)
+      setupComboCard('config-num-lock-behavior-card', (value) => {
+        this.updateModule('lockKeys', { numLockBehavior: value as 'toggle' | 'ignore' })
+      })
 
-      const scrollLockInitial = contentDiv.querySelector('#config-scroll-lock-initial') as any
-      if (scrollLockInitial) {
-        scrollLockInitial.addEventListener('change', (e: any) => {
-          this.updateModule('lockKeys', { scrollLockInitial: e.target.value as 'off' | 'on' })
-        })
-      }
+      // Scroll Lock - Initial State (switch)
+      setupComboCard('config-scroll-lock-initial-card', (value) => {
+        this.updateModule('lockKeys', { scrollLockInitial: (value as boolean) ? 'on' : 'off' })
+      })
 
-      const scrollLockBehavior = contentDiv.querySelector('#config-scroll-lock-behavior') as any
-      if (scrollLockBehavior) {
-        scrollLockBehavior.addEventListener('change', (e: any) => {
-          this.updateModule('lockKeys', { scrollLockBehavior: e.target.value as 'toggle' | 'ignore' })
-        })
-      }
+      // Scroll Lock - Behavior (select)
+      setupComboCard('config-scroll-lock-behavior-card', (value) => {
+        this.updateModule('lockKeys', { scrollLockBehavior: value as 'toggle' | 'ignore' })
+      })
     }
 
     // 初始化图标
@@ -3820,7 +3979,7 @@ End If`,
 
     const sticky = this.config.stickyKeys
 
-    // Sticky Keys Mode - RadioContainer (嵌套)
+    // Sticky Keys Mode - RadioContainer (嵌套多个 ComboCard switch)
     const stickyKeysRadioHtml = createRadioContainer({
       id: 'sticky-keys-container',
       name: 'sticky-keys-mode',
@@ -3841,44 +4000,59 @@ End If`,
         {
           value: 'custom',
           label: t('isoConfig.accessibility.stickyKeysCustom'),
-          description: ''
+          description: '',
+          nestedCards: [
+            {
+              id: 'sticky-keys-hotkey-active',
+              title: t('isoConfig.accessibility.stickyKeysHotKeyActive'),
+              controlType: 'switch',
+              value: sticky.stickyKeysHotKeyActive || false,
+              borderless: true
+            },
+            {
+              id: 'sticky-keys-hotkey-sound',
+              title: t('isoConfig.accessibility.stickyKeysHotKeySound'),
+              controlType: 'switch',
+              value: sticky.stickyKeysHotKeySound || false,
+              borderless: true
+            },
+            {
+              id: 'sticky-keys-indicator',
+              title: t('isoConfig.accessibility.stickyKeysIndicator'),
+              controlType: 'switch',
+              value: sticky.stickyKeysIndicator || false,
+              borderless: true
+            },
+            {
+              id: 'sticky-keys-audible',
+              title: t('isoConfig.accessibility.stickyKeysAudibleFeedback'),
+              controlType: 'switch',
+              value: sticky.stickyKeysAudibleFeedback || false,
+              borderless: true
+            },
+            {
+              id: 'sticky-keys-tristate',
+              title: t('isoConfig.accessibility.stickyKeysTriState'),
+              controlType: 'switch',
+              value: sticky.stickyKeysTriState || false,
+              borderless: true
+            },
+            {
+              id: 'sticky-keys-two-keys',
+              title: t('isoConfig.accessibility.stickyKeysTwoKeysOff'),
+              controlType: 'switch',
+              value: sticky.stickyKeysTwoKeysOff || false,
+              borderless: true
+            }
+          ]
         }
       ],
       selectedValue: sticky.mode || 'default',
       expanded: false
     })
 
-    // Custom Sticky Keys Options - ComboContainer (仅在custom模式下显示)
-    const customStickyKeysHtml = sticky.mode === 'custom'
-      ? createComboContainer({
-        id: 'sticky-keys-options-container',
-        name: 'sticky-keys-options',
-        title: '',
-        description: '',
-        icon: '',
-        options: [
-          { value: 'stickyKeysHotKeyActive', label: t('isoConfig.accessibility.stickyKeysHotKeyActive'), description: '', controlType: 'checkbox' },
-          { value: 'stickyKeysHotKeySound', label: t('isoConfig.accessibility.stickyKeysHotKeySound'), description: '', controlType: 'checkbox' },
-          { value: 'stickyKeysIndicator', label: t('isoConfig.accessibility.stickyKeysIndicator'), description: '', controlType: 'checkbox' },
-          { value: 'stickyKeysAudibleFeedback', label: t('isoConfig.accessibility.stickyKeysAudibleFeedback'), description: '', controlType: 'checkbox' },
-          { value: 'stickyKeysTriState', label: t('isoConfig.accessibility.stickyKeysTriState'), description: '', controlType: 'checkbox' },
-          { value: 'stickyKeysTwoKeysOff', label: t('isoConfig.accessibility.stickyKeysTwoKeysOff'), description: '', controlType: 'checkbox' }
-        ],
-        values: {
-          stickyKeysHotKeyActive: sticky.stickyKeysHotKeyActive || false,
-          stickyKeysHotKeySound: sticky.stickyKeysHotKeySound || false,
-          stickyKeysIndicator: sticky.stickyKeysIndicator || false,
-          stickyKeysAudibleFeedback: sticky.stickyKeysAudibleFeedback || false,
-          stickyKeysTriState: sticky.stickyKeysTriState || false,
-          stickyKeysTwoKeysOff: sticky.stickyKeysTwoKeysOff || false
-        },
-        expanded: false
-      })
-      : ''
-
     contentDiv.innerHTML = `
       ${stickyKeysRadioHtml}
-      ${customStickyKeysHtml}
     `
 
     // === 事件监听设置 ===
@@ -3891,9 +4065,24 @@ End If`,
 
     // 2. Custom sticky keys options (仅在custom模式下设置)
     if (sticky.mode === 'custom') {
-      setupComboContainer('sticky-keys-options-container', 'sticky-keys-options', (values) => {
-        this.updateModule('stickyKeys', values as Partial<StickyKeysSettings>)
-      }, true)
+      setupComboCard('sticky-keys-hotkey-active', (value) => {
+        this.updateModule('stickyKeys', { stickyKeysHotKeyActive: value as boolean })
+      })
+      setupComboCard('sticky-keys-hotkey-sound', (value) => {
+        this.updateModule('stickyKeys', { stickyKeysHotKeySound: value as boolean })
+      })
+      setupComboCard('sticky-keys-indicator', (value) => {
+        this.updateModule('stickyKeys', { stickyKeysIndicator: value as boolean })
+      })
+      setupComboCard('sticky-keys-audible', (value) => {
+        this.updateModule('stickyKeys', { stickyKeysAudibleFeedback: value as boolean })
+      })
+      setupComboCard('sticky-keys-tristate', (value) => {
+        this.updateModule('stickyKeys', { stickyKeysTriState: value as boolean })
+      })
+      setupComboCard('sticky-keys-two-keys', (value) => {
+        this.updateModule('stickyKeys', { stickyKeysTwoKeysOff: value as boolean })
+      })
     }
 
     // 初始化图标
@@ -4282,6 +4471,15 @@ End If`,
     }
   }
 
+  // 生成UUID辅助函数
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+  }
+
   // 渲染模块27: Run custom scripts
   private renderCustomScripts() {
     const contentDiv = this.getSectionContent('config-custom-scripts')
@@ -4289,197 +4487,390 @@ End If`,
 
     const scripts = this.config.scripts
 
+    // 辅助函数：获取脚本类型选项
+    const getScriptTypeOptions = (phase: 'system' | 'defaultUser' | 'firstLogon' | 'userOnce'): Array<{ value: string; label: string }> => {
+      if (phase === 'system') {
+        return [
+          { value: '.reg', label: '.reg' },
+          { value: '.cmd', label: '.cmd' },
+          { value: '.ps1', label: '.ps1' },
+          { value: '.vbs', label: '.vbs' }
+        ]
+      } else if (phase === 'defaultUser') {
+        return [
+          { value: '.reg', label: '.reg' },
+          { value: '.cmd', label: '.cmd' },
+          { value: '.ps1', label: '.ps1' }
+        ]
+      } else {
+        // firstLogon 和 userOnce
+        return [
+          { value: '.cmd', label: '.cmd' },
+          { value: '.ps1', label: '.ps1' },
+          { value: '.reg', label: '.reg' },
+          { value: '.vbs', label: '.vbs' }
+        ]
+      }
+    }
+
+    // 辅助函数：将ScriptItem转换为DynamicListItem（使用ComboContainer嵌套ComboCard + TextCard）
+    const scriptItemToDynamicListItem = (item: ScriptItem, phase: string, _index: number): DynamicListItem => {
+      const typeOptions = getScriptTypeOptions(phase as any)
+
+      // 使用 ComboContainer 嵌套 ComboCard（脚本类型选择）和 TextCard（脚本内容输入）
+      const comboContainerConfig: ComboContainerConfig = {
+        id: `config-${phase}-script-${item.id}`,
+        name: `${phase}-script-${item.id}`,
+        title: '',
+        description: '',
+        icon: 'file-code',
+        nestedCards: [
+          {
+            id: `config-${phase}-script-type-${item.id}`,
+            title: t('isoConfig.customScripts.scriptType'),
+            controlType: 'select',
+            options: typeOptions,
+            value: item.type,
+            borderless: true
+          },
+          {
+            id: `config-${phase}-script-content-${item.id}`,
+            title: t('isoConfig.customScripts.scriptContent'),
+            description: t('isoConfig.customScripts.scriptContentDesc'),
+            value: item.content,
+            placeholder: t('isoConfig.customScripts.scriptContentPlaceholder'),
+            rows: 5,
+            borderless: true,
+            showImportExport: false
+          }
+        ],
+        showHeader: false,
+        borderless: true
+      }
+
+      return {
+        id: item.id,
+        cardType: 'comboContainer',
+        cardConfig: comboContainerConfig
+      }
+    }
+
+    // 为每个阶段创建DynamicListContainer
+    const systemItems: DynamicListItem[] = scripts.system.map((item, idx) => scriptItemToDynamicListItem(item, 'system', idx))
+    const defaultUserItems: DynamicListItem[] = scripts.defaultUser.map((item, idx) => scriptItemToDynamicListItem(item, 'defaultUser', idx))
+    const firstLogonItems: DynamicListItem[] = scripts.firstLogon.map((item, idx) => scriptItemToDynamicListItem(item, 'firstLogon', idx))
+    const userOnceItems: DynamicListItem[] = scripts.userOnce.map((item, idx) => scriptItemToDynamicListItem(item, 'userOnce', idx))
+
+    // 生成HTML - 使用4个独立的DynamicListContainer
     contentDiv.innerHTML = `
-      <div class="card-expandable expanded">
-        <div class="card-expandable-header">
-          <div class="card-expandable-header-left">
-            <div class="card-expandable-title">Run custom scripts</div>
-          </div>
-          <div class="card-expandable-arrow">
-            <i data-lucide="chevron-down"></i>
-          </div>
-        </div>
-        <div class="card-expandable-content">
-          <div style="display: flex; flex-direction: column; gap: 20px;">
-            <div>
-              <div class="card-title">System scripts</div>
-              <div class="card-description" style="margin-top: 6px;">These scripts will run in the system context, before user accounts are created.</div>
-              <div id="config-system-scripts" style="margin-top: 12px;">
-                ${scripts.system.map((s, idx) => `
-                  <div class="card" style="background: var(--bg-primary); margin-bottom: 8px;">
-                    <div class="card-content">
-                      <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 12px; align-items: center;">
-                        <fluent-select class="script-type" data-phase="system" data-index="${idx}" style="width: 100%;">
-                          <fluent-option value=".reg" ${s.type === '.reg' ? 'selected' : ''}>.reg</fluent-option>
-                          <fluent-option value=".cmd" ${s.type === '.cmd' ? 'selected' : ''}>.cmd</fluent-option>
-                          <fluent-option value=".ps1" ${s.type === '.ps1' ? 'selected' : ''}>.ps1</fluent-option>
-                          <fluent-option value=".vbs" ${s.type === '.vbs' ? 'selected' : ''}>.vbs</fluent-option>
-                        </fluent-select>
-                        <textarea class="script-content" data-phase="system" data-index="${idx}" style="width: 100%; min-height: 60px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${s.content}</textarea>
-                        <fluent-button class="script-remove" data-phase="system" data-index="${idx}" appearance="stealth">Remove</fluent-button>
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-                <fluent-button id="config-add-system-script" appearance="outline" style="margin-top: 8px;">Add script</fluent-button>
-              </div>
-            </div>
-            <div>
-              <div class="card-title">DefaultUser scripts</div>
-              <div class="card-description" style="margin-top: 6px;">Use these scripts to modify the default user's registry hive.</div>
-              <div id="config-defaultuser-scripts" style="margin-top: 12px;">
-                ${scripts.defaultUser.map((s, idx) => `
-                  <div class="card" style="background: var(--bg-primary); margin-bottom: 8px;">
-                    <div class="card-content">
-                      <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 12px; align-items: center;">
-                        <fluent-select class="script-type" data-phase="defaultUser" data-index="${idx}" style="width: 100%;">
-                          <fluent-option value=".reg" ${s.type === '.reg' ? 'selected' : ''}>.reg</fluent-option>
-                          <fluent-option value=".cmd" ${s.type === '.cmd' ? 'selected' : ''}>.cmd</fluent-option>
-                          <fluent-option value=".ps1" ${s.type === '.ps1' ? 'selected' : ''}>.ps1</fluent-option>
-                        </fluent-select>
-                        <textarea class="script-content" data-phase="defaultUser" data-index="${idx}" style="width: 100%; min-height: 60px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${s.content}</textarea>
-                        <fluent-button class="script-remove" data-phase="defaultUser" data-index="${idx}" appearance="stealth">Remove</fluent-button>
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-                <fluent-button id="config-add-defaultuser-script" appearance="outline" style="margin-top: 8px;">Add script</fluent-button>
-              </div>
-            </div>
-            <div>
-              <div class="card-title">FirstLogon scripts</div>
-              <div class="card-description" style="margin-top: 6px;">These scripts will run when the first user logs on after Windows has been installed.</div>
-              <div id="config-firstlogon-scripts" style="margin-top: 12px;">
-                ${scripts.firstLogon.map((s, idx) => `
-                  <div class="card" style="background: var(--bg-primary); margin-bottom: 8px;">
-                    <div class="card-content">
-                      <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 12px; align-items: center;">
-                        <fluent-select class="script-type" data-phase="firstLogon" data-index="${idx}" style="width: 100%;">
-                          <fluent-option value=".cmd" ${s.type === '.cmd' ? 'selected' : ''}>.cmd</fluent-option>
-                          <fluent-option value=".ps1" ${s.type === '.ps1' ? 'selected' : ''}>.ps1</fluent-option>
-                          <fluent-option value=".reg" ${s.type === '.reg' ? 'selected' : ''}>.reg</fluent-option>
-                          <fluent-option value=".vbs" ${s.type === '.vbs' ? 'selected' : ''}>.vbs</fluent-option>
-                        </fluent-select>
-                        <textarea class="script-content" data-phase="firstLogon" data-index="${idx}" style="width: 100%; min-height: 60px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${s.content}</textarea>
-                        <fluent-button class="script-remove" data-phase="firstLogon" data-index="${idx}" appearance="stealth">Remove</fluent-button>
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-                <fluent-button id="config-add-firstlogon-script" appearance="outline" style="margin-top: 8px;">Add script</fluent-button>
-              </div>
-            </div>
-            <div>
-              <div class="card-title">UserOnce scripts</div>
-              <div class="card-description" style="margin-top: 6px;">These scripts will run whenever a user logs on for the first time.</div>
-              <div id="config-useronce-scripts" style="margin-top: 12px;">
-                ${scripts.userOnce.map((s, idx) => `
-                  <div class="card" style="background: var(--bg-primary); margin-bottom: 8px;">
-                    <div class="card-content">
-                      <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 12px; align-items: center;">
-                        <fluent-select class="script-type" data-phase="userOnce" data-index="${idx}" style="width: 100%;">
-                          <fluent-option value=".cmd" ${s.type === '.cmd' ? 'selected' : ''}>.cmd</fluent-option>
-                          <fluent-option value=".ps1" ${s.type === '.ps1' ? 'selected' : ''}>.ps1</fluent-option>
-                          <fluent-option value=".reg" ${s.type === '.reg' ? 'selected' : ''}>.reg</fluent-option>
-                          <fluent-option value=".vbs" ${s.type === '.vbs' ? 'selected' : ''}>.vbs</fluent-option>
-                        </fluent-select>
-                        <textarea class="script-content" data-phase="userOnce" data-index="${idx}" style="width: 100%; min-height: 60px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${s.content}</textarea>
-                        <fluent-button class="script-remove" data-phase="userOnce" data-index="${idx}" appearance="stealth">Remove</fluent-button>
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-                <fluent-button id="config-add-useronce-script" appearance="outline" style="margin-top: 8px;">Add script</fluent-button>
-              </div>
-            </div>
-            <div>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="config-restart-explorer" ${scripts.restartExplorer ? 'checked' : ''}>
-                <span>Restart File Explorer after scripts have run</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${createDynamicListContainer({
+      id: 'config-system-scripts-list',
+      name: 'system-scripts',
+      title: t('isoConfig.customScripts.systemScripts'),
+      description: t('isoConfig.customScripts.systemScriptsDesc'),
+      icon: 'file-code',
+      itemCardType: 'comboContainer',
+      items: systemItems,
+      expanded: true,
+      showHeader: true,
+      embedded: false,
+      defaultCardConfig: () => {
+        const newId = this.generateUUID()
+        const typeOptions = getScriptTypeOptions('system')
+        return {
+          id: `config-system-script-${newId}`,
+          name: `system-script-${newId}`,
+          title: '',
+          description: '',
+          icon: 'file-code',
+          nestedCards: [
+            {
+              id: `config-system-script-type-${newId}`,
+              title: t('isoConfig.customScripts.scriptType'),
+              controlType: 'select' as const,
+              options: typeOptions,
+              value: '.cmd',
+              borderless: true
+            },
+            {
+              id: `config-system-script-content-${newId}`,
+              title: t('isoConfig.customScripts.scriptContent'),
+              description: t('isoConfig.customScripts.scriptContentDesc'),
+              value: '',
+              placeholder: t('isoConfig.customScripts.scriptContentPlaceholder'),
+              rows: 5,
+              borderless: true,
+              showImportExport: false
+            }
+          ],
+          showHeader: false,
+          borderless: true
+        }
+      }
+    })}
+      ${createDynamicListContainer({
+      id: 'config-defaultuser-scripts-list',
+      name: 'defaultuser-scripts',
+      title: t('isoConfig.customScripts.defaultUserScripts'),
+      description: t('isoConfig.customScripts.defaultUserScriptsDesc'),
+      icon: 'file-code',
+      itemCardType: 'comboContainer',
+      items: defaultUserItems,
+      expanded: true,
+      showHeader: true,
+      embedded: false,
+      defaultCardConfig: () => {
+        const newId = this.generateUUID()
+        const typeOptions = getScriptTypeOptions('defaultUser')
+        return {
+          id: `config-defaultuser-script-${newId}`,
+          name: `defaultuser-script-${newId}`,
+          title: '',
+          description: '',
+          icon: 'file-code',
+          nestedCards: [
+            {
+              id: `config-defaultuser-script-type-${newId}`,
+              title: t('isoConfig.customScripts.scriptType'),
+              controlType: 'select' as const,
+              options: typeOptions,
+              value: '.reg',
+              borderless: true
+            },
+            {
+              id: `config-defaultuser-script-content-${newId}`,
+              title: t('isoConfig.customScripts.scriptContent'),
+              description: t('isoConfig.customScripts.scriptContentDesc'),
+              value: '',
+              placeholder: t('isoConfig.customScripts.scriptContentPlaceholder'),
+              rows: 5,
+              borderless: true,
+              showImportExport: false
+            }
+          ],
+          showHeader: false,
+          borderless: true
+        }
+      }
+    })}
+      ${createDynamicListContainer({
+      id: 'config-firstlogon-scripts-list',
+      name: 'firstlogon-scripts',
+      title: t('isoConfig.customScripts.firstLogonScripts'),
+      description: t('isoConfig.customScripts.firstLogonScriptsDesc'),
+      icon: 'file-code',
+      itemCardType: 'comboContainer',
+      items: firstLogonItems,
+      expanded: true,
+      showHeader: true,
+      embedded: false,
+      defaultCardConfig: () => {
+        const newId = this.generateUUID()
+        const typeOptions = getScriptTypeOptions('firstLogon')
+        return {
+          id: `config-firstlogon-script-${newId}`,
+          name: `firstlogon-script-${newId}`,
+          title: '',
+          description: '',
+          icon: 'file-code',
+          nestedCards: [
+            {
+              id: `config-firstlogon-script-type-${newId}`,
+              title: t('isoConfig.customScripts.scriptType'),
+              controlType: 'select' as const,
+              options: typeOptions,
+              value: '.cmd',
+              borderless: true
+            },
+            {
+              id: `config-firstlogon-script-content-${newId}`,
+              title: t('isoConfig.customScripts.scriptContent'),
+              description: t('isoConfig.customScripts.scriptContentDesc'),
+              value: '',
+              placeholder: t('isoConfig.customScripts.scriptContentPlaceholder'),
+              rows: 5,
+              borderless: true,
+              showImportExport: false
+            }
+          ],
+          showHeader: false,
+          borderless: true
+        }
+      }
+    })}
+      ${createDynamicListContainer({
+      id: 'config-useronce-scripts-list',
+      name: 'useronce-scripts',
+      title: t('isoConfig.customScripts.userOnceScripts'),
+      description: t('isoConfig.customScripts.userOnceScriptsDesc'),
+      icon: 'file-code',
+      itemCardType: 'comboContainer',
+      items: userOnceItems,
+      expanded: true,
+      showHeader: true,
+      embedded: false,
+      defaultCardConfig: () => {
+        const newId = this.generateUUID()
+        const typeOptions = getScriptTypeOptions('userOnce')
+        return {
+          id: `config-useronce-script-${newId}`,
+          name: `useronce-script-${newId}`,
+          title: '',
+          description: '',
+          icon: 'file-code',
+          nestedCards: [
+            {
+              id: `config-useronce-script-type-${newId}`,
+              title: t('isoConfig.customScripts.scriptType'),
+              controlType: 'select' as const,
+              options: typeOptions,
+              value: '.cmd',
+              borderless: true
+            },
+            {
+              id: `config-useronce-script-content-${newId}`,
+              title: t('isoConfig.customScripts.scriptContent'),
+              description: t('isoConfig.customScripts.scriptContentDesc'),
+              value: '',
+              placeholder: t('isoConfig.customScripts.scriptContentPlaceholder'),
+              rows: 5,
+              borderless: true,
+              showImportExport: false
+            }
+          ],
+          showHeader: false,
+          borderless: true
+        }
+      }
+    })}
+      ${createComboCard({
+      id: 'config-restart-explorer',
+      title: t('isoConfig.customScripts.restartExplorer'),
+      description: '',
+      icon: 'refresh-cw',
+      controlType: 'switch',
+      value: scripts.restartExplorer || false
+    })}
     `
 
-    // 添加脚本按钮
-    const addSystemBtn = contentDiv.querySelector('#config-add-system-script')
-    const addDefaultUserBtn = contentDiv.querySelector('#config-add-defaultuser-script')
-    const addFirstLogonBtn = contentDiv.querySelector('#config-add-firstlogon-script')
-    const addUserOnceBtn = contentDiv.querySelector('#config-add-useronce-script')
+    // 设置每个列表容器的事件监听
+    const setupListContainer = (phase: 'system' | 'defaultUser' | 'firstLogon' | 'userOnce', containerId: string, items: DynamicListItem[]) => {
+      // 获取配置信息
+      let title = ''
+      let description = ''
+      if (phase === 'system') {
+        title = t('isoConfig.customScripts.systemScripts')
+        description = t('isoConfig.customScripts.systemScriptsDesc')
+      } else if (phase === 'defaultUser') {
+        title = t('isoConfig.customScripts.defaultUserScripts')
+        description = t('isoConfig.customScripts.defaultUserScriptsDesc')
+      } else if (phase === 'firstLogon') {
+        title = t('isoConfig.customScripts.firstLogonScripts')
+        description = t('isoConfig.customScripts.firstLogonScriptsDesc')
+      } else if (phase === 'userOnce') {
+        title = t('isoConfig.customScripts.userOnceScripts')
+        description = t('isoConfig.customScripts.userOnceScriptsDesc')
+      }
 
-    if (addSystemBtn) {
-      addSystemBtn.addEventListener('click', () => {
-        const sysScripts = [...scripts.system, { type: '.cmd', content: '' }]
-        this.updateModule('scripts', { system: sysScripts })
-        this.renderCustomScripts()
-      })
+      setupDynamicListContainer(
+        containerId,
+        {
+          id: containerId,
+          name: `${phase}-scripts`,
+          title: title,
+          description: description,
+          icon: 'file-code',
+          itemCardType: 'comboContainer',
+          items: items,
+          expanded: true,
+          showHeader: true,
+          embedded: false,
+          defaultCardConfig: () => {
+            const newId = this.generateUUID()
+            const typeOptions = getScriptTypeOptions(phase)
+            return {
+              id: `config-${phase}-script-${newId}`,
+              name: `${phase}-script-${newId}`,
+              title: '',
+              description: '',
+              icon: 'file-code',
+              nestedCards: [
+                {
+                  id: `config-${phase}-script-type-${newId}`,
+                  title: t('isoConfig.customScripts.scriptType'),
+                  controlType: 'select' as const,
+                  options: typeOptions,
+                  value: phase === 'defaultUser' ? '.reg' : '.cmd',
+                  borderless: true
+                },
+                {
+                  id: `config-${phase}-script-content-${newId}`,
+                  title: t('isoConfig.customScripts.scriptContent'),
+                  description: t('isoConfig.customScripts.scriptContentDesc'),
+                  value: '',
+                  placeholder: t('isoConfig.customScripts.scriptContentPlaceholder'),
+                  rows: 5,
+                  borderless: true,
+                  showImportExport: false
+                }
+              ],
+              showHeader: false,
+              borderless: true
+            }
+          }
+        },
+        (newItem: DynamicListItem) => {
+          // 添加新项
+          // 由于值收集的 key 格式可能不同，我们需要从 cardConfig 中获取初始值
+          const defaultType = phase === 'defaultUser' ? '.reg' : '.cmd'
+          const newScriptItem: ScriptItem = {
+            id: newItem.id,
+            type: defaultType,
+            content: ''
+          }
+          const phaseScripts = [...scripts[phase], newScriptItem]
+          this.updateModule('scripts', { [phase]: phaseScripts })
+          this.renderCustomScripts()
+        },
+        (itemId: string) => {
+          // 删除项
+          const phaseScripts = scripts[phase].filter(item => item.id !== itemId)
+          this.updateModule('scripts', { [phase]: phaseScripts })
+          this.renderCustomScripts()
+        },
+        (itemId: string, values: any) => {
+          // 更新项 - values 现在是从 ComboContainer 收集的值对象
+          // 需要从 values 中提取 type 和 content
+          // 值的 key 格式为：script_type_xxx 和 script_content_xxx（最后两部分）
+          const typeKey = Object.keys(values).find(k => k.includes('type') && !k.includes('content'))
+          const contentKey = Object.keys(values).find(k => k.includes('content'))
+
+          const phaseScripts = scripts[phase].map(item => {
+            if (item.id === itemId) {
+              const updatedItem = { ...item }
+              if (typeKey) {
+                updatedItem.type = (values[typeKey] as string) || item.type
+              }
+              if (contentKey) {
+                updatedItem.content = (values[contentKey] as string) || item.content
+              }
+              return updatedItem
+            }
+            return item
+          })
+          this.updateModule('scripts', { [phase]: phaseScripts })
+        }
+      )
     }
 
-    if (addDefaultUserBtn) {
-      addDefaultUserBtn.addEventListener('click', () => {
-        const defUserScripts = [...scripts.defaultUser, { type: '.reg', content: '' }]
-        this.updateModule('scripts', { defaultUser: defUserScripts })
-        this.renderCustomScripts()
-      })
-    }
+    setupListContainer('system', 'config-system-scripts-list', systemItems)
+    setupListContainer('defaultUser', 'config-defaultuser-scripts-list', defaultUserItems)
+    setupListContainer('firstLogon', 'config-firstlogon-scripts-list', firstLogonItems)
+    setupListContainer('userOnce', 'config-useronce-scripts-list', userOnceItems)
 
-    if (addFirstLogonBtn) {
-      addFirstLogonBtn.addEventListener('click', () => {
-        const firstLogonScripts = [...scripts.firstLogon, { type: '.cmd', content: '' }]
-        this.updateModule('scripts', { firstLogon: firstLogonScripts })
-        this.renderCustomScripts()
-      })
-    }
-
-    if (addUserOnceBtn) {
-      addUserOnceBtn.addEventListener('click', () => {
-        const userOnceScripts = [...scripts.userOnce, { type: '.cmd', content: '' }]
-        this.updateModule('scripts', { userOnce: userOnceScripts })
-        this.renderCustomScripts()
-      })
-    }
-
-    // 移除脚本
-    contentDiv.querySelectorAll('.script-remove').forEach(btn => {
-      btn.addEventListener('click', (e: any) => {
-        const phase = e.target.dataset.phase
-        const idx = parseInt(e.target.dataset.index)
-        const phaseScripts = [...scripts[phase as keyof ScriptSettings] as Array<{ type: string; content: string }>]
-        phaseScripts.splice(idx, 1)
-        this.updateModule('scripts', { [phase]: phaseScripts })
-        this.renderCustomScripts()
-      })
+    setupComboCard('config-restart-explorer', (value) => {
+      this.updateModule('scripts', { restartExplorer: value as boolean })
     })
-
-    // 更新脚本类型和内容
-    contentDiv.querySelectorAll('.script-type').forEach(select => {
-      select.addEventListener('change', (e: any) => {
-        const phase = e.target.dataset.phase
-        const idx = parseInt(e.target.dataset.index)
-        const phaseScripts = [...scripts[phase as keyof ScriptSettings] as Array<{ type: string; content: string }>]
-        phaseScripts[idx] = { ...phaseScripts[idx], type: e.target.value }
-        this.updateModule('scripts', { [phase]: phaseScripts })
-      })
-    })
-
-    contentDiv.querySelectorAll('.script-content').forEach(textarea => {
-      textarea.addEventListener('input', (e: any) => {
-        const phase = e.target.dataset.phase
-        const idx = parseInt(e.target.dataset.index)
-        const phaseScripts = [...scripts[phase as keyof ScriptSettings] as Array<{ type: string; content: string }>]
-        phaseScripts[idx] = { ...phaseScripts[idx], content: e.target.value }
-        this.updateModule('scripts', { [phase]: phaseScripts })
-      })
-    })
-
-    const restartExplorerCheck = contentDiv.querySelector('#config-restart-explorer') as HTMLInputElement
-    if (restartExplorerCheck) {
-      restartExplorerCheck.addEventListener('change', (e: any) => {
-        this.updateModule('scripts', { restartExplorer: e.target.checked })
-      })
-    }
 
     if (window.lucide) {
       window.lucide.createIcons()
@@ -4577,99 +4968,218 @@ End If`,
 
     const xmlMarkup = this.config.xmlMarkup
 
-    contentDiv.innerHTML = `
-      <div class="card-expandable expanded">
-        <div class="card-expandable-header">
-          <div class="card-expandable-header-left">
-            <div class="card-expandable-title">XML markup for more components</div>
-          </div>
-          <div class="card-expandable-arrow">
-            <i data-lucide="chevron-down"></i>
-          </div>
-        </div>
-        <div class="card-expandable-content">
-          <div class="card-description" style="margin-bottom: 12px;">You can add settings for all available components to add functionality not yet covered by this generator.</div>
-          <div id="config-xml-components" style="display: flex; flex-direction: column; gap: 12px;">
-            ${xmlMarkup.components.map((comp, idx) => `
-              <div class="card" style="background: var(--bg-primary);">
-                <div class="card-content">
-                  <div style="display: grid; grid-template-columns: 200px 150px 1fr auto; gap: 12px; align-items: start;">
-                    <div>
-                      <label style="display: block; margin-bottom: 6px; font-size: 12px;">Component:</label>
-                      <fluent-text-field class="xml-component-name" data-index="${idx}" value="${comp.component}" placeholder="Microsoft-Windows-..." style="width: 100%;"></fluent-text-field>
-                    </div>
-                    <div>
-                      <label style="display: block; margin-bottom: 6px; font-size: 12px;">Pass:</label>
-                      <fluent-select class="xml-component-pass" data-index="${idx}" style="width: 100%;">
-                        <fluent-option value="offlineServicing" ${comp.pass === 'offlineServicing' ? 'selected' : ''}>offlineServicing</fluent-option>
-                        <fluent-option value="windowsPE" ${comp.pass === 'windowsPE' ? 'selected' : ''}>windowsPE</fluent-option>
-                        <fluent-option value="generalize" ${comp.pass === 'generalize' ? 'selected' : ''}>generalize</fluent-option>
-                        <fluent-option value="specialize" ${comp.pass === 'specialize' ? 'selected' : ''}>specialize</fluent-option>
-                        <fluent-option value="auditSystem" ${comp.pass === 'auditSystem' ? 'selected' : ''}>auditSystem</fluent-option>
-                        <fluent-option value="auditUser" ${comp.pass === 'auditUser' ? 'selected' : ''}>auditUser</fluent-option>
-                        <fluent-option value="oobeSystem" ${comp.pass === 'oobeSystem' ? 'selected' : ''}>oobeSystem</fluent-option>
-                      </fluent-select>
-                    </div>
-                    <div>
-                      <label style="display: block; margin-bottom: 6px; font-size: 12px;">XML Markup:</label>
-                      <textarea class="xml-component-markup" data-index="${idx}" style="width: 100%; min-height: 80px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${comp.markup}</textarea>
-                    </div>
-                    <fluent-button class="xml-component-remove" data-index="${idx}" appearance="stealth">Remove</fluent-button>
-                  </div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-          <fluent-button id="config-add-xml-component" appearance="outline" style="margin-top: 12px;">Add component</fluent-button>
-        </div>
-      </div>
-    `
+    // Pass 选项
+    const passOptions = [
+      { value: 'offlineServicing', label: 'offlineServicing' },
+      { value: 'windowsPE', label: 'windowsPE' },
+      { value: 'generalize', label: 'generalize' },
+      { value: 'specialize', label: 'specialize' },
+      { value: 'auditSystem', label: 'auditSystem' },
+      { value: 'auditUser', label: 'auditUser' },
+      { value: 'oobeSystem', label: 'oobeSystem' }
+    ]
 
-    const addBtn = contentDiv.querySelector('#config-add-xml-component')
-    if (addBtn) {
-      addBtn.addEventListener('click', () => {
-        const components = [...xmlMarkup.components, { component: '', pass: 'windowsPE', markup: '' }]
-        this.updateModule('xmlMarkup', { components })
-        this.renderXmlMarkup()
-      })
+    // 辅助函数：将 XML 组件转换为 DynamicListItem
+    const componentToDynamicListItem = (comp: XmlMarkupComponent): DynamicListItem => {
+      const comboContainerConfig: ComboContainerConfig = {
+        id: `config-xml-component-${comp.id}`,
+        name: `xml-component-${comp.id}`,
+        title: '',
+        description: '',
+        icon: 'code',
+        nestedCards: [
+          {
+            id: `config-xml-component-name-${comp.id}`,
+            title: t('isoConfig.xmlMarkup.component'),
+            controlType: 'text',
+            value: comp.component,
+            placeholder: t('isoConfig.xmlMarkup.componentPlaceholder'),
+            borderless: true
+          },
+          {
+            id: `config-xml-component-pass-${comp.id}`,
+            title: t('isoConfig.xmlMarkup.pass'),
+            controlType: 'select',
+            options: passOptions,
+            value: comp.pass,
+            borderless: true
+          },
+          {
+            id: `config-xml-component-markup-${comp.id}`,
+            title: t('isoConfig.xmlMarkup.xmlMarkup'),
+            description: '',
+            value: comp.markup,
+            placeholder: '',
+            rows: 5,
+            borderless: true,
+            showImportExport: false
+          }
+        ],
+        showHeader: false,
+        borderless: true
+      }
+
+      return {
+        id: comp.id,
+        cardType: 'comboContainer',
+        cardConfig: comboContainerConfig
+      }
     }
 
-    contentDiv.querySelectorAll('.xml-component-remove').forEach(btn => {
-      btn.addEventListener('click', (e: any) => {
-        const idx = parseInt(e.target.dataset.index)
-        const components = [...xmlMarkup.components]
-        components.splice(idx, 1)
+    // 将组件转换为 DynamicListItem
+    const items: DynamicListItem[] = xmlMarkup.components.map(comp => componentToDynamicListItem(comp))
+
+    // 生成 HTML
+    contentDiv.innerHTML = createDynamicListContainer({
+      id: 'config-xml-markup-list',
+      name: 'xml-markup',
+      title: t('isoConfig.xmlMarkup.title'),
+      description: t('isoConfig.xmlMarkup.description'),
+      icon: 'code',
+      itemCardType: 'comboContainer',
+      items: items,
+      expanded: true,
+      showHeader: true,
+      embedded: false,
+      defaultCardConfig: () => {
+        const newId = this.generateUUID()
+        return {
+          id: `config-xml-component-${newId}`,
+          name: `xml-component-${newId}`,
+          title: '',
+          description: '',
+          icon: 'code',
+          nestedCards: [
+            {
+              id: `config-xml-component-name-${newId}`,
+              title: t('isoConfig.xmlMarkup.component'),
+              controlType: 'text',
+              value: '',
+              placeholder: t('isoConfig.xmlMarkup.componentPlaceholder'),
+              borderless: true
+            },
+            {
+              id: `config-xml-component-pass-${newId}`,
+              title: t('isoConfig.xmlMarkup.pass'),
+              controlType: 'select',
+              options: passOptions,
+              value: 'windowsPE',
+              borderless: true
+            },
+            {
+              id: `config-xml-component-markup-${newId}`,
+              title: t('isoConfig.xmlMarkup.xmlMarkup'),
+              description: '',
+              value: '',
+              placeholder: '',
+              rows: 5,
+              borderless: true,
+              showImportExport: false
+            }
+          ],
+          showHeader: false,
+          borderless: true
+        }
+      }
+    })
+
+    // 设置事件监听
+    setupDynamicListContainer(
+      'config-xml-markup-list',
+      {
+        id: 'config-xml-markup-list',
+        name: 'xml-markup',
+        title: t('isoConfig.xmlMarkup.title'),
+        description: t('isoConfig.xmlMarkup.description'),
+        icon: 'code',
+        itemCardType: 'comboContainer',
+        items: items,
+        expanded: true,
+        showHeader: true,
+        embedded: false,
+        defaultCardConfig: () => {
+          const newId = this.generateUUID()
+          return {
+            id: `config-xml-component-${newId}`,
+            name: `xml-component-${newId}`,
+            title: '',
+            description: '',
+            icon: 'code',
+            nestedCards: [
+              {
+                id: `config-xml-component-name-${newId}`,
+                title: t('isoConfig.xmlMarkup.component'),
+                controlType: 'text',
+                value: '',
+                placeholder: t('isoConfig.xmlMarkup.componentPlaceholder'),
+                borderless: true
+              },
+              {
+                id: `config-xml-component-pass-${newId}`,
+                title: t('isoConfig.xmlMarkup.pass'),
+                controlType: 'select',
+                options: passOptions,
+                value: 'windowsPE',
+                borderless: true
+              },
+              {
+                id: `config-xml-component-markup-${newId}`,
+                title: t('isoConfig.xmlMarkup.xmlMarkup'),
+                description: '',
+                value: '',
+                placeholder: '',
+                rows: 5,
+                borderless: true,
+                showImportExport: false
+              }
+            ],
+            showHeader: false,
+            borderless: true
+          }
+        }
+      },
+      (_newItem: DynamicListItem) => {
+        // 添加新项
+        const newComponent: XmlMarkupComponent = {
+          id: this.generateUUID(),
+          component: '',
+          pass: 'windowsPE',
+          markup: ''
+        }
+        const components = [...xmlMarkup.components, newComponent]
         this.updateModule('xmlMarkup', { components })
         this.renderXmlMarkup()
-      })
-    })
-
-    contentDiv.querySelectorAll('.xml-component-name').forEach(input => {
-      input.addEventListener('input', (e: any) => {
-        const idx = parseInt(e.target.dataset.index)
-        const components = [...xmlMarkup.components]
-        components[idx] = { ...components[idx], component: e.target.value }
+      },
+      (itemId: string) => {
+        // 删除项
+        const components = xmlMarkup.components.filter(comp => comp.id !== itemId)
         this.updateModule('xmlMarkup', { components })
-      })
-    })
-
-    contentDiv.querySelectorAll('.xml-component-pass').forEach(select => {
-      select.addEventListener('change', (e: any) => {
-        const idx = parseInt(e.target.dataset.index)
+        this.renderXmlMarkup()
+      },
+      (itemId: string, values: any) => {
+        // 更新项 - values 是从 ComboContainer 收集的值对象
         const components = [...xmlMarkup.components]
-        components[idx] = { ...components[idx], pass: e.target.value }
-        this.updateModule('xmlMarkup', { components })
-      })
-    })
+        const component = components.find(comp => comp.id === itemId)
 
-    contentDiv.querySelectorAll('.xml-component-markup').forEach(textarea => {
-      textarea.addEventListener('input', (e: any) => {
-        const idx = parseInt(e.target.dataset.index)
-        const components = [...xmlMarkup.components]
-        components[idx] = { ...components[idx], markup: e.target.value }
-        this.updateModule('xmlMarkup', { components })
-      })
-    })
+        if (component) {
+          // 从 values 中提取 component、pass 和 markup
+          const componentKey = Object.keys(values).find(k => k.includes('name') && !k.includes('pass') && !k.includes('markup'))
+          const passKey = Object.keys(values).find(k => k.includes('pass'))
+          const markupKey = Object.keys(values).find(k => k.includes('markup'))
+
+          if (componentKey) {
+            component.component = (values[componentKey] as string) || ''
+          }
+          if (passKey) {
+            component.pass = (values[passKey] as string) || 'windowsPE'
+          }
+          if (markupKey) {
+            component.markup = (values[markupKey] as string) || ''
+          }
+          this.updateModule('xmlMarkup', { components })
+        }
+      }
+    )
 
     if (window.lucide) {
       window.lucide.createIcons()

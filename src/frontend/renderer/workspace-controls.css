@@ -954,6 +954,266 @@
     margin: 0;
 }
 
+/* Combo 容器内的 fluent-text-field 样式调整 */
+.workspace .combo-container-item fluent-text-field {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+}
+
+/* Combo 容器无边框模式 */
+.workspace .combo-container-borderless {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+}
+
+.workspace .combo-container-borderless .combo-container-content {
+    padding: 0;
+}
+
+.workspace .combo-container-borderless .combo-container-list {
+    margin-top: 0;
+}
+
+/* 无头模式的Combo容器（不显示头部，只显示内容） */
+.workspace .combo-container:not(.card-expandable) {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 12px;
+}
+
+.workspace .combo-container:not(.card-expandable) .combo-container-content {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0;
+}
+
+.workspace .combo-container:not(.card-expandable) .combo-container-list {
+    display: flex !important;
+    margin-top: 0;
+    gap: 12px;
+    flex-direction: column;
+}
+
+/* 修复无头模式下combo-container-item的布局，避免遮挡 */
+.workspace .combo-container:not(.card-expandable) .combo-container-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    margin: 0;
+    gap: 8px;
+}
+
+.workspace .combo-container:not(.card-expandable) .combo-container-item-content {
+    margin-left: 0;
+}
+
+/* 修复无头模式下控件的定位 */
+.workspace .combo-container:not(.card-expandable) .combo-container-item fluent-checkbox,
+.workspace .combo-container:not(.card-expandable) .combo-container-item fluent-switch,
+.workspace .combo-container:not(.card-expandable) .combo-container-item fluent-select,
+.workspace .combo-container:not(.card-expandable) .combo-container-item fluent-text-field {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    margin: 0;
+    width: 100%;
+}
+
+/* Combo 容器嵌套卡片区域 */
+.workspace .combo-container-nested-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+}
+
+/* Combo 容器嵌套卡片分隔线 */
+.workspace .combo-container-nested-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 8px 0;
+}
+
+/* 确保嵌套卡片在 ComboContainer 中占据全宽 */
+.workspace .combo-container-nested-cards .combo-card,
+.workspace .combo-container-nested-cards .text-card,
+.workspace .combo-container-nested-cards .multi-column-checkbox-container {
+    width: 100%;
+}
+
+/* ========================================
+   可变列表容器样式（支持动态增删相同类型的card）
+   ======================================== */
+
+/* DynamicListContainer - 标准卡片样式 */
+.workspace .dynamic-list-container {
+    /* 继承card-expandable样式 */
+}
+
+/* DynamicListContainer 头部 */
+.workspace .dynamic-list-header {
+    /* 继承card-expandable-header样式 */
+}
+
+.workspace .dynamic-list-header-title-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+    min-height: 40px;
+    justify-content: center;
+}
+
+.workspace .dynamic-list-header-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.workspace .dynamic-list-header-description.hidden {
+    display: none;
+}
+
+.workspace .dynamic-list-header-count {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* DynamicListContainer 内容区域 */
+.workspace .dynamic-list-content {
+    position: relative;
+}
+
+.workspace .dynamic-list-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* DynamicListContainer 列表项 */
+.workspace .dynamic-list-item {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+/* DynamicListContainer 列表项中的卡片容器 */
+.workspace .dynamic-list-item-cards {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* 确保 DynamicListContainer 中的 ComboContainer 占据全宽 */
+.workspace .dynamic-list-item-cards .combo-container {
+    width: 100%;
+}
+
+/* DynamicListContainer 删除按钮 */
+.workspace .dynamic-list-item-delete {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    padding: 0;
+    margin-top: 0;
+}
+
+.workspace .dynamic-list-item-delete:hover {
+    background: var(--hover-bg);
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.workspace .dynamic-list-item-delete i {
+    width: 16px;
+    height: 16px;
+}
+
+/* DynamicListContainer 添加按钮（位于左下角） */
+.workspace .dynamic-list-add-button {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    padding: 0;
+    margin-top: 12px;
+}
+
+.workspace .dynamic-list-add-button:hover {
+    background: var(--hover-bg);
+    border-color: var(--text-primary);
+    color: var(--text-primary);
+}
+
+.workspace .dynamic-list-add-button i {
+    width: 16px;
+    height: 16px;
+}
+
+/* DynamicListContainer 嵌入模式 */
+.workspace .dynamic-list-embedded {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.workspace .dynamic-list-embedded .dynamic-list-content {
+    padding: 0;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+.workspace .dynamic-list-embedded .dynamic-list-items {
+    margin-top: 0;
+}
+
+/* 嵌入模式下，调整顶部间距 */
+.workspace .radio-container-nested-cards .dynamic-list-container.dynamic-list-embedded {
+    margin: 0;
+}
+
+.workspace .radio-container-nested-cards .dynamic-list-container.dynamic-list-embedded .dynamic-list-content {
+    padding-top: 12px;
+    padding-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
 /* ========================================
    ComboCard 容器样式（单个card，右侧控件）
    ======================================== */

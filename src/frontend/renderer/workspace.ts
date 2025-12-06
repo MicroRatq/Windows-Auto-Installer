@@ -13,7 +13,7 @@ export interface RadioContainerOption {
     value: string
     label: string
     description?: string
-    nestedCards?: (ComboCardConfig | TextCardConfig | { type: 'multiColumnCheckbox', config: MultiColumnCheckboxConfig })[] // 嵌套的卡片，支持 ComboCard、TextCard 或多列Checkbox容器
+    nestedCards?: (ComboCardConfig | TextCardConfig | { type: 'multiColumnCheckbox', config: MultiColumnCheckboxConfig } | { type: 'radioContainer', config: RadioContainerConfig })[] // 嵌套的卡片，支持 ComboCard、TextCard、多列Checkbox容器或 RadioContainer
 }
 
 export interface RadioContainerConfig {
@@ -50,10 +50,10 @@ export interface ComboContainerConfig {
     title: string
     description?: string
     icon: string // 图标必填
-    options: ComboContainerOption[]
-    // 值映射：value -> boolean (checkbox/switch) 或 string (select)
-    values: Record<string, boolean | string>
+    nestedCards?: (ComboCardConfig | TextCardConfig | { type: 'multiColumnCheckbox', config: MultiColumnCheckboxConfig })[] // 嵌套的卡片，支持 ComboCard、TextCard 或多列Checkbox容器
     expanded?: boolean
+    showHeader?: boolean // 是否显示头部（默认true）
+    borderless?: boolean // 是否无边框模式（默认false）
 }
 
 // ========================================
@@ -114,6 +114,33 @@ export interface MultiColumnCheckboxConfig {
 }
 
 // ========================================
+// 可变列表容器控件（支持动态增删相同类型的card）
+// ========================================
+
+export type ListItemCardType = 'comboCard' | 'textCard' | 'comboContainer'
+
+export interface DynamicListItem {
+    id: string // UUID
+    cardType: ListItemCardType
+    cardConfig: ComboCardConfig | TextCardConfig | ComboContainerConfig
+    nestedCard?: ComboCardConfig | TextCardConfig | ComboContainerConfig // 可选的嵌套card（用于组合card场景）
+}
+
+export interface DynamicListContainerConfig {
+    id: string
+    name: string
+    title?: string
+    description?: string
+    icon?: string
+    itemCardType: ListItemCardType
+    defaultCardConfig: () => ComboCardConfig | TextCardConfig | ComboContainerConfig
+    items: DynamicListItem[]
+    expanded?: boolean
+    showHeader?: boolean // 是否显示容器头部（嵌入模式），默认true
+    embedded?: boolean // 是否为嵌入模式，默认false
+}
+
+// ========================================
 // Radio容器控件
 // ========================================
 
@@ -142,13 +169,17 @@ export function createRadioContainer(config: RadioContainerConfig): string {
             ? `<div class="radio-container-item-description ${opt.description ? '' : 'hidden'}">${opt.description}</div>`
             : ''
 
-        // 嵌套的 ComboCard/TextCard/MultiColumnCheckbox HTML
+        // 嵌套的 ComboCard/TextCard/MultiColumnCheckbox/RadioContainer HTML
         const nestedCardsHtml = (opt.nestedCards && opt.nestedCards.length > 0)
             ? `<div class="radio-container-nested-cards">
                 ${opt.nestedCards.map(cardConfig => {
                 // 检查是否为 MultiColumnCheckbox 配置
                 if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'multiColumnCheckbox') {
                     return createMultiColumnCheckboxContainer((cardConfig as any).config)
+                }
+                // 检查是否为 RadioContainer 配置
+                if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'radioContainer') {
+                    return createRadioContainer((cardConfig as any).config)
                 }
                 // 检查是否为 TextCard 配置（根据特有属性判断）
                 const cardConfigAny = cardConfig as any
@@ -257,6 +288,7 @@ export function setupRadioContainer(
             if (e.target.closest('.combo-card-borderless')) return
             if (e.target.closest('.text-card-borderless')) return
             if (e.target.closest('.multi-column-checkbox-container')) return
+            if (e.target.closest('.radio-container')) return // 嵌套的 RadioContainer
 
             const radio = item.querySelector('fluent-radio') as any
             if (radio) {
@@ -275,21 +307,7 @@ export function setupRadioContainer(
  * 创建Combo容器HTML
  */
 export function createComboContainer(config: ComboContainerConfig): string {
-    const { id, name, title, description, icon, options, values, expanded = false } = config
-
-    // 计算头部显示值
-    const selectedCount = options.filter(opt => {
-        const val = values[opt.value]
-        if (opt.controlType === 'select') {
-            return typeof val === 'string' && val !== ''
-        } else {
-            return typeof val === 'boolean' && val === true
-        }
-    }).length
-
-    const selectedLabel = selectedCount > 0
-        ? `${selectedCount} ${selectedCount === 1 ? 'item' : 'items'} selected`
-        : 'No items selected'
+    const { id, title, description, icon, nestedCards, expanded = false, showHeader = true, borderless = false } = config
 
     // 图标HTML（必填）
     const iconHtml = `<i data-lucide="${icon}" class="card-expandable-header-icon"></i>`
@@ -299,44 +317,28 @@ export function createComboContainer(config: ComboContainerConfig): string {
         ? `<div class="combo-container-header-description ${description ? '' : 'hidden'}">${description}</div>`
         : ''
 
-    // 选项列表HTML
-    const optionsHtml = options.map(opt => {
-        const val = values[opt.value]
-        const optDescriptionHtml = opt.description
-            ? `<div class="combo-container-item-description ${opt.description ? '' : 'hidden'}">${opt.description}</div>`
-            : ''
+    // 嵌套卡片HTML（参考 RadioContainer 的实现）
+    const nestedCardsHtml = (nestedCards && nestedCards.length > 0)
+        ? `<div class="combo-container-nested-cards">
+            ${nestedCards.map(cardConfig => {
+            // 检查是否为 MultiColumnCheckbox 配置
+            if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'multiColumnCheckbox') {
+                return createMultiColumnCheckboxContainer((cardConfig as any).config)
+            }
+            // 检查是否为 TextCard 配置（根据特有属性判断）
+            const cardConfigAny = cardConfig as any
+            if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
+                return createTextCard(cardConfigAny)
+            }
+            // 默认为 ComboCard 配置
+            return createComboCard(cardConfigAny)
+        }).join('<div class="combo-container-nested-divider"></div>')}
+           </div>`
+        : ''
 
-        let controlHtml = ''
-        let isSelected = false
-
-        if (opt.controlType === 'checkbox') {
-            isSelected = typeof val === 'boolean' && val === true
-            controlHtml = `<fluent-checkbox name="${name}-${opt.value}" value="${opt.value}" ${isSelected ? 'checked' : ''}></fluent-checkbox>`
-        } else if (opt.controlType === 'switch') {
-            isSelected = typeof val === 'boolean' && val === true
-            controlHtml = `<fluent-switch name="${name}-${opt.value}" value="${opt.value}" ${isSelected ? 'checked' : ''}></fluent-switch>`
-        } else if (opt.controlType === 'select') {
-            const selectedVal = typeof val === 'string' ? val : ''
-            isSelected = selectedVal !== ''
-            const selectOptionsHtml = (opt.selectOptions || []).map(selOpt =>
-                `<fluent-option value="${selOpt.value}" ${selectedVal === selOpt.value ? 'selected' : ''}>${selOpt.label}</fluent-option>`
-            ).join('')
-            controlHtml = `<fluent-select name="${name}-${opt.value}" id="${name}-${opt.value}-select" style="width: 200px; min-width: 150px;">${selectOptionsHtml}</fluent-select>`
-        }
-
-        return `
-      <div class="combo-container-item" data-value="${opt.value}" data-control-type="${opt.controlType}" data-selected="${isSelected ? 'true' : 'false'}">
-        ${controlHtml}
-        <div class="combo-container-item-content">
-          <div class="combo-container-item-title">${opt.label}</div>
-          ${optDescriptionHtml}
-        </div>
-      </div>
-    `
-    }).join('')
-
-    return `
-    <div class="card-expandable combo-container ${expanded ? 'expanded' : ''}" id="${id}">
+    // 头部HTML（当showHeader=true时显示）
+    const headerHtml = showHeader
+        ? `
       <div class="card-expandable-header combo-container-header">
         <div class="card-expandable-header-left combo-container-header-left">
           ${iconHtml}
@@ -345,16 +347,37 @@ export function createComboContainer(config: ComboContainerConfig): string {
             ${descriptionHtml}
           </div>
         </div>
-        <div class="combo-container-header-value">${selectedLabel}</div>
         <div class="card-expandable-arrow combo-container-header-arrow">
           <i data-lucide="chevron-down"></i>
         </div>
       </div>
+    `
+        : ''
+
+    // 内容区域HTML
+    const contentHtml = `
       <div class="card-expandable-content combo-container-content">
-        <div class="combo-container-list">
-          ${optionsHtml}
-        </div>
+        ${nestedCardsHtml}
       </div>
+    `
+
+    // 根据showHeader和borderless决定容器结构
+    if (!showHeader) {
+        // 无头模式：直接返回内容区域，不包含card-expandable包装
+        const borderlessClass = borderless ? 'combo-container-borderless' : ''
+        return `
+      <div class="combo-container ${borderlessClass}" id="${id}">
+        ${contentHtml}
+      </div>
+    `
+    }
+
+    // 有头模式：使用card-expandable结构
+    const borderlessClass = borderless ? 'combo-container-borderless' : ''
+    return `
+    <div class="card-expandable combo-container ${borderlessClass} ${expanded ? 'expanded' : ''}" id="${id}">
+      ${headerHtml}
+      ${contentHtml}
     </div>
   `
 }
@@ -366,155 +389,122 @@ export function setupComboContainer(
     containerId: string,
     _comboName: string, // 保留参数以保持API兼容性，但当前未使用
     onValueChange: (values: Record<string, boolean | string>) => void,
-    updateHeaderValue: boolean = true
+    _updateHeaderValue: boolean = true, // 保留参数以保持API兼容性，但当前未使用
+    config?: ComboContainerConfig // 可选配置，用于获取嵌套卡片信息
 ): void {
     const container = document.querySelector(`#${containerId}`) as HTMLElement
     if (!container) return
 
     // 注意：展开/折叠功能由父容器的事件委托处理，这里不需要单独绑定
 
-    // 更新头部显示值
-    const updateHeader = () => {
-        if (!updateHeaderValue) return
-
-        const items = container.querySelectorAll('.combo-container-item') as NodeListOf<HTMLElement>
-        let selectedCount = 0
-
-        items.forEach(item => {
-            const controlType = item.dataset.controlType
-            const value = item.dataset.value
-            if (!value) return
-
-            if (controlType === 'checkbox') {
-                const checkbox = item.querySelector('fluent-checkbox') as any
-                if (checkbox && checkbox.checked) {
-                    selectedCount++
-                }
-            } else if (controlType === 'switch') {
-                const switchEl = item.querySelector('fluent-switch') as any
-                if (switchEl && switchEl.checked) {
-                    selectedCount++
-                }
-            } else if (controlType === 'select') {
-                const select = item.querySelector('fluent-select') as any
-                if (select && select.value && select.value !== '') {
-                    selectedCount++
-                }
-            }
-        })
-
-        const valueEl = container.querySelector('.combo-container-header-value') as HTMLElement
-        if (valueEl) {
-            valueEl.textContent = selectedCount > 0
-                ? `${selectedCount} ${selectedCount === 1 ? 'item' : 'items'} selected`
-                : 'No items selected'
-        }
-    }
-
-    // 获取所有当前值
+    // 从嵌套卡片中收集所有值
     const getAllValues = (): Record<string, boolean | string> => {
         const result: Record<string, boolean | string> = {}
-        const items = container.querySelectorAll('.combo-container-item') as NodeListOf<HTMLElement>
 
-        items.forEach(item => {
-            const controlType = item.dataset.controlType
-            const value = item.dataset.value
-            if (!value) return
+        if (!config || !config.nestedCards) {
+            return result
+        }
 
-            if (controlType === 'checkbox') {
-                const checkbox = item.querySelector('fluent-checkbox') as any
-                result[value] = checkbox ? checkbox.checked : false
-            } else if (controlType === 'switch') {
-                const switchEl = item.querySelector('fluent-switch') as any
-                result[value] = switchEl ? switchEl.checked : false
-            } else if (controlType === 'select') {
-                const select = item.querySelector('fluent-select') as any
-                result[value] = select ? (select.value || '') : ''
+        // 遍历嵌套卡片，从每个卡片中获取值
+        config.nestedCards.forEach(cardConfig => {
+            // 检查是否为 MultiColumnCheckbox 配置
+            if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'multiColumnCheckbox') {
+                const multiColumnConfig = (cardConfig as any).config as MultiColumnCheckboxConfig
+                const multiColumnContainer = container.querySelector(`#${multiColumnConfig.id}`) as HTMLElement
+                if (multiColumnContainer) {
+                    // 从 MultiColumnCheckboxContainer 中获取值
+                    const items = multiColumnContainer.querySelectorAll('.multi-column-checkbox-item') as NodeListOf<HTMLElement>
+                    items.forEach(item => {
+                        const checkbox = item.querySelector('fluent-checkbox') as any
+                        const value = item.dataset.value
+                        if (value && checkbox) {
+                            result[value] = checkbox.checked || false
+                        }
+                    })
+                }
+            } else {
+                // 检查是否为 TextCard 配置
+                const cardConfigAny = cardConfig as any
+                if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
+                    // TextCard
+                    const textCardId = cardConfigAny.id
+                    const value = getTextCardValue(textCardId, false)
+                    // 使用 card id 的最后部分作为 key（例如：script-content-xxx -> content）
+                    const key = textCardId.split('-').slice(-2).join('_') // 取最后两部分，如 script_content_xxx
+                    result[key] = value
+                } else {
+                    // ComboCard
+                    const comboCardId = cardConfigAny.id
+                    const comboCard = container.querySelector(`#${comboCardId}`) as HTMLElement
+                    if (comboCard) {
+                        const controlType = cardConfigAny.controlType
+                        let value: boolean | string = ''
+
+                        if (controlType === 'checkbox' || controlType === 'switch') {
+                            const control = comboCard.querySelector(`#${comboCardId}-control`) as any
+                            value = control ? control.checked : false
+                        } else if (controlType === 'select') {
+                            const select = comboCard.querySelector(`#${comboCardId}-control`) as any
+                            value = select ? (select.value || '') : ''
+                        } else if (controlType === 'text') {
+                            const textField = comboCard.querySelector(`#${comboCardId}-control`) as any
+                            value = textField ? (textField.value || '') : ''
+                        }
+
+                        // 使用 card id 的最后部分作为 key（例如：script-type-xxx -> type）
+                        // 或者使用完整 id 作为 key
+                        const key = comboCardId.split('-').slice(-2).join('_') // 取最后两部分，如 script_type_xxx
+                        result[key] = value
+                    }
+                }
             }
         })
 
         return result
     }
 
-    // Checkbox选择事件
-    container.querySelectorAll('fluent-checkbox').forEach(checkbox => {
-        (checkbox as any).addEventListener('change', (e: any) => {
-            const target = e.target as any
-            const item = target.closest('.combo-container-item') as HTMLElement
-
-            if (item) {
-                item.setAttribute('data-selected', target.checked ? 'true' : 'false')
-            }
-
-            // 更新头部显示值
-            updateHeader()
-
-            // 调用回调
-            onValueChange(getAllValues())
-        })
-    })
-
-    // Switch选择事件
-    container.querySelectorAll('fluent-switch').forEach(switchEl => {
-        (switchEl as any).addEventListener('change', (e: any) => {
-            const target = e.target as any
-            const item = target.closest('.combo-container-item') as HTMLElement
-
-            if (item) {
-                item.setAttribute('data-selected', target.checked ? 'true' : 'false')
-            }
-
-            // 更新头部显示值
-            updateHeader()
-
-            // 调用回调
-            onValueChange(getAllValues())
-        })
-    })
-
-    // Select选择事件
-    container.querySelectorAll('fluent-select').forEach(select => {
-        (select as any).addEventListener('change', (e: any) => {
-            const target = e.target as any
-            const item = target.closest('.combo-container-item') as HTMLElement
-
-            if (item) {
-                const hasValue = target.value && target.value !== ''
-                item.setAttribute('data-selected', hasValue ? 'true' : 'false')
-            }
-
-            // 更新头部显示值
-            updateHeader()
-
-            // 调用回调
-            onValueChange(getAllValues())
-        })
-    })
-
-    // 点击列表项也可以切换（仅对checkbox/switch有效）
-    container.querySelectorAll('.combo-container-item').forEach((item: any) => {
-        item.addEventListener('click', (e: any) => {
-            const controlType = item.dataset.controlType
-
-            // 如果点击的是控件本身，不处理（避免重复触发）
-            if (e.target.closest('fluent-checkbox') || e.target.closest('fluent-select')) return
-
-            // 只对checkbox/switch支持点击切换
-            if (controlType === 'checkbox') {
-                const checkbox = item.querySelector('fluent-checkbox') as any
-                if (checkbox) {
-                    checkbox.checked = !checkbox.checked
-                    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
-                }
-            } else if (controlType === 'switch') {
-                const switchEl = item.querySelector('fluent-switch') as any
-                if (switchEl) {
-                    switchEl.checked = !switchEl.checked
-                    switchEl.dispatchEvent(new Event('change', { bubbles: true }))
+    // 为嵌套卡片设置事件监听
+    if (config && config.nestedCards) {
+        config.nestedCards.forEach(cardConfig => {
+            // 检查是否为 MultiColumnCheckbox 配置
+            if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'multiColumnCheckbox') {
+                const multiColumnConfig = (cardConfig as any).config as MultiColumnCheckboxConfig
+                setupMultiColumnCheckboxContainer(
+                    multiColumnConfig.id,
+                    multiColumnConfig.name,
+                    (_values: Record<string, boolean>) => {
+                        // 当 MultiColumnCheckbox 的值变化时，收集所有值并调用回调
+                        onValueChange(getAllValues())
+                    },
+                    false // 不更新头部值（由父容器处理）
+                )
+            } else {
+                // 检查是否为 TextCard 配置
+                const cardConfigAny = cardConfig as any
+                if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
+                    // TextCard
+                    setupTextCard(
+                        cardConfigAny.id,
+                        (_value: string) => {
+                            // 当 TextCard 的值变化时，收集所有值并调用回调
+                            onValueChange(getAllValues())
+                        },
+                        undefined, // 导入功能（如果需要可以传递）
+                        undefined  // 导出功能（如果需要可以传递）
+                    )
+                } else {
+                    // ComboCard
+                    setupComboCard(
+                        cardConfigAny.id,
+                        (_value: boolean | string) => {
+                            // 当 ComboCard 的值变化时，收集所有值并调用回调
+                            onValueChange(getAllValues())
+                        }
+                    )
                 }
             }
         })
-    })
+    }
 }
 
 // ========================================
@@ -1000,6 +990,229 @@ export function setupMultiColumnCheckboxContainer(
                     checkbox.dispatchEvent(new Event('change', { bubbles: true }))
                 }
             })
+        })
+    }
+}
+
+// ========================================
+// 可变列表容器控件（支持动态增删相同类型的card）
+// ========================================
+
+/**
+ * 生成UUID
+ */
+function generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0
+        const v = c === 'x' ? r : (r & 0x3 | 0x8)
+        return v.toString(16)
+    })
+}
+
+/**
+ * 创建可变列表容器HTML
+ */
+export function createDynamicListContainer(config: DynamicListContainerConfig): string {
+    const {
+        id,
+        title,
+        description,
+        icon,
+        items,
+        expanded = false,
+        showHeader = true,
+        embedded = false
+    } = config
+
+    // 头部HTML（当showHeader=true时显示）
+    let headerHtml = ''
+    if (showHeader) {
+        const iconHtml = icon ? `<i data-lucide="${icon}" class="card-expandable-header-icon"></i>` : ''
+        const descriptionHtml = description
+            ? `<div class="dynamic-list-header-description ${description ? '' : 'hidden'}">${description}</div>`
+            : ''
+        const titleHtml = title || ''
+
+        headerHtml = `
+      <div class="card-expandable-header dynamic-list-header">
+        <div class="card-expandable-header-left dynamic-list-header-left">
+          ${iconHtml}
+          <div class="dynamic-list-header-title-group">
+            ${titleHtml ? `<div class="card-expandable-title dynamic-list-header-title">${titleHtml}</div>` : ''}
+            ${descriptionHtml}
+          </div>
+        </div>
+        <div class="dynamic-list-header-count">${items.length} ${items.length === 1 ? 'item' : 'items'}</div>
+        <div class="card-expandable-arrow dynamic-list-header-arrow">
+          <i data-lucide="chevron-down"></i>
+        </div>
+      </div>
+    `
+    }
+
+    // 列表项HTML
+    const itemsHtml = items.map(item => {
+        let cardHtml = ''
+        let nestedCardHtml = ''
+
+        // 根据card类型生成相应的HTML
+        if (item.cardType === 'comboCard') {
+            cardHtml = createComboCard(item.cardConfig as ComboCardConfig)
+        } else if (item.cardType === 'textCard') {
+            cardHtml = createTextCard(item.cardConfig as TextCardConfig)
+        } else if (item.cardType === 'comboContainer') {
+            cardHtml = createComboContainer(item.cardConfig as ComboContainerConfig)
+        }
+
+        // 如果有嵌套card，也生成其HTML
+        if (item.nestedCard) {
+            if ('rows' in item.nestedCard || 'showImportExport' in item.nestedCard) {
+                // TextCard
+                nestedCardHtml = createTextCard(item.nestedCard as TextCardConfig)
+            } else if ('nestedCards' in item.nestedCard || ('name' in item.nestedCard && 'icon' in item.nestedCard)) {
+                // ComboContainer (新版本使用 nestedCards，旧版本有 name 和 icon)
+                nestedCardHtml = createComboContainer(item.nestedCard as ComboContainerConfig)
+            } else {
+                // ComboCard
+                nestedCardHtml = createComboCard(item.nestedCard as ComboCardConfig)
+            }
+        }
+
+        // 删除按钮HTML
+        const deleteButtonHtml = `
+      <button class="dynamic-list-item-delete" data-item-id="${item.id}" title="${t('common.removeItem')}">
+        <i data-lucide="x"></i>
+      </button>
+    `
+
+        return `
+      <div class="dynamic-list-item" data-item-id="${item.id}">
+        <div class="dynamic-list-item-cards">
+          ${cardHtml}
+          ${nestedCardHtml}
+        </div>
+        ${deleteButtonHtml}
+      </div>
+    `
+    }).join('')
+
+    // 添加按钮HTML（位于左下角）
+    const addButtonHtml = `
+      <button class="dynamic-list-add-button" id="${id}-add-btn" title="${t('common.addItem')}">
+        <i data-lucide="plus"></i>
+      </button>
+    `
+
+    // 内容区域HTML
+    const contentHtml = `
+      <div class="card-expandable-content dynamic-list-content">
+        <div class="dynamic-list-items">
+          ${itemsHtml}
+        </div>
+        ${addButtonHtml}
+      </div>
+    `
+
+    // 根据showHeader和embedded决定容器结构
+    if (!showHeader || embedded) {
+        // 嵌入模式或无头模式：直接返回内容区域
+        return `
+      <div class="dynamic-list-container ${embedded ? 'dynamic-list-embedded' : ''}" id="${id}">
+        ${contentHtml}
+      </div>
+    `
+    }
+
+    // 有头模式：使用card-expandable结构
+    return `
+    <div class="card-expandable dynamic-list-container ${expanded ? 'expanded' : ''}" id="${id}">
+      ${headerHtml}
+      ${contentHtml}
+    </div>
+  `
+}
+
+/**
+ * 设置可变列表容器事件监听
+ */
+export function setupDynamicListContainer(
+    containerId: string,
+    config: DynamicListContainerConfig,
+    onItemAdd: (newItem: DynamicListItem) => void,
+    onItemRemove: (itemId: string) => void,
+    onItemChange: (itemId: string, value: any) => void
+): void {
+    const container = document.querySelector(`#${containerId}`) as HTMLElement
+    if (!container) return
+
+    // 更新头部计数
+    const updateHeaderCount = () => {
+        const headerCountEl = container.querySelector('.dynamic-list-header-count') as HTMLElement
+        if (headerCountEl) {
+            const items = container.querySelectorAll('.dynamic-list-item') as NodeListOf<HTMLElement>
+            const count = items.length
+            headerCountEl.textContent = `${count} ${count === 1 ? 'item' : 'items'}`
+        }
+    }
+
+    // 为每个列表项设置card事件监听
+    config.items.forEach(item => {
+        const itemElement = container.querySelector(`.dynamic-list-item[data-item-id="${item.id}"]`) as HTMLElement
+        if (!itemElement) return
+
+        // 根据card类型设置相应的事件监听（主card）
+        if (item.cardType === 'comboCard') {
+            const cardConfig = item.cardConfig as ComboCardConfig
+            setupComboCard(cardConfig.id, (value) => {
+                onItemChange(item.id, { main: value })
+            })
+        } else if (item.cardType === 'textCard') {
+            const cardConfig = item.cardConfig as TextCardConfig
+            setupTextCard(cardConfig.id, (value) => {
+                onItemChange(item.id, { main: value })
+            })
+        } else if (item.cardType === 'comboContainer') {
+            const cardConfig = item.cardConfig as ComboContainerConfig
+            setupComboContainer(cardConfig.id, cardConfig.name, (values) => {
+                onItemChange(item.id, values)
+            }, false, cardConfig) // 传递 config 以便正确收集嵌套卡片的值
+        }
+
+        // 注意：新的 ComboContainer 使用 nestedCards 数组，不再需要单独处理 nestedCard
+    })
+
+    // 删除按钮事件监听
+    container.querySelectorAll('.dynamic-list-item-delete').forEach(deleteBtn => {
+        deleteBtn.addEventListener('click', (e: any) => {
+            e.stopPropagation()
+            const itemId = e.target.closest('.dynamic-list-item-delete')?.getAttribute('data-item-id')
+            if (itemId) {
+                onItemRemove(itemId)
+                updateHeaderCount()
+            }
+        })
+    })
+
+    // 添加按钮事件监听
+    const addBtn = container.querySelector(`#${containerId}-add-btn`) as HTMLElement
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            // 生成新的UUID
+            const newId = generateUUID()
+            // 创建默认配置
+            const defaultConfig = config.defaultCardConfig()
+            // 为新配置设置唯一的ID
+            defaultConfig.id = `${defaultConfig.id}-${newId}`
+
+            // 创建新项
+            const newItem: DynamicListItem = {
+                id: newId,
+                cardType: config.itemCardType,
+                cardConfig: defaultConfig
+            }
+
+            onItemAdd(newItem)
+            updateHeaderCount()
         })
     }
 }

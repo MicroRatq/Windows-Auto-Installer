@@ -7,7 +7,9 @@
         "selectAll": "Select all",
         "deselectAll": "Deselect all",
         "importFile": "Import",
-        "exportFile": "Export"
+        "exportFile": "Export",
+        "addItem": "Add item",
+        "removeItem": "Remove"
     },
     "isoConfig": {
         "regionLanguage": {
@@ -382,6 +384,31 @@
             "stickyKeysTriState": "Lock shortcut keys when pressed twice in a row",
             "stickyKeysTwoKeysOff": "Turn off Sticky keys when two keys are pressed at the same time",
             "stickyKeysDesc": "This will affect all users and also the login screen."
+        },
+        "customScripts": {
+            "title": "Run custom scripts",
+            "systemScripts": "System scripts",
+            "systemScriptsDesc": "These scripts will run in the system context, before user accounts are created.",
+            "defaultUserScripts": "DefaultUser scripts",
+            "defaultUserScriptsDesc": "Use these scripts to modify the default user's registry hive.",
+            "firstLogonScripts": "FirstLogon scripts",
+            "firstLogonScriptsDesc": "These scripts will run when the first user logs on after Windows has been installed.",
+            "userOnceScripts": "UserOnce scripts",
+            "userOnceScriptsDesc": "These scripts will run whenever a user logs on for the first time.",
+            "scriptType": "Script type",
+            "scriptContent": "Script content",
+            "scriptContentDesc": "Enter your script content here",
+            "scriptContentPlaceholder": "Enter your script content here",
+            "restartExplorer": "Restart File Explorer after scripts have run"
+        },
+        "xmlMarkup": {
+            "title": "XML markup for more components",
+            "description": "You can add settings for all available components to add functionality not yet covered by this generator.",
+            "component": "Component",
+            "componentPlaceholder": "Microsoft-Windows-...",
+            "pass": "Pass",
+            "xmlMarkup": "XML Markup",
+            "addComponent": "Add component"
         }
     },
     "settings": {
