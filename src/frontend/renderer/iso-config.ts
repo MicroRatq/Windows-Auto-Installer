@@ -10,7 +10,8 @@ import {
   setupComboCard,
   createComboContainer,
   setupComboContainer,
-  createTextCard, // 通过 createRadioContainer 的嵌套功能动态调用
+  createMultiColumnCheckboxContainer,
+  setupMultiColumnCheckboxContainer,
   setupTextCard,
   getTextCardValue,
   setTextCardValue
@@ -140,13 +141,15 @@ interface LockoutSettings {
 interface FileExplorerTweaks {
   showFileExtensions: boolean
   showAllTrayIcons: boolean
-  hideFiles: 'hidden' | 'show'
+  hideFiles: 'hidden' | 'hiddenSystem' | 'none'
   hideEdgeFre: boolean
   disableEdgeStartupBoost: boolean
   makeEdgeUninstallable: boolean
   deleteEdgeDesktopIcon: boolean
   launchToThisPC: boolean
   disableBingResults: boolean
+  classicContextMenu: boolean
+  showEndTask: boolean
 }
 
 // 开始菜单和任务栏设置
@@ -154,9 +157,11 @@ interface StartMenuTaskbarSettings {
   leftTaskbar: boolean
   hideTaskViewButton: boolean
   taskbarSearch: 'hide' | 'icon' | 'box' | 'label'
-  startPins?: string[]
-  startTiles?: any
-  taskbarIcons?: any
+  disableWidgets: boolean
+  startTilesMode: 'default' | 'empty' | 'custom'
+  startTilesXml?: string
+  startPinsMode: 'default' | 'empty' | 'custom'
+  startPinsJson?: string
 }
 
 // 系统调整
@@ -188,18 +193,57 @@ interface SystemTweaks {
 
 // 视觉效果
 interface VisualEffects {
-  effects?: any
+  mode: 'default' | 'appearance' | 'performance' | 'custom'
+  controlAnimations?: boolean
+  animateMinMax?: boolean
+  taskbarAnimations?: boolean
+  dwmAeroPeekEnabled?: boolean
+  menuAnimation?: boolean
+  tooltipAnimation?: boolean
+  selectionFade?: boolean
+  dwmSaveThumbnailEnabled?: boolean
+  cursorShadow?: boolean
+  listviewShadow?: boolean
+  thumbnailsOrIcon?: boolean
+  listviewAlphaSelect?: boolean
+  dragFullWindows?: boolean
+  comboBoxAnimation?: boolean
+  fontSmoothing?: boolean
+  listBoxSmoothScrolling?: boolean
+  dropShadow?: boolean
 }
 
 // 桌面图标设置
 interface DesktopIconSettings {
   mode: 'default' | 'custom'
-  icons?: any
+  deleteEdgeDesktopIcon: boolean
+  iconControlPanel?: boolean
+  iconDesktop?: boolean
+  iconDocuments?: boolean
+  iconDownloads?: boolean
+  iconGallery?: boolean
+  iconHome?: boolean
+  iconMusic?: boolean
+  iconNetwork?: boolean
+  iconPictures?: boolean
+  iconRecycleBin?: boolean
+  iconThisPC?: boolean
+  iconUserFiles?: boolean
+  iconVideos?: boolean
 }
 
 // 开始菜单文件夹设置
 interface StartFolderSettings {
-  folders?: string[]
+  mode: 'default' | 'custom'
+  startFolderDocuments?: boolean
+  startFolderDownloads?: boolean
+  startFolderFileExplorer?: boolean
+  startFolderMusic?: boolean
+  startFolderNetwork?: boolean
+  startFolderPersonalFolder?: boolean
+  startFolderPictures?: boolean
+  startFolderSettings?: boolean
+  startFolderVideos?: boolean
 }
 
 // 虚拟机支持
@@ -226,17 +270,23 @@ type ExpressSettingsMode = 'interactive' | 'enableAll' | 'disableAll'
 // 锁定键设置
 interface LockKeySettings {
   mode: 'skip' | 'configure'
-  keys?: Array<{
-    key: string
-    initialState: boolean
-    whenPressed: string
-  }>
+  capsLockInitial?: 'off' | 'on'
+  capsLockBehavior?: 'toggle' | 'ignore'
+  numLockInitial?: 'off' | 'on'
+  numLockBehavior?: 'toggle' | 'ignore'
+  scrollLockInitial?: 'off' | 'on'
+  scrollLockBehavior?: 'toggle' | 'ignore'
 }
 
 // 粘滞键设置
 interface StickyKeysSettings {
   mode: 'default' | 'disabled' | 'custom'
-  enabled?: boolean
+  stickyKeysHotKeyActive?: boolean
+  stickyKeysHotKeySound?: boolean
+  stickyKeysIndicator?: boolean
+  stickyKeysAudibleFeedback?: boolean
+  stickyKeysTriState?: boolean
+  stickyKeysTwoKeysOff?: boolean
 }
 
 // 个性化设置
@@ -247,7 +297,12 @@ interface PersonalizationSettings {
   lockScreenMode: 'default' | 'script'
   lockScreenScript?: string
   colorMode: 'default' | 'custom'
+  systemColorTheme?: 'dark' | 'light'
+  appsColorTheme?: 'dark' | 'light'
   accentColor?: string
+  accentColorOnStart?: boolean
+  accentColorOnBorders?: boolean
+  enableTransparency?: boolean
 }
 
 // 预装软件移除
@@ -455,12 +510,17 @@ function createDefaultConfig(): UnattendConfig {
       makeEdgeUninstallable: false,
       deleteEdgeDesktopIcon: false,
       launchToThisPC: false,
-      disableBingResults: false
+      disableBingResults: false,
+      classicContextMenu: false,
+      showEndTask: false
     },
     startMenuTaskbar: {
       leftTaskbar: false,
       hideTaskViewButton: false,
-      taskbarSearch: 'box'
+      taskbarSearch: 'box',
+      disableWidgets: false,
+      startTilesMode: 'default',
+      startPinsMode: 'default'
     },
     systemTweaks: {
       enableLongPaths: false,
@@ -487,11 +547,16 @@ function createDefaultConfig(): UnattendConfig {
       disableCoreIsolation: false,
       showEndTask: false
     },
-    visualEffects: {},
-    desktopIcons: {
+    visualEffects: {
       mode: 'default'
     },
-    startFolders: {},
+    desktopIcons: {
+      mode: 'default',
+      deleteEdgeDesktopIcon: false
+    },
+    startFolders: {
+      mode: 'default'
+    },
     vmSupport: {
       vBoxGuestAdditions: false,
       vmwareTools: false,
@@ -1022,7 +1087,7 @@ class UnattendConfigManager {
         }
       ],
       selectedValue: cn.mode,
-      expanded: true
+      expanded: false
     })
 
     // 2. User accounts - RadioContainer
@@ -1050,7 +1115,7 @@ class UnattendConfigManager {
         }
       ],
       selectedValue: accounts.mode,
-      expanded: true
+      expanded: false
     })
 
     // User accounts list (只在 unattended 模式下显示)
@@ -1134,7 +1199,7 @@ class UnattendConfigManager {
           }
         ],
         selectedValue: accounts.autoLogonMode || 'none',
-        expanded: true
+        expanded: false
       })
       : ''
 
@@ -1198,7 +1263,7 @@ class UnattendConfigManager {
         }
       ],
       selectedValue: pe.mode,
-      expanded: true
+      expanded: false
     })
 
     // 4. Account Lockout policy - RadioContainer（带嵌套 ComboCard）
@@ -1255,7 +1320,7 @@ class UnattendConfigManager {
         }
       ],
       selectedValue: lockout.mode,
-      expanded: true
+      expanded: false
     })
 
     contentDiv.innerHTML = `
@@ -1469,7 +1534,7 @@ class UnattendConfigManager {
         }
       ],
       selectedValue: compactOS,
-      expanded: true
+      expanded: false
     })
 
     // 2. Windows PE operation - RadioContainer
@@ -1538,7 +1603,7 @@ pause`,
         }
       ],
       selectedValue: pe.mode,
-      expanded: true
+      expanded: false
     })
 
 
@@ -1581,7 +1646,7 @@ pause`,
         virtIoGuestTools: vm.virtIoGuestTools || false,
         parallelsTools: vm.parallelsTools || false
       },
-      expanded: true
+      expanded: false
     })
 
     // 4. WDAC - ComboCard Switch
@@ -1620,7 +1685,7 @@ pause`,
           }
         ],
         selectedValue: wdac.enforcementMode || 'auditOnBootFailure',
-        expanded: true
+        expanded: false
       })
       : ''
 
@@ -1644,7 +1709,7 @@ pause`,
           }
         ],
         selectedValue: wdac.scriptEnforcement || 'restricted',
-        expanded: true
+        expanded: false
       })
       : ''
 
@@ -1892,7 +1957,7 @@ GPT ATTRIBUTES=0x8000000000000001`,
         }
       ],
       selectedValue: part.mode,
-      expanded: true
+      expanded: false
     })
 
     // 2. 磁盘断言 RadioContainer（无条件显示）
@@ -1940,7 +2005,7 @@ End If`,
         }
       ],
       selectedValue: part.diskAssertionMode || 'skip',
-      expanded: true
+      expanded: false
     })
 
     contentDiv.innerHTML = `
@@ -2130,7 +2195,7 @@ End If`,
         }
       ],
       selectedValue: edition.mode === 'key' ? 'custom' : edition.mode === 'index' || edition.mode === 'name' ? 'generic' : edition.mode,
-      expanded: true
+      expanded: false
     })
 
     // 2. Source Image Mode - RadioContainer (带嵌套)
@@ -2180,7 +2245,7 @@ End If`,
         }
       ],
       selectedValue: source.mode || 'automatic',
-      expanded: true
+      expanded: false
     })
 
     contentDiv.innerHTML = `
@@ -2545,74 +2610,138 @@ End If`,
 
     const fe = this.config.fileExplorerTweaks
 
-    contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.uiPersonalization.fileExplorer')}</div>
-            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.showFileExtensions ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.showFileExtensions')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.showAllTrayIcons ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.showAllTrayIcons')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.hideEdgeFre ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.hideEdgeFre')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.disableEdgeStartupBoost ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.disableEdgeStartupBoost')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.makeEdgeUninstallable ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.makeEdgeUninstallable')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.deleteEdgeDesktopIcon ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.launchToThisPC ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.launchToThisPC')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" ${fe.disableBingResults ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.disableBingResults')}</span>
-              </label>
-              <div>
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.hideFiles')}</label>
-                <fluent-select id="config-hide-files" style="width: 100%;">
-                  <fluent-option value="hidden" ${fe.hideFiles === 'hidden' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.hidden')}</fluent-option>
-                  <fluent-option value="show" ${fe.hideFiles === 'show' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.show')}</fluent-option>
-                </fluent-select>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `
-
-    const checkboxes = contentDiv.querySelectorAll('input[type="checkbox"]')
-    const keys: (keyof FileExplorerTweaks)[] = [
-      'showFileExtensions', 'showAllTrayIcons', 'hideEdgeFre',
-      'disableEdgeStartupBoost', 'makeEdgeUninstallable', 'deleteEdgeDesktopIcon',
-      'launchToThisPC', 'disableBingResults'
-    ]
-    checkboxes.forEach((cb, i) => {
-      cb.addEventListener('change', (e: any) => {
-        this.updateModule('fileExplorerTweaks', { [keys[i]]: e.target.checked })
-      })
+    // 1. Hide Files - RadioContainer (嵌套)
+    const hideFilesRadioHtml = createRadioContainer({
+      id: 'hide-files-container',
+      name: 'hide-files-mode',
+      title: t('isoConfig.uiPersonalization.hideFiles'),
+      description: '',
+      icon: 'eye-off',
+      options: [
+        {
+          value: 'hidden',
+          label: t('isoConfig.uiPersonalization.hideFilesDefault'),
+          description: t('isoConfig.uiPersonalization.hideFilesDefaultDesc')
+        },
+        {
+          value: 'hiddenSystem',
+          label: t('isoConfig.uiPersonalization.hideFilesHiddenSystem'),
+          description: t('isoConfig.uiPersonalization.hideFilesHiddenSystemDesc')
+        },
+        {
+          value: 'none',
+          label: t('isoConfig.uiPersonalization.hideFilesNone'),
+          description: t('isoConfig.uiPersonalization.hideFilesNoneDesc')
+        }
+      ],
+      selectedValue: fe.hideFiles || 'hidden',
+      expanded: false
     })
 
-    const hideFilesSelect = contentDiv.querySelector('#config-hide-files') as any
-    if (hideFilesSelect) {
-      hideFilesSelect.addEventListener('change', (e: any) => {
-        this.updateModule('fileExplorerTweaks', { hideFiles: e.target.value })
-      })
+    // 2. File Explorer Options - ComboContainer
+    const fileExplorerOptionsHtml = createComboContainer({
+      id: 'file-explorer-options-container',
+      name: 'file-explorer-options',
+      title: t('isoConfig.uiPersonalization.fileExplorer'),
+      description: '',
+      icon: 'folder',
+      options: [
+        {
+          value: 'showFileExtensions',
+          label: t('isoConfig.uiPersonalization.showFileExtensions'),
+          description: t('isoConfig.uiPersonalization.showFileExtensionsDesc'),
+          controlType: 'checkbox'
+        },
+        {
+          value: 'showAllTrayIcons',
+          label: t('isoConfig.uiPersonalization.showAllTrayIcons'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'classicContextMenu',
+          label: t('isoConfig.uiPersonalization.classicContextMenu'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'launchToThisPC',
+          label: t('isoConfig.uiPersonalization.launchToThisPC'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'showEndTask',
+          label: t('isoConfig.uiPersonalization.showEndTask'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'hideEdgeFre',
+          label: t('isoConfig.uiPersonalization.hideEdgeFre'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'disableEdgeStartupBoost',
+          label: t('isoConfig.uiPersonalization.disableEdgeStartupBoost'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'makeEdgeUninstallable',
+          label: t('isoConfig.uiPersonalization.makeEdgeUninstallable'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'deleteEdgeDesktopIcon',
+          label: t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'disableBingResults',
+          label: t('isoConfig.uiPersonalization.disableBingResults'),
+          description: '',
+          controlType: 'checkbox'
+        }
+      ],
+      values: {
+        showFileExtensions: fe.showFileExtensions || false,
+        showAllTrayIcons: fe.showAllTrayIcons || false,
+        classicContextMenu: fe.classicContextMenu || false,
+        launchToThisPC: fe.launchToThisPC || false,
+        showEndTask: fe.showEndTask || false,
+        hideEdgeFre: fe.hideEdgeFre || false,
+        disableEdgeStartupBoost: fe.disableEdgeStartupBoost || false,
+        makeEdgeUninstallable: fe.makeEdgeUninstallable || false,
+        deleteEdgeDesktopIcon: fe.deleteEdgeDesktopIcon || false,
+        disableBingResults: fe.disableBingResults || false
+      },
+      expanded: false
+    })
+
+    contentDiv.innerHTML = `
+      ${hideFilesRadioHtml}
+      ${fileExplorerOptionsHtml}
+    `
+
+    // === 事件监听设置 ===
+
+    // 1. Hide Files mode
+    setupRadioContainer('hide-files-container', 'hide-files-mode', (value) => {
+      this.updateModule('fileExplorerTweaks', { hideFiles: value as 'hidden' | 'hiddenSystem' | 'none' })
+    }, true)
+
+    // 2. File Explorer options
+    setupComboContainer('file-explorer-options-container', 'file-explorer-options', (values) => {
+      this.updateModule('fileExplorerTweaks', values as Partial<FileExplorerTweaks>)
+    }, true)
+
+    // 初始化图标
+    if (window.lucide) {
+      window.lucide.createIcons()
     }
   }
 
@@ -2623,61 +2752,247 @@ End If`,
 
     const st = this.config.startMenuTaskbar
 
+    // 1. Taskbar Options - ComboContainer
+    const taskbarOptionsHtml = createComboContainer({
+      id: 'taskbar-options-container',
+      name: 'taskbar-options',
+      title: t('isoConfig.uiPersonalization.startTaskbar'),
+      description: '',
+      icon: 'layout-grid',
+      options: [
+        {
+          value: 'leftTaskbar',
+          label: t('isoConfig.uiPersonalization.leftTaskbar'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'hideTaskViewButton',
+          label: t('isoConfig.uiPersonalization.hideTaskViewButton'),
+          description: '',
+          controlType: 'checkbox'
+        },
+        {
+          value: 'disableWidgets',
+          label: t('isoConfig.uiPersonalization.disableWidgets'),
+          description: '',
+          controlType: 'checkbox'
+        }
+      ],
+      values: {
+        leftTaskbar: st.leftTaskbar || false,
+        hideTaskViewButton: st.hideTaskViewButton || false,
+        disableWidgets: st.disableWidgets || false
+      },
+      expanded: false
+    })
+
+    // 2. Taskbar Search - ComboCard select
+    const taskbarSearchCardHtml = createComboCard({
+      id: 'taskbar-search-card',
+      title: t('isoConfig.uiPersonalization.taskbarSearch'),
+      description: '',
+      icon: 'search',
+      controlType: 'select',
+      options: [
+        { value: 'box', label: t('isoConfig.uiPersonalization.taskbarSearchBox') },
+        { value: 'label', label: t('isoConfig.uiPersonalization.taskbarSearchLabel') },
+        { value: 'icon', label: t('isoConfig.uiPersonalization.taskbarSearchIcon') },
+        { value: 'hide', label: t('isoConfig.uiPersonalization.taskbarSearchHide') }
+      ],
+      value: st.taskbarSearch || 'box'
+    })
+
+    // 3. Windows 10 Start Tiles - RadioContainer (嵌套)
+    const startTilesRadioHtml = createRadioContainer({
+      id: 'start-tiles-container',
+      name: 'start-tiles-mode',
+      title: t('isoConfig.uiPersonalization.startTilesMode'),
+      description: '',
+      icon: 'grid-3x3',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.startTilesDefault'),
+          description: t('isoConfig.uiPersonalization.startTilesDefaultDesc')
+        },
+        {
+          value: 'empty',
+          label: t('isoConfig.uiPersonalization.startTilesEmpty'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.startTilesCustom'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'start-tiles-xml-card',
+              title: t('isoConfig.uiPersonalization.startTilesXml'),
+              description: '',
+              icon: 'code',
+              value: st.startTilesXml || '',
+              placeholder: `<LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModificationTemplate" xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" Version="1">
+  <defaultlayout:StartLayoutCollection>
+    <defaultlayout:DefaultLayout StartLayoutGroupCellWidth="6">
+      <start:Group Name="Group1">
+        <start:DesktopApplicationTile Size="2x2" Column="0" Row="0" DesktopApplicationLinkPath="%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk" />
+        <start:DesktopApplicationTile Size="2x2" Column="2" Row="0" DesktopApplicationLinkPath="%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\System Tools\\File Explorer.lnk" />
+      </start:Group>
+    </defaultlayout:DefaultLayout>
+  </defaultlayout:StartLayoutCollection>
+</LayoutModificationTemplate>`,
+              rows: 15,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: st.startTilesMode || 'default',
+      expanded: false
+    })
+
+    // 4. Windows 11 Start Pins - RadioContainer (嵌套)
+    const startPinsRadioHtml = createRadioContainer({
+      id: 'start-pins-container',
+      name: 'start-pins-mode',
+      title: t('isoConfig.uiPersonalization.startPinsMode'),
+      description: '',
+      icon: 'pin',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.startPinsDefault'),
+          description: t('isoConfig.uiPersonalization.startPinsDefaultDesc')
+        },
+        {
+          value: 'empty',
+          label: t('isoConfig.uiPersonalization.startPinsEmpty'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.startPinsCustom'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'start-pins-json-card',
+              title: t('isoConfig.uiPersonalization.startPinsJson'),
+              description: '',
+              icon: 'code',
+              value: st.startPinsJson || '',
+              placeholder: `{
+  "pinnedList": [
+    {
+      "desktopAppLink": "%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk"
+    },
+    {
+      "desktopAppLink": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\File Explorer.lnk"
+    }
+  ]
+}`,
+              rows: 15,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: st.startPinsMode || 'default',
+      expanded: false
+    })
+
     contentDiv.innerHTML = `
-      <div class="card-expandable expanded">
-        <div class="card-expandable-header">
-          <div class="card-expandable-header-left">
-            <div class="card-expandable-title">${t('isoConfig.uiPersonalization.startTaskbar')}</div>
-          </div>
-          <div class="card-expandable-arrow">
-            <i data-lucide="chevron-down"></i>
-          </div>
-        </div>
-        <div class="card-expandable-content">
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" ${st.leftTaskbar ? 'checked' : ''}>
-              <span>${t('isoConfig.uiPersonalization.leftTaskbar')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" ${st.hideTaskViewButton ? 'checked' : ''}>
-              <span>${t('isoConfig.uiPersonalization.hideTaskViewButton')}</span>
-            </label>
-            <div>
-              <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.taskbarSearch')}</label>
-              <fluent-select id="config-taskbar-search" style="width: 100%;">
-                <fluent-option value="hide" ${st.taskbarSearch === 'hide' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchHide')}</fluent-option>
-                <fluent-option value="icon" ${st.taskbarSearch === 'icon' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchIcon')}</fluent-option>
-                <fluent-option value="box" ${st.taskbarSearch === 'box' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchBox')}</fluent-option>
-                <fluent-option value="label" ${st.taskbarSearch === 'label' ? 'selected' : ''}>${t('isoConfig.uiPersonalization.searchLabel')}</fluent-option>
-              </fluent-select>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${taskbarOptionsHtml}
+      ${taskbarSearchCardHtml}
+      ${startTilesRadioHtml}
+      ${startPinsRadioHtml}
     `
 
-    const leftTaskbarCheck = contentDiv.querySelector('input[type="checkbox"]') as HTMLInputElement
-    if (leftTaskbarCheck) {
-      leftTaskbarCheck.addEventListener('change', (e: any) => {
-        this.updateModule('startMenuTaskbar', { leftTaskbar: e.target.checked })
+    // === 事件监听设置 ===
+
+    // 1. Taskbar options
+    setupComboContainer('taskbar-options-container', 'taskbar-options', (values) => {
+      this.updateModule('startMenuTaskbar', values as Partial<StartMenuTaskbarSettings>)
+    }, true)
+
+    // 2. Taskbar search
+    setupComboCard('taskbar-search-card', (value) => {
+      this.updateModule('startMenuTaskbar', { taskbarSearch: value as 'hide' | 'icon' | 'box' | 'label' })
+    })
+
+    // 3. Start tiles mode
+    setupRadioContainer('start-tiles-container', 'start-tiles-mode', (value) => {
+      this.updateModule('startMenuTaskbar', { startTilesMode: value as 'default' | 'empty' | 'custom' })
+      this.renderStartTaskbar()
+    }, true)
+
+    if (st.startTilesMode === 'custom') {
+      setupTextCard('start-tiles-xml-card', (value) => {
+        this.updateModule('startMenuTaskbar', { startTilesXml: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('start-tiles-xml-card', content)
+            this.updateModule('startMenuTaskbar', { startTilesXml: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml'] }],
+            defaultPath: 'start-tiles.xml'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('start-tiles-xml-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
       })
     }
 
-    const hideTaskViewCheck = contentDiv.querySelectorAll('input[type="checkbox"]')[1] as HTMLInputElement
-    if (hideTaskViewCheck) {
-      hideTaskViewCheck.addEventListener('change', (e: any) => {
-        this.updateModule('startMenuTaskbar', { hideTaskViewButton: e.target.checked })
+    // 4. Start pins mode
+    setupRadioContainer('start-pins-container', 'start-pins-mode', (value) => {
+      this.updateModule('startMenuTaskbar', { startPinsMode: value as 'default' | 'empty' | 'custom' })
+      this.renderStartTaskbar()
+    }, true)
+
+    if (st.startPinsMode === 'custom') {
+      setupTextCard('start-pins-json-card', (value) => {
+        this.updateModule('startMenuTaskbar', { startPinsJson: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'JSON Files', extensions: ['json', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('start-pins-json-card', content)
+            this.updateModule('startMenuTaskbar', { startPinsJson: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'JSON Files', extensions: ['json'] }],
+            defaultPath: 'start-pins.json'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('start-pins-json-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
       })
     }
 
-    const searchSelect = contentDiv.querySelector('#config-taskbar-search') as any
-    if (searchSelect) {
-      searchSelect.addEventListener('change', (e: any) => {
-        this.updateModule('startMenuTaskbar', { taskbarSearch: e.target.value })
-      })
-    }
-
+    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }
@@ -2694,212 +3009,131 @@ End If`,
     const express = this.config.expressSettings
     const preset = this.getPresetData()
 
+    // 1. System Tweaks - MultiColumnCheckboxContainer (非嵌入式，显示头部)
+    const systemTweaksHtml = createMultiColumnCheckboxContainer({
+      id: 'system-tweaks-container',
+      name: 'system-tweaks',
+      title: t('isoConfig.systemOptimization.systemTweaks'),
+      description: '',
+      icon: 'settings',
+      options: [
+        { value: 'enableLongPaths', label: t('isoConfig.systemOptimization.enableLongPaths') },
+        { value: 'enableRemoteDesktop', label: t('isoConfig.systemOptimization.enableRemoteDesktop') },
+        { value: 'hardenSystemDriveAcl', label: t('isoConfig.systemOptimization.hardenSystemDriveAcl') },
+        { value: 'deleteJunctions', label: t('isoConfig.systemOptimization.deleteJunctions') },
+        { value: 'allowPowerShellScripts', label: t('isoConfig.systemOptimization.allowPowerShellScripts') },
+        { value: 'disableLastAccess', label: t('isoConfig.systemOptimization.disableLastAccess') },
+        { value: 'preventAutomaticReboot', label: t('isoConfig.systemOptimization.preventAutomaticReboot') },
+        { value: 'disableDefender', label: t('isoConfig.systemOptimization.disableDefender') },
+        { value: 'disableSac', label: t('isoConfig.systemOptimization.disableSac') },
+        { value: 'disableUac', label: t('isoConfig.systemOptimization.disableUac') },
+        { value: 'disableSmartScreen', label: t('isoConfig.systemOptimization.disableSmartScreen') },
+        { value: 'disableSystemRestore', label: t('isoConfig.systemOptimization.disableSystemRestore') },
+        { value: 'disableFastStartup', label: t('isoConfig.systemOptimization.disableFastStartup') },
+        { value: 'turnOffSystemSounds', label: t('isoConfig.systemOptimization.turnOffSystemSounds') },
+        { value: 'disableAppSuggestions', label: t('isoConfig.systemOptimization.disableAppSuggestions') },
+        { value: 'disableWidgets', label: t('isoConfig.systemOptimization.disableWidgets') },
+        { value: 'preventDeviceEncryption', label: t('isoConfig.systemOptimization.preventDeviceEncryption') },
+        { value: 'classicContextMenu', label: t('isoConfig.systemOptimization.classicContextMenu') },
+        { value: 'disableWindowsUpdate', label: t('isoConfig.systemOptimization.disableWindowsUpdate') },
+        { value: 'disablePointerPrecision', label: t('isoConfig.systemOptimization.disablePointerPrecision') },
+        { value: 'deleteWindowsOld', label: t('isoConfig.systemOptimization.deleteWindowsOld') },
+        { value: 'disableCoreIsolation', label: t('isoConfig.systemOptimization.disableCoreIsolation') },
+        { value: 'showEndTask', label: t('isoConfig.systemOptimization.showEndTask') }
+      ],
+      values: {
+        enableLongPaths: tweaks.enableLongPaths || false,
+        enableRemoteDesktop: tweaks.enableRemoteDesktop || false,
+        hardenSystemDriveAcl: tweaks.hardenSystemDriveAcl || false,
+        deleteJunctions: tweaks.deleteJunctions || false,
+        allowPowerShellScripts: tweaks.allowPowerShellScripts || false,
+        disableLastAccess: tweaks.disableLastAccess || false,
+        preventAutomaticReboot: tweaks.preventAutomaticReboot || false,
+        disableDefender: tweaks.disableDefender || false,
+        disableSac: tweaks.disableSac || false,
+        disableUac: tweaks.disableUac || false,
+        disableSmartScreen: tweaks.disableSmartScreen || false,
+        disableSystemRestore: tweaks.disableSystemRestore || false,
+        disableFastStartup: tweaks.disableFastStartup || false,
+        turnOffSystemSounds: tweaks.turnOffSystemSounds || false,
+        disableAppSuggestions: tweaks.disableAppSuggestions || false,
+        disableWidgets: tweaks.disableWidgets || false,
+        preventDeviceEncryption: tweaks.preventDeviceEncryption || false,
+        classicContextMenu: tweaks.classicContextMenu || false,
+        disableWindowsUpdate: tweaks.disableWindowsUpdate || false,
+        disablePointerPrecision: tweaks.disablePointerPrecision || false,
+        deleteWindowsOld: tweaks.deleteWindowsOld || false,
+        disableCoreIsolation: tweaks.disableCoreIsolation || false,
+        showEndTask: tweaks.showEndTask || false
+      },
+      expanded: false,
+      showHeader: true, // 非嵌入式，显示头部
+      minColumnWidth: 200,
+      maxColumns: 4 // 限制最大列数，确保文本完整显示
+    })
+
+    // 2. Remove Bloatware - MultiColumnCheckboxContainer (非嵌入式，显示头部)
+    // 先构建选项和值
+    const bloatwareOptions = preset.bloatwareItems.map(item => ({
+      value: item,
+      label: item
+    }))
+    const bloatwareValues: Record<string, boolean> = {}
+    preset.bloatwareItems.forEach(item => {
+      bloatwareValues[item] = bloatware.items.includes(item)
+    })
+
+    const removeBloatwareHtml = createMultiColumnCheckboxContainer({
+      id: 'remove-bloatware-container',
+      name: 'remove-bloatware',
+      title: t('isoConfig.systemOptimization.removeBloatware'),
+      description: '',
+      icon: 'trash-2',
+      options: bloatwareOptions,
+      values: bloatwareValues,
+      expanded: false,
+      showHeader: true, // 非嵌入式，显示头部
+      minColumnWidth: 180,
+      maxColumns: 4 // 限制最大列数，确保文本完整显示
+    })
+
+    // 3. Express Settings - ComboCard select
+    const expressSettingsCardHtml = createComboCard({
+      id: 'express-settings-card',
+      title: t('isoConfig.systemOptimization.expressSettings'),
+      description: '',
+      icon: 'shield-check',
+      controlType: 'select',
+      options: [
+        { value: 'interactive', label: t('isoConfig.systemOptimization.expressInteractive') },
+        { value: 'enableAll', label: t('isoConfig.systemOptimization.expressEnableAll') },
+        { value: 'disableAll', label: t('isoConfig.systemOptimization.expressDisableAll') }
+      ],
+      value: express || 'interactive'
+    })
+
     contentDiv.innerHTML = `
-      <div class="card-expandable expanded">
-        <div class="card-expandable-header">
-          <div class="card-expandable-header-left">
-            <i data-lucide="settings" class="card-icon"></i>
-            <div class="card-expandable-title">${t('isoConfig.systemOptimization.systemTweaks')}</div>
-          </div>
-          <div class="card-expandable-arrow">
-            <i data-lucide="chevron-down"></i>
-          </div>
-        </div>
-        <div class="card-expandable-content">
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px;">
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="enableLongPaths" ${tweaks.enableLongPaths ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.enableLongPaths')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="enableRemoteDesktop" ${tweaks.enableRemoteDesktop ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.enableRemoteDesktop')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="hardenSystemDriveAcl" ${tweaks.hardenSystemDriveAcl ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.hardenSystemDriveAcl')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="deleteJunctions" ${tweaks.deleteJunctions ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.deleteJunctions')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="allowPowerShellScripts" ${tweaks.allowPowerShellScripts ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.allowPowerShellScripts')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableLastAccess" ${tweaks.disableLastAccess ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableLastAccess')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="preventAutomaticReboot" ${tweaks.preventAutomaticReboot ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.preventAutomaticReboot')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableDefender" ${tweaks.disableDefender ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableDefender')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableSac" ${tweaks.disableSac ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableSac')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableUac" ${tweaks.disableUac ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableUac')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableSmartScreen" ${tweaks.disableSmartScreen ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableSmartScreen')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableSystemRestore" ${tweaks.disableSystemRestore ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableSystemRestore')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableFastStartup" ${tweaks.disableFastStartup ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableFastStartup')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="turnOffSystemSounds" ${tweaks.turnOffSystemSounds ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.turnOffSystemSounds')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableAppSuggestions" ${tweaks.disableAppSuggestions ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableAppSuggestions')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableWidgets" ${tweaks.disableWidgets ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableWidgets')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="preventDeviceEncryption" ${tweaks.preventDeviceEncryption ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.preventDeviceEncryption')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="classicContextMenu" ${tweaks.classicContextMenu ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.classicContextMenu')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableWindowsUpdate" ${tweaks.disableWindowsUpdate ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableWindowsUpdate')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disablePointerPrecision" ${tweaks.disablePointerPrecision ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disablePointerPrecision')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="deleteWindowsOld" ${tweaks.deleteWindowsOld ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.deleteWindowsOld')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="disableCoreIsolation" ${tweaks.disableCoreIsolation ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.disableCoreIsolation')}</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" class="tweak-checkbox" data-key="showEndTask" ${tweaks.showEndTask ? 'checked' : ''}>
-              <span>${t('isoConfig.systemOptimization.showEndTask')}</span>
-            </label>
-          </div>
-        </div>
-      </div>
-      
-      <div class="card-expandable expanded">
-        <div class="card-expandable-header">
-          <div class="card-expandable-header-left">
-            <i data-lucide="trash-2" class="card-icon"></i>
-            <div class="card-expandable-title">${t('isoConfig.systemOptimization.removeBloatware')}</div>
-          </div>
-          <div class="card-expandable-arrow">
-            <i data-lucide="chevron-down"></i>
-          </div>
-        </div>
-        <div class="card-expandable-content">
-          <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-            <fluent-button id="config-bloatware-select-all" appearance="outline">${t('common.selectAll')}</fluent-button>
-            <fluent-button id="config-bloatware-deselect-all" appearance="outline">${t('common.deselectAll')}</fluent-button>
-          </div>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-            ${preset.bloatwareItems.map(item => `
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" class="bloatware-item" value="${item}" ${bloatware.items.includes(item) ? 'checked' : ''}>
-                <span>${item}</span>
-              </label>
-            `).join('')}
-          </div>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-left">
-          <i data-lucide="shield-check" class="card-icon"></i>
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.systemOptimization.expressSettings')}</div>
-            <div style="display: flex; gap: 20px; margin-top: 10px;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="express-settings-mode" value="interactive" ${express === 'interactive' ? 'checked' : ''}>
-                <span>${t('isoConfig.systemOptimization.expressInteractive')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="express-settings-mode" value="enableAll" ${express === 'enableAll' ? 'checked' : ''}>
-                <span>${t('isoConfig.systemOptimization.expressEnableAll')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="express-settings-mode" value="disableAll" ${express === 'disableAll' ? 'checked' : ''}>
-                <span>${t('isoConfig.systemOptimization.expressDisableAll')}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${systemTweaksHtml}
+      ${removeBloatwareHtml}
+      ${expressSettingsCardHtml}
     `
 
-    // System tweaks事件监听
-    contentDiv.querySelectorAll('.tweak-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e: any) => {
-        const key = e.target.dataset.key
-        this.updateModule('systemTweaks', { [key]: e.target.checked })
-      })
-    })
+    // === 事件监听设置 ===
 
-    // Bloatware事件监听
-    const selectAllBtn = contentDiv.querySelector('#config-bloatware-select-all')
-    const deselectAllBtn = contentDiv.querySelector('#config-bloatware-deselect-all')
-    const bloatwareCheckboxes = contentDiv.querySelectorAll('.bloatware-item')
+    // 1. System Tweaks
+    setupMultiColumnCheckboxContainer('system-tweaks-container', 'system-tweaks', (values) => {
+      this.updateModule('systemTweaks', values as Partial<SystemTweaks>)
+    }, true)
 
-    if (selectAllBtn) {
-      selectAllBtn.addEventListener('click', () => {
-        const allItems = preset.bloatwareItems.map(i => i)
-        this.updateModule('bloatware', { items: allItems })
-        this.renderSystemOptimization()
-      })
-    }
+    // 2. Remove Bloatware
+    setupMultiColumnCheckboxContainer('remove-bloatware-container', 'remove-bloatware', (values) => {
+      const items = Object.keys(values).filter(key => values[key] === true)
+      this.updateModule('bloatware', { items })
+    }, true)
 
-    if (deselectAllBtn) {
-      deselectAllBtn.addEventListener('click', () => {
-        this.updateModule('bloatware', { items: [] })
-        this.renderSystemOptimization()
-      })
-    }
-
-    bloatwareCheckboxes.forEach(cb => {
-      cb.addEventListener('change', (e: any) => {
-        const item = e.target.value
-        const items = [...bloatware.items]
-        if (e.target.checked) {
-          if (!items.includes(item)) items.push(item)
-        } else {
-          const idx = items.indexOf(item)
-          if (idx > -1) items.splice(idx, 1)
-        }
-        this.updateModule('bloatware', { items })
-      })
-    })
-
-    // Express settings事件监听
-    contentDiv.querySelectorAll('input[name="express-settings-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateConfig({ expressSettings: e.target.value as ExpressSettingsMode })
-      })
+    // 3. Express Settings
+    setupComboCard('express-settings-card', (value) => {
+      this.updateConfig({ expressSettings: value as ExpressSettingsMode })
     })
 
     // 初始化图标
@@ -2912,16 +3146,115 @@ End If`,
   private renderVisualEffects() {
     const contentDiv = this.getSectionContent('config-visual-effects')
     if (!contentDiv) return
+
+    const ve = this.config.visualEffects
+
+    // Visual Effects Mode - RadioContainer (嵌套多列Checkbox容器)
+    const visualEffectsRadioHtml = createRadioContainer({
+      id: 'visual-effects-container',
+      name: 'visual-effects-mode',
+      title: t('isoConfig.uiPersonalization.visualEffects'),
+      description: '',
+      icon: 'sparkles',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.visualEffectsDefault'),
+          description: ''
+        },
+        {
+          value: 'appearance',
+          label: t('isoConfig.uiPersonalization.visualEffectsAppearance'),
+          description: ''
+        },
+        {
+          value: 'performance',
+          label: t('isoConfig.uiPersonalization.visualEffectsPerformance'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.visualEffectsCustom'),
+          description: '',
+          nestedCards: [
+            {
+              type: 'multiColumnCheckbox',
+              config: {
+                id: 'visual-effects-options-container',
+                name: 'visual-effects-options',
+                options: [
+                  { value: 'controlAnimations', label: t('isoConfig.uiPersonalization.controlAnimations') },
+                  { value: 'animateMinMax', label: t('isoConfig.uiPersonalization.animateMinMax') },
+                  { value: 'taskbarAnimations', label: t('isoConfig.uiPersonalization.taskbarAnimations') },
+                  { value: 'dwmAeroPeekEnabled', label: t('isoConfig.uiPersonalization.dwmAeroPeekEnabled') },
+                  { value: 'menuAnimation', label: t('isoConfig.uiPersonalization.menuAnimation') },
+                  { value: 'tooltipAnimation', label: t('isoConfig.uiPersonalization.tooltipAnimation') },
+                  { value: 'selectionFade', label: t('isoConfig.uiPersonalization.selectionFade') },
+                  { value: 'dwmSaveThumbnailEnabled', label: t('isoConfig.uiPersonalization.dwmSaveThumbnailEnabled') },
+                  { value: 'cursorShadow', label: t('isoConfig.uiPersonalization.cursorShadow') },
+                  { value: 'listviewShadow', label: t('isoConfig.uiPersonalization.listviewShadow') },
+                  { value: 'thumbnailsOrIcon', label: t('isoConfig.uiPersonalization.thumbnailsOrIcon') },
+                  { value: 'listviewAlphaSelect', label: t('isoConfig.uiPersonalization.listviewAlphaSelect') },
+                  { value: 'dragFullWindows', label: t('isoConfig.uiPersonalization.dragFullWindows') },
+                  { value: 'comboBoxAnimation', label: t('isoConfig.uiPersonalization.comboBoxAnimation') },
+                  { value: 'fontSmoothing', label: t('isoConfig.uiPersonalization.fontSmoothing') },
+                  { value: 'listBoxSmoothScrolling', label: t('isoConfig.uiPersonalization.listBoxSmoothScrolling') },
+                  { value: 'dropShadow', label: t('isoConfig.uiPersonalization.dropShadow') }
+                ],
+                values: {
+                  controlAnimations: ve.controlAnimations || false,
+                  animateMinMax: ve.animateMinMax || false,
+                  taskbarAnimations: ve.taskbarAnimations || false,
+                  dwmAeroPeekEnabled: ve.dwmAeroPeekEnabled || false,
+                  menuAnimation: ve.menuAnimation || false,
+                  tooltipAnimation: ve.tooltipAnimation || false,
+                  selectionFade: ve.selectionFade || false,
+                  dwmSaveThumbnailEnabled: ve.dwmSaveThumbnailEnabled || false,
+                  cursorShadow: ve.cursorShadow || false,
+                  listviewShadow: ve.listviewShadow || false,
+                  thumbnailsOrIcon: ve.thumbnailsOrIcon || false,
+                  listviewAlphaSelect: ve.listviewAlphaSelect || false,
+                  dragFullWindows: ve.dragFullWindows || false,
+                  comboBoxAnimation: ve.comboBoxAnimation || false,
+                  fontSmoothing: ve.fontSmoothing || false,
+                  listBoxSmoothScrolling: ve.listBoxSmoothScrolling || false,
+                  dropShadow: ve.dropShadow || false
+                },
+                showHeader: false, // 嵌入模式，隐藏头部
+                minColumnWidth: 140,
+                maxColumns: 3 // 限制最大列数为3，确保文本完整显示
+              }
+            }
+          ]
+        }
+      ],
+      selectedValue: ve.mode || 'default',
+      expanded: false
+    })
+
     contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.uiPersonalization.visualEffects')}</div>
-            <div class="card-description" style="margin-top: 8px;">${t('isoConfig.uiPersonalization.visualEffectsDesc')}</div>
-          </div>
-        </div>
-      </div>
+      ${visualEffectsRadioHtml}
     `
+
+    // === 事件监听设置 ===
+
+    // 1. Visual Effects mode
+    setupRadioContainer('visual-effects-container', 'visual-effects-mode', (value) => {
+      this.updateModule('visualEffects', { mode: value as 'default' | 'appearance' | 'performance' | 'custom' })
+      this.renderVisualEffects()
+    }, true)
+
+    // 2. Custom effects options (仅在custom模式下设置)
+    if (ve.mode === 'custom') {
+      setupMultiColumnCheckboxContainer('visual-effects-options-container', 'visual-effects-options', (values) => {
+        this.updateModule('visualEffects', values as Partial<VisualEffects>)
+      }, false) // 不更新头部值（因为已隐藏头部）
+    }
+
+    // 初始化图标
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
   }
 
   // 渲染模块18: Desktop icons
@@ -2931,31 +3264,111 @@ End If`,
 
     const icons = this.config.desktopIcons
 
+    // 1. Delete Edge Desktop Icon - ComboCard switch
+    const deleteEdgeIconCardHtml = createComboCard({
+      id: 'delete-edge-desktop-icon-card',
+      title: t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon'),
+      description: '',
+      icon: 'trash-2',
+      controlType: 'switch',
+      value: icons.deleteEdgeDesktopIcon || false
+    })
+
+    // 2. Desktop Icons Mode - RadioContainer (嵌套)
+    const desktopIconsRadioHtml = createRadioContainer({
+      id: 'desktop-icons-container',
+      name: 'desktop-icons-mode',
+      title: t('isoConfig.uiPersonalization.desktopIcons'),
+      description: '',
+      icon: 'layout-grid',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.defaultIcons'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.customIcons'),
+          description: ''
+        }
+      ],
+      selectedValue: icons.mode || 'default',
+      expanded: false
+    })
+
+    // 3. Custom Desktop Icons - ComboContainer (仅在custom模式下显示)
+    const customIconsHtml = icons.mode === 'custom'
+      ? createComboContainer({
+        id: 'desktop-icons-options-container',
+        name: 'desktop-icons-options',
+        title: '',
+        description: '',
+        icon: '',
+        options: [
+          { value: 'iconControlPanel', label: t('isoConfig.uiPersonalization.iconControlPanel'), description: '', controlType: 'checkbox' },
+          { value: 'iconDesktop', label: t('isoConfig.uiPersonalization.iconDesktop'), description: '', controlType: 'checkbox' },
+          { value: 'iconDocuments', label: t('isoConfig.uiPersonalization.iconDocuments'), description: '', controlType: 'checkbox' },
+          { value: 'iconDownloads', label: t('isoConfig.uiPersonalization.iconDownloads'), description: '', controlType: 'checkbox' },
+          { value: 'iconGallery', label: t('isoConfig.uiPersonalization.iconGallery'), description: '', controlType: 'checkbox' },
+          { value: 'iconHome', label: t('isoConfig.uiPersonalization.iconHome'), description: '', controlType: 'checkbox' },
+          { value: 'iconMusic', label: t('isoConfig.uiPersonalization.iconMusic'), description: '', controlType: 'checkbox' },
+          { value: 'iconNetwork', label: t('isoConfig.uiPersonalization.iconNetwork'), description: '', controlType: 'checkbox' },
+          { value: 'iconPictures', label: t('isoConfig.uiPersonalization.iconPictures'), description: '', controlType: 'checkbox' },
+          { value: 'iconRecycleBin', label: t('isoConfig.uiPersonalization.iconRecycleBin'), description: '', controlType: 'checkbox' },
+          { value: 'iconThisPC', label: t('isoConfig.uiPersonalization.iconThisPC'), description: '', controlType: 'checkbox' },
+          { value: 'iconUserFiles', label: t('isoConfig.uiPersonalization.iconUserFiles'), description: '', controlType: 'checkbox' },
+          { value: 'iconVideos', label: t('isoConfig.uiPersonalization.iconVideos'), description: '', controlType: 'checkbox' }
+        ],
+        values: {
+          iconControlPanel: icons.iconControlPanel || false,
+          iconDesktop: icons.iconDesktop || false,
+          iconDocuments: icons.iconDocuments || false,
+          iconDownloads: icons.iconDownloads || false,
+          iconGallery: icons.iconGallery || false,
+          iconHome: icons.iconHome || false,
+          iconMusic: icons.iconMusic || false,
+          iconNetwork: icons.iconNetwork || false,
+          iconPictures: icons.iconPictures || false,
+          iconRecycleBin: icons.iconRecycleBin || false,
+          iconThisPC: icons.iconThisPC || false,
+          iconUserFiles: icons.iconUserFiles || false,
+          iconVideos: icons.iconVideos || false
+        },
+        expanded: false
+      })
+      : ''
+
     contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.uiPersonalization.desktopIcons')}</div>
-            <div style="display: flex; gap: 20px; margin-top: 10px;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="desktop-icons-mode" value="default" ${icons.mode === 'default' ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.defaultIcons')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="desktop-icons-mode" value="custom" ${icons.mode === 'custom' ? 'checked' : ''}>
-                <span>${t('isoConfig.uiPersonalization.customIcons')}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${deleteEdgeIconCardHtml}
+      ${desktopIconsRadioHtml}
+      ${customIconsHtml}
     `
 
-    contentDiv.querySelectorAll('input[name="desktop-icons-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('desktopIcons', { mode: e.target.value })
-      })
+    // === 事件监听设置 ===
+
+    // 1. Delete Edge Desktop Icon
+    setupComboCard('delete-edge-desktop-icon-card', (value) => {
+      this.updateModule('desktopIcons', { deleteEdgeDesktopIcon: value as boolean })
     })
+
+    // 2. Desktop Icons mode
+    setupRadioContainer('desktop-icons-container', 'desktop-icons-mode', (value) => {
+      this.updateModule('desktopIcons', { mode: value as 'default' | 'custom' })
+      this.renderDesktopIcons()
+    }, true)
+
+    // 3. Custom icons options (仅在custom模式下设置)
+    if (icons.mode === 'custom') {
+      setupComboContainer('desktop-icons-options-container', 'desktop-icons-options', (values) => {
+        this.updateModule('desktopIcons', values as Partial<DesktopIconSettings>)
+      }, true)
+    }
+
+    // 初始化图标
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
   }
 
   // 渲染模块19: Folders on Start
@@ -2963,18 +3376,89 @@ End If`,
     const contentDiv = this.getSectionContent('config-folders-start')
     if (!contentDiv) return
 
-    // const folders = this.config.startFolders // TODO: 实现文件夹选择功能
+    const folders = this.config.startFolders
+
+    // Folders on Start Mode - RadioContainer (嵌套)
+    const foldersStartRadioHtml = createRadioContainer({
+      id: 'folders-start-container',
+      name: 'folders-start-mode',
+      title: t('isoConfig.uiPersonalization.foldersStart'),
+      description: t('isoConfig.uiPersonalization.foldersStartDesc'),
+      icon: 'folder',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.foldersStartDefault'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.foldersStartCustom'),
+          description: ''
+        }
+      ],
+      selectedValue: folders.mode || 'default',
+      expanded: false
+    })
+
+    // Custom Folders - ComboContainer (仅在custom模式下显示)
+    const customFoldersHtml = folders.mode === 'custom'
+      ? createComboContainer({
+        id: 'folders-start-options-container',
+        name: 'folders-start-options',
+        title: '',
+        description: '',
+        icon: '',
+        options: [
+          { value: 'startFolderDocuments', label: t('isoConfig.uiPersonalization.startFolderDocuments'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderDownloads', label: t('isoConfig.uiPersonalization.startFolderDownloads'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderFileExplorer', label: t('isoConfig.uiPersonalization.startFolderFileExplorer'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderMusic', label: t('isoConfig.uiPersonalization.startFolderMusic'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderNetwork', label: t('isoConfig.uiPersonalization.startFolderNetwork'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderPersonalFolder', label: t('isoConfig.uiPersonalization.startFolderPersonalFolder'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderPictures', label: t('isoConfig.uiPersonalization.startFolderPictures'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderSettings', label: t('isoConfig.uiPersonalization.startFolderSettings'), description: '', controlType: 'checkbox' },
+          { value: 'startFolderVideos', label: t('isoConfig.uiPersonalization.startFolderVideos'), description: '', controlType: 'checkbox' }
+        ],
+        values: {
+          startFolderDocuments: folders.startFolderDocuments || false,
+          startFolderDownloads: folders.startFolderDownloads || false,
+          startFolderFileExplorer: folders.startFolderFileExplorer || false,
+          startFolderMusic: folders.startFolderMusic || false,
+          startFolderNetwork: folders.startFolderNetwork || false,
+          startFolderPersonalFolder: folders.startFolderPersonalFolder || false,
+          startFolderPictures: folders.startFolderPictures || false,
+          startFolderSettings: folders.startFolderSettings || false,
+          startFolderVideos: folders.startFolderVideos || false
+        },
+        expanded: false
+      })
+      : ''
 
     contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.uiPersonalization.foldersStart')}</div>
-            <div class="card-description" style="margin-top: 8px;">${t('isoConfig.uiPersonalization.foldersStartDesc')}</div>
-          </div>
-        </div>
-      </div>
+      ${foldersStartRadioHtml}
+      ${customFoldersHtml}
     `
+
+    // === 事件监听设置 ===
+
+    // 1. Folders on Start mode
+    setupRadioContainer('folders-start-container', 'folders-start-mode', (value) => {
+      this.updateModule('startFolders', { mode: value as 'default' | 'custom' })
+      this.renderFoldersStart()
+    }, true)
+
+    // 2. Custom folders options (仅在custom模式下设置)
+    if (folders.mode === 'custom') {
+      setupComboContainer('folders-start-options-container', 'folders-start-options', (values) => {
+        this.updateModule('startFolders', values as Partial<StartFolderSettings>)
+      }, true)
+    }
+
+    // 初始化图标
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
   }
 
   // 渲染模块21: WLAN / Wi-Fi setup
@@ -3094,7 +3578,7 @@ End If`,
         }
       ],
       selectedValue: wifi.mode || 'interactive',
-      expanded: true
+      expanded: false
     })
 
     contentDiv.innerHTML = `
@@ -3173,48 +3657,157 @@ End If`,
 
     const lockKeys = this.config.lockKeys
 
-    contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.accessibility.lockKeys')}</div>
-            <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="lock-keys-mode" value="skip" ${lockKeys.mode === 'skip' ? 'checked' : ''}>
-                <span>${t('isoConfig.accessibility.lockKeysSkip')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="lock-keys-mode" value="configure" ${lockKeys.mode === 'configure' ? 'checked' : ''}>
-                <span>${t('isoConfig.accessibility.lockKeysConfigure')}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-      ${lockKeys.mode === 'configure' ? `
-        <div class="card-expandable expanded">
-          <div class="card-expandable-header">
-            <div class="card-expandable-header-left">
-              <div class="card-expandable-title">${t('isoConfig.accessibility.lockKeyConfig')}</div>
-            </div>
-            <div class="card-expandable-arrow">
-              <i data-lucide="chevron-down"></i>
-            </div>
-          </div>
-          <div class="card-expandable-content">
-            <div class="card-description">${t('isoConfig.accessibility.lockKeyConfigDesc')}</div>
-          </div>
-        </div>
-      ` : ''}
-    `
-
-    contentDiv.querySelectorAll('input[name="lock-keys-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('lockKeys', { mode: e.target.value })
-        this.renderLockKeys()
-      })
+    // Lock Keys Mode - RadioContainer
+    const lockKeysRadioHtml = createRadioContainer({
+      id: 'lock-keys-container',
+      name: 'lock-keys-mode',
+      title: t('isoConfig.accessibility.lockKeys'),
+      description: '',
+      icon: 'keyboard',
+      options: [
+        {
+          value: 'skip',
+          label: t('isoConfig.accessibility.lockKeysSkip'),
+          description: ''
+        },
+        {
+          value: 'configure',
+          label: t('isoConfig.accessibility.lockKeysConfigure'),
+          description: ''
+        }
+      ],
+      selectedValue: lockKeys.mode || 'skip',
+      expanded: false
     })
 
+    // Lock Keys Configuration Table (使用HTML，因为需要表格布局)
+    const lockKeysTableHtml = lockKeys.mode === 'configure'
+      ? `<div class="card">
+          <div class="card-left">
+            <i data-lucide="settings" class="card-icon"></i>
+            <div class="card-content">
+              <div class="card-title">${t('isoConfig.accessibility.lockKeyConfig')}</div>
+              <div class="card-description" style="margin-top: 8px; margin-bottom: 12px;">${t('isoConfig.accessibility.lockKeyConfigDesc')}</div>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="text-align: left; padding: 8px; font-weight: 600;">${t('isoConfig.accessibility.lockKeyKey')}</th>
+                    <th style="text-align: left; padding: 8px; font-weight: 600;">${t('isoConfig.accessibility.lockKeyInitialState')}</th>
+                    <th style="text-align: left; padding: 8px; font-weight: 600;">${t('isoConfig.accessibility.lockKeyBehavior')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 8px;">${t('isoConfig.accessibility.lockKeyCapsLock')}</td>
+                    <td style="padding: 8px;">
+                      <fluent-select id="config-caps-lock-initial" style="width: 100%;">
+                        <fluent-option value="off" ${lockKeys.capsLockInitial === 'off' || !lockKeys.capsLockInitial ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOff')}</fluent-option>
+                        <fluent-option value="on" ${lockKeys.capsLockInitial === 'on' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOn')}</fluent-option>
+                      </fluent-select>
+                    </td>
+                    <td style="padding: 8px;">
+                      <fluent-select id="config-caps-lock-behavior" style="width: 100%;">
+                        <fluent-option value="toggle" ${lockKeys.capsLockBehavior === 'toggle' || !lockKeys.capsLockBehavior ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyToggle')}</fluent-option>
+                        <fluent-option value="ignore" ${lockKeys.capsLockBehavior === 'ignore' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyIgnore')}</fluent-option>
+                      </fluent-select>
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 8px;">${t('isoConfig.accessibility.lockKeyNumLock')}</td>
+                    <td style="padding: 8px;">
+                      <fluent-select id="config-num-lock-initial" style="width: 100%;">
+                        <fluent-option value="off" ${lockKeys.numLockInitial === 'off' || !lockKeys.numLockInitial ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOff')}</fluent-option>
+                        <fluent-option value="on" ${lockKeys.numLockInitial === 'on' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOn')}</fluent-option>
+                      </fluent-select>
+                    </td>
+                    <td style="padding: 8px;">
+                      <fluent-select id="config-num-lock-behavior" style="width: 100%;">
+                        <fluent-option value="toggle" ${lockKeys.numLockBehavior === 'toggle' || !lockKeys.numLockBehavior ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyToggle')}</fluent-option>
+                        <fluent-option value="ignore" ${lockKeys.numLockBehavior === 'ignore' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyIgnore')}</fluent-option>
+                      </fluent-select>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px;">${t('isoConfig.accessibility.lockKeyScrollLock')}</td>
+                    <td style="padding: 8px;">
+                      <fluent-select id="config-scroll-lock-initial" style="width: 100%;">
+                        <fluent-option value="off" ${lockKeys.scrollLockInitial === 'off' || !lockKeys.scrollLockInitial ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOff')}</fluent-option>
+                        <fluent-option value="on" ${lockKeys.scrollLockInitial === 'on' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyOn')}</fluent-option>
+                      </fluent-select>
+                    </td>
+                    <td style="padding: 8px;">
+                      <fluent-select id="config-scroll-lock-behavior" style="width: 100%;">
+                        <fluent-option value="toggle" ${lockKeys.scrollLockBehavior === 'toggle' || !lockKeys.scrollLockBehavior ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyToggle')}</fluent-option>
+                        <fluent-option value="ignore" ${lockKeys.scrollLockBehavior === 'ignore' ? 'selected' : ''}>${t('isoConfig.accessibility.lockKeyIgnore')}</fluent-option>
+                      </fluent-select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>`
+      : ''
+
+    contentDiv.innerHTML = `
+      ${lockKeysRadioHtml}
+      ${lockKeysTableHtml}
+    `
+
+    // === 事件监听设置 ===
+
+    // 1. Lock Keys mode
+    setupRadioContainer('lock-keys-container', 'lock-keys-mode', (value) => {
+      this.updateModule('lockKeys', { mode: value as 'skip' | 'configure' })
+      this.renderLockKeys()
+    }, true)
+
+    // 2. Lock Keys configuration (仅在configure模式下设置)
+    if (lockKeys.mode === 'configure') {
+      const capsLockInitial = contentDiv.querySelector('#config-caps-lock-initial') as any
+      if (capsLockInitial) {
+        capsLockInitial.addEventListener('change', (e: any) => {
+          this.updateModule('lockKeys', { capsLockInitial: e.target.value as 'off' | 'on' })
+        })
+      }
+
+      const capsLockBehavior = contentDiv.querySelector('#config-caps-lock-behavior') as any
+      if (capsLockBehavior) {
+        capsLockBehavior.addEventListener('change', (e: any) => {
+          this.updateModule('lockKeys', { capsLockBehavior: e.target.value as 'toggle' | 'ignore' })
+        })
+      }
+
+      const numLockInitial = contentDiv.querySelector('#config-num-lock-initial') as any
+      if (numLockInitial) {
+        numLockInitial.addEventListener('change', (e: any) => {
+          this.updateModule('lockKeys', { numLockInitial: e.target.value as 'off' | 'on' })
+        })
+      }
+
+      const numLockBehavior = contentDiv.querySelector('#config-num-lock-behavior') as any
+      if (numLockBehavior) {
+        numLockBehavior.addEventListener('change', (e: any) => {
+          this.updateModule('lockKeys', { numLockBehavior: e.target.value as 'toggle' | 'ignore' })
+        })
+      }
+
+      const scrollLockInitial = contentDiv.querySelector('#config-scroll-lock-initial') as any
+      if (scrollLockInitial) {
+        scrollLockInitial.addEventListener('change', (e: any) => {
+          this.updateModule('lockKeys', { scrollLockInitial: e.target.value as 'off' | 'on' })
+        })
+      }
+
+      const scrollLockBehavior = contentDiv.querySelector('#config-scroll-lock-behavior') as any
+      if (scrollLockBehavior) {
+        scrollLockBehavior.addEventListener('change', (e: any) => {
+          this.updateModule('lockKeys', { scrollLockBehavior: e.target.value as 'toggle' | 'ignore' })
+        })
+      }
+    }
+
+    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }
@@ -3227,35 +3820,86 @@ End If`,
 
     const sticky = this.config.stickyKeys
 
+    // Sticky Keys Mode - RadioContainer (嵌套)
+    const stickyKeysRadioHtml = createRadioContainer({
+      id: 'sticky-keys-container',
+      name: 'sticky-keys-mode',
+      title: t('isoConfig.accessibility.stickyKeys'),
+      description: t('isoConfig.accessibility.stickyKeysDesc'),
+      icon: 'keyboard',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.accessibility.stickyKeysDefault'),
+          description: ''
+        },
+        {
+          value: 'disabled',
+          label: t('isoConfig.accessibility.stickyKeysDisabled'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.accessibility.stickyKeysCustom'),
+          description: ''
+        }
+      ],
+      selectedValue: sticky.mode || 'default',
+      expanded: false
+    })
+
+    // Custom Sticky Keys Options - ComboContainer (仅在custom模式下显示)
+    const customStickyKeysHtml = sticky.mode === 'custom'
+      ? createComboContainer({
+        id: 'sticky-keys-options-container',
+        name: 'sticky-keys-options',
+        title: '',
+        description: '',
+        icon: '',
+        options: [
+          { value: 'stickyKeysHotKeyActive', label: t('isoConfig.accessibility.stickyKeysHotKeyActive'), description: '', controlType: 'checkbox' },
+          { value: 'stickyKeysHotKeySound', label: t('isoConfig.accessibility.stickyKeysHotKeySound'), description: '', controlType: 'checkbox' },
+          { value: 'stickyKeysIndicator', label: t('isoConfig.accessibility.stickyKeysIndicator'), description: '', controlType: 'checkbox' },
+          { value: 'stickyKeysAudibleFeedback', label: t('isoConfig.accessibility.stickyKeysAudibleFeedback'), description: '', controlType: 'checkbox' },
+          { value: 'stickyKeysTriState', label: t('isoConfig.accessibility.stickyKeysTriState'), description: '', controlType: 'checkbox' },
+          { value: 'stickyKeysTwoKeysOff', label: t('isoConfig.accessibility.stickyKeysTwoKeysOff'), description: '', controlType: 'checkbox' }
+        ],
+        values: {
+          stickyKeysHotKeyActive: sticky.stickyKeysHotKeyActive || false,
+          stickyKeysHotKeySound: sticky.stickyKeysHotKeySound || false,
+          stickyKeysIndicator: sticky.stickyKeysIndicator || false,
+          stickyKeysAudibleFeedback: sticky.stickyKeysAudibleFeedback || false,
+          stickyKeysTriState: sticky.stickyKeysTriState || false,
+          stickyKeysTwoKeysOff: sticky.stickyKeysTwoKeysOff || false
+        },
+        expanded: false
+      })
+      : ''
+
     contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">${t('isoConfig.accessibility.stickyKeys')}</div>
-            <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="sticky-keys-mode" value="default" ${sticky.mode === 'default' ? 'checked' : ''}>
-                <span>${t('isoConfig.accessibility.stickyKeysDefault')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="sticky-keys-mode" value="disabled" ${sticky.mode === 'disabled' ? 'checked' : ''}>
-                <span>${t('isoConfig.accessibility.stickyKeysDisabled')}</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="sticky-keys-mode" value="custom" ${sticky.mode === 'custom' ? 'checked' : ''}>
-                <span>${t('isoConfig.accessibility.stickyKeysCustom')}</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
+      ${stickyKeysRadioHtml}
+      ${customStickyKeysHtml}
     `
 
-    contentDiv.querySelectorAll('input[name="sticky-keys-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('stickyKeys', { mode: e.target.value })
-      })
-    })
+    // === 事件监听设置 ===
+
+    // 1. Sticky Keys mode
+    setupRadioContainer('sticky-keys-container', 'sticky-keys-mode', (value) => {
+      this.updateModule('stickyKeys', { mode: value as 'default' | 'disabled' | 'custom' })
+      this.renderStickyKeys()
+    }, true)
+
+    // 2. Custom sticky keys options (仅在custom模式下设置)
+    if (sticky.mode === 'custom') {
+      setupComboContainer('sticky-keys-options-container', 'sticky-keys-options', (values) => {
+        this.updateModule('stickyKeys', values as Partial<StickyKeysSettings>)
+      }, true)
+    }
+
+    // 初始化图标
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
   }
 
   // 渲染模块25: Personalization settings
@@ -3265,139 +3909,301 @@ End If`,
 
     const pers = this.config.personalization
 
+    // 1. Colors - RadioContainer (嵌套)
+    const colorModeRadioHtml = createRadioContainer({
+      id: 'color-mode-container',
+      name: 'color-mode',
+      title: t('isoConfig.uiPersonalization.colorMode'),
+      description: t('isoConfig.uiPersonalization.personalizationDesc'),
+      icon: 'palette',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.colorDefault'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.colorCustom'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'system-color-theme-card',
+              title: t('isoConfig.uiPersonalization.systemColorTheme'),
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' }
+              ],
+              value: pers.systemColorTheme || 'light',
+              borderless: true
+            },
+            {
+              id: 'apps-color-theme-card',
+              title: t('isoConfig.uiPersonalization.appsColorTheme'),
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' }
+              ],
+              value: pers.appsColorTheme || 'light',
+              borderless: true
+            },
+            {
+              id: 'accent-color-card',
+              title: t('isoConfig.uiPersonalization.accentColor'),
+              description: '',
+              controlType: 'text',
+              value: pers.accentColor || '#0078D4',
+              placeholder: '#0078D4',
+              borderless: true
+            },
+            {
+              id: 'accent-color-on-start-card',
+              title: t('isoConfig.uiPersonalization.accentColorOnStart'),
+              description: '',
+              controlType: 'switch',
+              value: pers.accentColorOnStart || false,
+              borderless: true
+            },
+            {
+              id: 'accent-color-on-borders-card',
+              title: t('isoConfig.uiPersonalization.accentColorOnBorders'),
+              description: '',
+              controlType: 'switch',
+              value: pers.accentColorOnBorders || false,
+              borderless: true
+            },
+            {
+              id: 'enable-transparency-card',
+              title: t('isoConfig.uiPersonalization.enableTransparency'),
+              description: '',
+              controlType: 'switch',
+              value: pers.enableTransparency || false,
+              borderless: true
+            }
+          ]
+        }
+      ],
+      selectedValue: pers.colorMode || 'default',
+      expanded: false
+    })
+
+    // 2. Desktop Wallpaper - RadioContainer (嵌套)
+    const wallpaperModeRadioHtml = createRadioContainer({
+      id: 'wallpaper-mode-container',
+      name: 'wallpaper-mode',
+      title: t('isoConfig.uiPersonalization.wallpaperMode'),
+      description: '',
+      icon: 'image',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.wallpaperDefault'),
+          description: ''
+        },
+        {
+          value: 'solid',
+          label: t('isoConfig.uiPersonalization.wallpaperSolid'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'wallpaper-color-card',
+              title: t('isoConfig.uiPersonalization.wallpaperColor'),
+              description: '',
+              controlType: 'text',
+              value: pers.wallpaperColor || '#008080',
+              placeholder: '#008080',
+              borderless: true
+            }
+          ]
+        },
+        {
+          value: 'script',
+          label: t('isoConfig.uiPersonalization.wallpaperScript'),
+          description: t('isoConfig.uiPersonalization.wallpaperScriptDesc'),
+          nestedCards: [
+            {
+              id: 'wallpaper-script-card',
+              title: t('isoConfig.uiPersonalization.wallpaperPsScript'),
+              description: '',
+              icon: 'code',
+              value: pers.wallpaperScript || '',
+              placeholder: `$url = 'https://example.com/wallpaper.jpg';
+& {
+  $ProgressPreference = 'SilentlyContinue';
+  ( Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30 ).Content;
+};`,
+              rows: 8,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: pers.wallpaperMode || 'default',
+      expanded: false
+    })
+
+    // 3. Lock Screen - RadioContainer (嵌套)
+    const lockScreenModeRadioHtml = createRadioContainer({
+      id: 'lockscreen-mode-container',
+      name: 'lockscreen-mode',
+      title: t('isoConfig.uiPersonalization.lockScreenMode'),
+      description: '',
+      icon: 'lock',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.lockScreenDefault'),
+          description: ''
+        },
+        {
+          value: 'script',
+          label: t('isoConfig.uiPersonalization.lockScreenScript'),
+          description: t('isoConfig.uiPersonalization.lockScreenScriptDesc'),
+          nestedCards: [
+            {
+              id: 'lockscreen-script-card',
+              title: t('isoConfig.uiPersonalization.lockScreenPsScript'),
+              description: '',
+              icon: 'code',
+              value: pers.lockScreenScript || '',
+              placeholder: `foreach( $drive in [System.IO.DriveInfo]::GetDrives() ) {
+  if( $found = Join-Path -Path $drive.RootDirectory -ChildPath 'lockscreen.png' -Resolve -ErrorAction 'SilentlyContinue' ) {
+    return [System.IO.File]::ReadAllBytes( $found );
+  }
+}`,
+              rows: 8,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: pers.lockScreenMode || 'default',
+      expanded: false
+    })
+
     contentDiv.innerHTML = `
-      <div class="card-expandable expanded">
-        <div class="card-expandable-header">
-          <div class="card-expandable-header-left">
-            <div class="card-expandable-title">${t('isoConfig.uiPersonalization.personalization')}</div>
-          </div>
-          <div class="card-expandable-arrow">
-            <i data-lucide="chevron-down"></i>
-          </div>
-        </div>
-        <div class="card-expandable-content">
-          <div style="display: flex; flex-direction: column; gap: 16px;">
-            <div>
-              <div class="card-title">${t('isoConfig.uiPersonalization.wallpaper')}</div>
-              <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="wallpaper-mode" value="default" ${pers.wallpaperMode === 'default' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.wallpaperDefault')}</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="wallpaper-mode" value="solid" ${pers.wallpaperMode === 'solid' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.wallpaperSolid')}</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="wallpaper-mode" value="script" ${pers.wallpaperMode === 'script' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.wallpaperScript')}</span>
-                </label>
-              </div>
-              ${pers.wallpaperMode === 'solid' ? `
-                <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.wallpaperColor')}</label>
-                  <fluent-text-field id="config-wallpaper-color" value="${pers.wallpaperColor || '#000000'}" placeholder="#000000" style="width: 100%;"></fluent-text-field>
-                </div>
-              ` : ''}
-              ${pers.wallpaperMode === 'script' ? `
-                <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.wallpaperPsScript')}</label>
-                  <textarea id="config-wallpaper-script" style="width: 100%; min-height: 100px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${pers.wallpaperScript || ''}</textarea>
-                </div>
-              ` : ''}
-            </div>
-            <div>
-              <div class="card-title">${t('isoConfig.uiPersonalization.lockScreen')}</div>
-              <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="lockscreen-mode" value="default" ${pers.lockScreenMode === 'default' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.lockScreenDefault')}</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="lockscreen-mode" value="script" ${pers.lockScreenMode === 'script' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.lockScreenScript')}</span>
-                </label>
-              </div>
-              ${pers.lockScreenMode === 'script' ? `
-                <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.lockScreenPsScript')}</label>
-                  <textarea id="config-lockscreen-script" style="width: 100%; min-height: 100px; padding: 8px; font-family: monospace; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">${pers.lockScreenScript || ''}</textarea>
-                </div>
-              ` : ''}
-            </div>
-            <div>
-              <div class="card-title">${t('isoConfig.uiPersonalization.color')}</div>
-              <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="color-mode" value="default" ${pers.colorMode === 'default' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.colorDefault')}</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="radio" name="color-mode" value="custom" ${pers.colorMode === 'custom' ? 'checked' : ''}>
-                  <span>${t('isoConfig.uiPersonalization.colorCustom')}</span>
-                </label>
-              </div>
-              ${pers.colorMode === 'custom' ? `
-                <div style="margin-top: 12px;">
-                  <label style="display: block; margin-bottom: 6px; font-weight: 600;">${t('isoConfig.uiPersonalization.accentColor')}</label>
-                  <fluent-text-field id="config-accent-color" value="${pers.accentColor || '#0078d4'}" placeholder="#0078d4" style="width: 100%;"></fluent-text-field>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        </div>
-      </div>
+      ${colorModeRadioHtml}
+      ${wallpaperModeRadioHtml}
+      ${lockScreenModeRadioHtml}
     `
 
-    contentDiv.querySelectorAll('input[name="wallpaper-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('personalization', { wallpaperMode: e.target.value })
-        this.renderPersonalization()
-      })
-    })
+    // === 事件监听设置 ===
 
-    contentDiv.querySelectorAll('input[name="lockscreen-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('personalization', { lockScreenMode: e.target.value })
-        this.renderPersonalization()
-      })
-    })
+    // 1. Color mode
+    setupRadioContainer('color-mode-container', 'color-mode', (value) => {
+      this.updateModule('personalization', { colorMode: value as 'default' | 'custom' })
+      this.renderPersonalization()
+    }, true)
 
-    contentDiv.querySelectorAll('input[name="color-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('personalization', { colorMode: e.target.value })
-        this.renderPersonalization()
+    if (pers.colorMode === 'custom') {
+      setupComboCard('system-color-theme-card', (value) => {
+        this.updateModule('personalization', { systemColorTheme: value as 'dark' | 'light' })
       })
-    })
 
-    const wallpaperColorInput = contentDiv.querySelector('#config-wallpaper-color') as any
-    if (wallpaperColorInput) {
-      wallpaperColorInput.addEventListener('input', (e: any) => {
-        this.updateModule('personalization', { wallpaperColor: e.target.value })
+      setupComboCard('apps-color-theme-card', (value) => {
+        this.updateModule('personalization', { appsColorTheme: value as 'dark' | 'light' })
       })
-    }
 
-    const wallpaperScriptInput = contentDiv.querySelector('#config-wallpaper-script') as HTMLTextAreaElement
-    if (wallpaperScriptInput) {
-      wallpaperScriptInput.addEventListener('input', (e: any) => {
-        this.updateModule('personalization', { wallpaperScript: e.target.value })
+      setupComboCard('accent-color-card', (value) => {
+        this.updateModule('personalization', { accentColor: value as string })
       })
-    }
 
-    const lockscreenScriptInput = contentDiv.querySelector('#config-lockscreen-script') as HTMLTextAreaElement
-    if (lockscreenScriptInput) {
-      lockscreenScriptInput.addEventListener('input', (e: any) => {
-        this.updateModule('personalization', { lockScreenScript: e.target.value })
+      setupComboCard('accent-color-on-start-card', (value) => {
+        this.updateModule('personalization', { accentColorOnStart: value as boolean })
+      })
+
+      setupComboCard('accent-color-on-borders-card', (value) => {
+        this.updateModule('personalization', { accentColorOnBorders: value as boolean })
+      })
+
+      setupComboCard('enable-transparency-card', (value) => {
+        this.updateModule('personalization', { enableTransparency: value as boolean })
       })
     }
 
-    const accentColorInput = contentDiv.querySelector('#config-accent-color') as any
-    if (accentColorInput) {
-      accentColorInput.addEventListener('input', (e: any) => {
-        this.updateModule('personalization', { accentColor: e.target.value })
+    // 2. Wallpaper mode
+    setupRadioContainer('wallpaper-mode-container', 'wallpaper-mode', (value) => {
+      this.updateModule('personalization', { wallpaperMode: value as 'default' | 'solid' | 'script' })
+      this.renderPersonalization()
+    }, true)
+
+    if (pers.wallpaperMode === 'solid') {
+      setupComboCard('wallpaper-color-card', (value) => {
+        this.updateModule('personalization', { wallpaperColor: value as string })
       })
     }
 
+    if (pers.wallpaperMode === 'script') {
+      setupTextCard('wallpaper-script-card', (value) => {
+        this.updateModule('personalization', { wallpaperScript: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('wallpaper-script-card', content)
+            this.updateModule('personalization', { wallpaperScript: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
+            defaultPath: 'wallpaper.ps1'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('wallpaper-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    // 3. Lock Screen mode
+    setupRadioContainer('lockscreen-mode-container', 'lockscreen-mode', (value) => {
+      this.updateModule('personalization', { lockScreenMode: value as 'default' | 'script' })
+      this.renderPersonalization()
+    }, true)
+
+    if (pers.lockScreenMode === 'script') {
+      setupTextCard('lockscreen-script-card', (value) => {
+        this.updateModule('personalization', { lockScreenScript: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('lockscreen-script-card', content)
+            this.updateModule('personalization', { lockScreenScript: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
+            defaultPath: 'lockscreen.ps1'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('lockscreen-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }

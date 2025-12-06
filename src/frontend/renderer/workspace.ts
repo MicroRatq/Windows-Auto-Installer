@@ -13,7 +13,7 @@ export interface RadioContainerOption {
     value: string
     label: string
     description?: string
-    nestedCards?: ComboCardConfig[] // 嵌套的 ComboCard
+    nestedCards?: (ComboCardConfig | TextCardConfig | { type: 'multiColumnCheckbox', config: MultiColumnCheckboxConfig })[] // 嵌套的卡片，支持 ComboCard、TextCard 或多列Checkbox容器
 }
 
 export interface RadioContainerConfig {
@@ -91,6 +91,29 @@ export interface TextCardConfig {
 }
 
 // ========================================
+// 多列Checkbox容器控件（用于数量多、文本短的场景）
+// ========================================
+
+export interface MultiColumnCheckboxOption {
+    value: string
+    label: string
+}
+
+export interface MultiColumnCheckboxConfig {
+    id: string
+    name: string
+    title?: string // 标题可选（用于嵌入场景）
+    description?: string
+    icon?: string // 图标可选（用于嵌入场景）
+    options: MultiColumnCheckboxOption[]
+    values: Record<string, boolean> // 值映射：value -> boolean
+    expanded?: boolean // 是否默认展开
+    showHeader?: boolean // 是否显示头部（标题、图标、折叠按钮），默认true
+    minColumnWidth?: number // 最小列宽（px），用于自适应计算，默认120
+    maxColumns?: number // 最大列数，用于限制列数确保文本完整显示，默认不限制
+}
+
+// ========================================
 // Radio容器控件
 // ========================================
 
@@ -119,15 +142,21 @@ export function createRadioContainer(config: RadioContainerConfig): string {
             ? `<div class="radio-container-item-description ${opt.description ? '' : 'hidden'}">${opt.description}</div>`
             : ''
 
-        // 嵌套的 ComboCard/TextCard HTML
+        // 嵌套的 ComboCard/TextCard/MultiColumnCheckbox HTML
         const nestedCardsHtml = (opt.nestedCards && opt.nestedCards.length > 0)
             ? `<div class="radio-container-nested-cards">
                 ${opt.nestedCards.map(cardConfig => {
-                // 检查是否为 TextCard 配置（根据特有属性判断）
-                if ('rows' in cardConfig || 'showImportExport' in cardConfig) {
-                    return createTextCard(cardConfig as any)
+                // 检查是否为 MultiColumnCheckbox 配置
+                if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'multiColumnCheckbox') {
+                    return createMultiColumnCheckboxContainer((cardConfig as any).config)
                 }
-                return createComboCard(cardConfig)
+                // 检查是否为 TextCard 配置（根据特有属性判断）
+                const cardConfigAny = cardConfig as any
+                if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
+                    return createTextCard(cardConfigAny)
+                }
+                // 默认为 ComboCard 配置
+                return createComboCard(cardConfigAny)
             }).join('<div class="radio-container-nested-divider"></div>')}
                </div>`
             : ''
@@ -227,6 +256,7 @@ export function setupRadioContainer(
             if (e.target.closest('.radio-container-nested-cards')) return
             if (e.target.closest('.combo-card-borderless')) return
             if (e.target.closest('.text-card-borderless')) return
+            if (e.target.closest('.multi-column-checkbox-container')) return
 
             const radio = item.querySelector('fluent-radio') as any
             if (radio) {
@@ -726,6 +756,251 @@ export function setTextCardValue(cardId: string, value: string): void {
     const textarea = card.querySelector(`#${cardId}-textarea`) as any
     if (textarea) {
         textarea.value = value
+    }
+}
+
+// ========================================
+// 多列Checkbox容器控件（用于数量多、文本短的场景）
+// ========================================
+
+/**
+ * 创建多列Checkbox容器HTML
+ */
+export function createMultiColumnCheckboxContainer(config: MultiColumnCheckboxConfig): string {
+    const {
+        id,
+        name,
+        title,
+        description,
+        icon,
+        options,
+        values,
+        expanded = false,
+        showHeader = true,
+        minColumnWidth = 120,
+        maxColumns
+    } = config
+
+    // 计算选中数量
+    const selectedCount = options.filter(opt => values[opt.value] === true).length
+    const selectedLabel = selectedCount > 0
+        ? `${selectedCount} ${selectedCount === 1 ? 'item' : 'items'} selected`
+        : 'No items selected'
+
+    // 头部HTML（可选）
+    let headerHtml = ''
+    if (showHeader) {
+        const iconHtml = icon ? `<i data-lucide="${icon}" class="card-expandable-header-icon"></i>` : ''
+        const descriptionHtml = description
+            ? `<div class="multi-column-checkbox-header-description ${description ? '' : 'hidden'}">${description}</div>`
+            : ''
+        const titleHtml = title || ''
+
+        headerHtml = `
+      <div class="card-expandable-header multi-column-checkbox-header">
+        <div class="card-expandable-header-left multi-column-checkbox-header-left">
+          ${iconHtml}
+          <div class="multi-column-checkbox-header-title-group">
+            ${titleHtml ? `<div class="card-expandable-title multi-column-checkbox-header-title">${titleHtml}</div>` : ''}
+            ${descriptionHtml}
+          </div>
+        </div>
+        <div class="multi-column-checkbox-header-value">${selectedLabel}</div>
+        <div class="card-expandable-arrow multi-column-checkbox-header-arrow">
+          <i data-lucide="chevron-down"></i>
+        </div>
+      </div>
+    `
+    }
+
+    // Checkbox选项HTML（使用Grid布局实现多列）
+    const optionsHtml = options.map(opt => {
+        const isChecked = values[opt.value] === true
+        return `
+      <div class="multi-column-checkbox-item" data-value="${opt.value}" data-selected="${isChecked ? 'true' : 'false'}">
+        <fluent-checkbox name="${name}-${opt.value}" value="${opt.value}" ${isChecked ? 'checked' : ''}></fluent-checkbox>
+        <label class="multi-column-checkbox-label" for="${name}-${opt.value}">${opt.label}</label>
+      </div>
+    `
+    }).join('')
+
+    // 使用CSS Grid实现自适应列数
+    // 如果设置了 maxColumns，通过调整 minmax 的最小值来间接限制列数
+    // 使用 calc(100% / maxColumns) 作为最小列宽，确保不会超过 maxColumns 列
+    // 如果没有设置 maxColumns，使用 minColumnWidth 作为最小列宽
+    let gridStyle: string
+    if (maxColumns && maxColumns > 0) {
+        // 使用 max() 函数确保最小列宽不小于 minColumnWidth，同时通过 calc(100% / maxColumns) 限制最大列数
+        // 这样 auto-fit 会根据容器宽度自动调整，但不会超过 maxColumns 列
+        gridStyle = `grid-template-columns: repeat(auto-fit, minmax(max(${minColumnWidth}px, calc((100% - ${(maxColumns - 1) * 16}px) / ${maxColumns})), max-content));`
+    } else {
+        // 没有限制时，使用 minColumnWidth 作为最小列宽
+        gridStyle = `grid-template-columns: repeat(auto-fit, minmax(${minColumnWidth}px, max-content));`
+    }
+
+    // 全选/取消全选按钮HTML
+    const actionButtonsHtml = `
+      <div class="multi-column-checkbox-actions">
+        <fluent-button id="${id}-select-all" appearance="outline">${t('common.selectAll')}</fluent-button>
+        <fluent-button id="${id}-deselect-all" appearance="outline">${t('common.deselectAll')}</fluent-button>
+      </div>
+    `
+
+    const contentHtml = `
+      <div class="card-expandable-content multi-column-checkbox-content">
+        <div class="multi-column-checkbox-grid" style="${gridStyle}">
+          ${optionsHtml}
+        </div>
+        ${actionButtonsHtml}
+      </div>
+    `
+
+    // 如果隐藏头部，直接返回内容区域
+    if (!showHeader) {
+        return `
+      <div class="multi-column-checkbox-container" id="${id}">
+        ${contentHtml}
+      </div>
+    `
+    }
+
+    return `
+    <div class="card-expandable multi-column-checkbox-container ${expanded ? 'expanded' : ''}" id="${id}">
+      ${headerHtml}
+      ${contentHtml}
+    </div>
+  `
+}
+
+/**
+ * 设置多列Checkbox容器事件监听
+ */
+export function setupMultiColumnCheckboxContainer(
+    containerId: string,
+    _checkboxName: string, // 保留参数以保持API兼容性
+    onValueChange: (values: Record<string, boolean>) => void,
+    updateHeaderValue: boolean = true
+): void {
+    const container = document.querySelector(`#${containerId}`) as HTMLElement
+    if (!container) return
+
+    // 更新头部显示值
+    const updateHeader = () => {
+        if (!updateHeaderValue) return
+
+        const headerValueEl = container.querySelector('.multi-column-checkbox-header-value') as HTMLElement
+        if (!headerValueEl) return
+
+        const items = container.querySelectorAll('.multi-column-checkbox-item') as NodeListOf<HTMLElement>
+        let selectedCount = 0
+
+        items.forEach(item => {
+            const checkbox = item.querySelector('fluent-checkbox') as any
+            if (checkbox && checkbox.checked) {
+                selectedCount++
+            }
+        })
+
+        headerValueEl.textContent = selectedCount > 0
+            ? `${selectedCount} ${selectedCount === 1 ? 'item' : 'items'} selected`
+            : 'No items selected'
+    }
+
+    // 获取所有当前值
+    const getAllValues = (): Record<string, boolean> => {
+        const result: Record<string, boolean> = {}
+        const items = container.querySelectorAll('.multi-column-checkbox-item') as NodeListOf<HTMLElement>
+
+        items.forEach(item => {
+            const value = item.dataset.value
+            if (!value) return
+
+            const checkbox = item.querySelector('fluent-checkbox') as any
+            result[value] = checkbox ? checkbox.checked : false
+        })
+
+        return result
+    }
+
+    // Checkbox选择事件
+    container.querySelectorAll('fluent-checkbox').forEach(checkbox => {
+        (checkbox as any).addEventListener('change', (e: any) => {
+            const target = e.target as any
+            const item = target.closest('.multi-column-checkbox-item') as HTMLElement
+
+            if (item) {
+                item.setAttribute('data-selected', target.checked ? 'true' : 'false')
+            }
+
+            // 更新头部显示值
+            updateHeader()
+
+            // 调用回调
+            onValueChange(getAllValues())
+        })
+    })
+
+    // 点击标签也可以切换checkbox
+    container.querySelectorAll('.multi-column-checkbox-label').forEach(label => {
+        label.addEventListener('click', (e: any) => {
+            e.preventDefault()
+            const item = label.closest('.multi-column-checkbox-item') as HTMLElement
+            if (!item) return
+
+            const checkbox = item.querySelector('fluent-checkbox') as any
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+            }
+        })
+    })
+
+    // 点击列表项也可以切换（如果点击的不是checkbox本身）
+    container.querySelectorAll('.multi-column-checkbox-item').forEach((item: any) => {
+        item.addEventListener('click', (e: any) => {
+            // 如果点击的是checkbox本身，不处理（避免重复触发）
+            if (e.target.closest('fluent-checkbox')) return
+            // 如果点击的是label，不处理（已单独处理）
+            if (e.target.closest('.multi-column-checkbox-label')) return
+
+            const checkbox = item.querySelector('fluent-checkbox') as any
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+            }
+        })
+    })
+
+    // 全选按钮事件
+    const selectAllBtn = container.querySelector(`#${containerId}-select-all`) as HTMLElement
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', () => {
+            const items = container.querySelectorAll('.multi-column-checkbox-item') as NodeListOf<HTMLElement>
+            items.forEach(item => {
+                const checkbox = item.querySelector('fluent-checkbox') as any
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true
+                    item.setAttribute('data-selected', 'true')
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+                }
+            })
+        })
+    }
+
+    // 取消全选按钮事件
+    const deselectAllBtn = container.querySelector(`#${containerId}-deselect-all`) as HTMLElement
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', () => {
+            const items = container.querySelectorAll('.multi-column-checkbox-item') as NodeListOf<HTMLElement>
+            items.forEach(item => {
+                const checkbox = item.querySelector('fluent-checkbox') as any
+                if (checkbox && checkbox.checked) {
+                    checkbox.checked = false
+                    item.setAttribute('data-selected', 'false')
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+                }
+            })
+        })
     }
 }
 
