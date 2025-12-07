@@ -12,6 +12,14 @@
     "removeItem": "删除"
   },
   "isoConfig": {
+    "import": {
+      "title": "导入配置",
+      "description": "从 XML 文件导入配置"
+    },
+    "export": {
+      "title": "导出配置",
+      "description": "将当前配置导出为 XML 文件"
+    },
     "regionLanguage": {
       "title": "区域、语言和时区",
       "languageMode": "语言模式",

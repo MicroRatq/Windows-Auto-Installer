@@ -671,6 +671,8 @@ class UnattendConfigManager {
       console.error(`Panel ${panelId} not found`)
       return
     }
+    // 更新 section 标题的 i18n 翻译
+    this.updateSectionTitles()
     // 不清空panel，因为HTML中已经有框架结构
     this.renderAllModules()
     this.setupEventListeners()
@@ -682,6 +684,23 @@ class UnattendConfigManager {
     if (!this.panel) return
     this.renderAllModules()
     this.setupEventListeners()
+  }
+
+  // 更新 section 标题的 i18n 翻译
+  private updateSectionTitles() {
+    if (!this.panel) return
+
+    // 更新 Run custom scripts 标题
+    const customScriptsSection = this.panel.querySelector('#config-custom-scripts .section-title') as HTMLElement
+    if (customScriptsSection) {
+      customScriptsSection.textContent = t('isoConfig.customScripts.title') || 'Run custom scripts'
+    }
+
+    // 更新 XML markup for more components 标题
+    const xmlMarkupSection = this.panel.querySelector('#config-xml-markup .section-title') as HTMLElement
+    if (xmlMarkupSection) {
+      xmlMarkupSection.textContent = t('isoConfig.xmlMarkup.title') || 'XML markup for more components'
+    }
   }
 
   // 辅助函数：获取或创建section内容容器
@@ -707,6 +726,9 @@ class UnattendConfigManager {
   // 渲染所有模块
   public renderAllModules() {
     if (!this.panel) return
+
+    // 0. Import and Export cards (在最顶部)
+    this.renderImportExport()
 
     // 1. Region, Language and Time Zone (合并模块1和6)
     this.renderRegionLanguageTimeZone()
@@ -805,6 +827,66 @@ class UnattendConfigManager {
     // TODO: 实现导出功能（调用后端生成XML）
     const xml = await this.exportToXml()
     console.log('Export XML:', xml)
+  }
+
+  // 渲染导入和导出卡片
+  private renderImportExport() {
+    if (!this.panel) return
+
+    // 获取或创建导入/导出 section 容器
+    let section = this.panel.querySelector('.section:first-child') as HTMLElement
+    if (!section || !section.querySelector('#iso-config-import-btn')) {
+      // 如果不存在，创建一个新的 section
+      section = document.createElement('div')
+      section.className = 'section'
+      this.panel.insertBefore(section, this.panel.firstChild)
+    } else {
+      // 清空现有内容
+      section.innerHTML = ''
+    }
+
+    // 创建 section-content 容器（与其他 section 保持一致）
+    const contentDiv = document.createElement('div')
+    contentDiv.className = 'section-content'
+
+    // 创建导入卡片
+    const importCardId = 'iso-config-import-card'
+    const importCardHtml = createComboCard({
+      id: importCardId,
+      title: t('isoConfig.import.title') || '导入配置',
+      description: t('isoConfig.import.description') || '从 XML 文件导入配置',
+      icon: 'folder-up',
+      controlType: 'clickable',
+      value: ''
+    })
+
+    // 创建导出卡片
+    const exportCardId = 'iso-config-export-card'
+    const exportCardHtml = createComboCard({
+      id: exportCardId,
+      title: t('isoConfig.export.title') || '导出配置',
+      description: t('isoConfig.export.description') || '将当前配置导出为 XML 文件',
+      icon: 'folder-down',
+      controlType: 'clickable',
+      value: ''
+    })
+
+    // 直接将卡片 HTML 设置到 contentDiv（与其他 section 保持一致）
+    contentDiv.innerHTML = importCardHtml + exportCardHtml
+    section.appendChild(contentDiv)
+
+    // 初始化图标
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+
+    // 设置事件监听
+    setupComboCard(importCardId, () => { }, () => {
+      this.handleImport()
+    })
+    setupComboCard(exportCardId, () => { }, () => {
+      this.handleExport()
+    })
   }
 
   // 渲染模块1: Region, Language and Time Zone

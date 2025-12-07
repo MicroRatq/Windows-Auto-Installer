@@ -12,6 +12,14 @@
         "removeItem": "Remove"
     },
     "isoConfig": {
+        "import": {
+            "title": "Import Configuration",
+            "description": "Import configuration from XML file"
+        },
+        "export": {
+            "title": "Export Configuration",
+            "description": "Export current configuration to XML file"
+        },
         "regionLanguage": {
             "title": "Region, Language and Time Zone",
             "languageMode": "Language mode",
