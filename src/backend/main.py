@@ -15,6 +15,11 @@ from typing import Any, Callable
 from iso_handler import ISOHandler
 from downloader import Downloader
 
+# 设置 stdout 编码为 UTF-8，避免 Windows 上的 GBK 编码问题
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -119,6 +124,7 @@ class BackendServer:
         self.downloader = None
         self.download_tasks = {}
         self.project_root = Path(__file__).parent.parent.parent
+        self.unattend_generator = None
     
     def register_handler(self, method: str, handler: Callable[..., Any]) -> None:
         """注册请求处理器"""
@@ -142,10 +148,25 @@ class BackendServer:
         
         try:
             json_str = json.dumps(response, ensure_ascii=False)
-            print(json_str, flush=True)  # Keep print for IPC communication
+            # 确保输出使用 UTF-8 编码
+            try:
+                print(json_str, flush=True)  # Keep print for IPC communication
+            except UnicodeEncodeError:
+                # 如果 stdout 编码不是 UTF-8，尝试使用 UTF-8 编码输出
+                import sys
+                if hasattr(sys.stdout, 'buffer'):
+                    sys.stdout.buffer.write(json_str.encode('utf-8'))
+                    sys.stdout.buffer.write(b'\n')
+                    sys.stdout.buffer.flush()
+                else:
+                    # 最后的后备方案：使用 ASCII 编码
+                    json_str_ascii = json.dumps(response, ensure_ascii=True)
+                    print(json_str_ascii, flush=True)
         except Exception as e:
             # If response serialization fails, try to send error information
             logger.error(f"Response serialization failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             error_response = {
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -154,7 +175,13 @@ class BackendServer:
                     "message": f"Response serialization failed: {str(e)}"
                 }
             }
-            print(json.dumps(error_response, ensure_ascii=False), flush=True)  # Keep print for IPC communication
+            try:
+                json_str = json.dumps(error_response, ensure_ascii=False)
+                print(json_str, flush=True)
+            except UnicodeEncodeError:
+                # 使用 ASCII 编码作为后备
+                json_str = json.dumps(error_response, ensure_ascii=True)
+                print(json_str, flush=True)
     
     def handle_request(self, request: dict[str, Any]) -> None:
         """处理单个请求"""
@@ -179,10 +206,26 @@ class BackendServer:
         
         # Execute handler
         try:
+            # 确保 params 是字典类型
+            if not isinstance(params, dict):
+                logger.error(f"Invalid params type for method {method}: {type(params)}, value: {params}")
+                # 如果 params 是字符串，尝试解析为 JSON
+                if isinstance(params, str):
+                    try:
+                        params = json.loads(params)
+                    except json.JSONDecodeError:
+                        self.send_response(request_id, error=f"params must be a dict or valid JSON string")
+                        return
+                else:
+                    self.send_response(request_id, error=f"params must be a dict, got {type(params)}")
+                    return
+            
             result = handler(params)
             self.send_response(request_id, result=result)
         except Exception as e:
             logger.error(f"Handler execution failed for {method}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             error_msg = f"{method} execution failed: {str(e)}"
             self.send_response(request_id, error=error_msg)
     
@@ -239,6 +282,18 @@ class BackendServer:
             self.register_handler("iso_identify_status", self._handle_iso_identify_status)
         except ImportError as e:
             logger.error(f"Failed to import ISO handler: {e}")
+        
+        # 注册 Unattend 配置相关处理器
+        try:
+            from unattend_generator import UnattendGenerator, Configuration
+            self.unattend_generator = UnattendGenerator()
+            
+            self.register_handler("unattend_export_xml", self._handle_unattend_export_xml)
+            self.register_handler("unattend_import_xml", self._handle_unattend_import_xml)
+            self.register_handler("unattend_get_data", self._handle_unattend_get_data)
+        except ImportError as e:
+            logger.error(f"Failed to import Unattend generator: {e}")
+            self.unattend_generator = None
         
         # 读取stdin并处理请求
         for line in sys.stdin:
@@ -844,6 +899,190 @@ class BackendServer:
             "config": config,
             "output_path": output_path
         })
+    
+    def _handle_unattend_export_xml(self, params: dict[str, Any]) -> dict[str, Any]:
+        """处理导出 XML 请求"""
+        if not self.unattend_generator:
+            raise Exception("Unattend generator not initialized")
+        
+        try:
+            # 确保 params 是字典类型
+            if not isinstance(params, dict):
+                logger.error(f"Invalid params type: {type(params)}, value: {params}")
+                raise ValueError(f"params must be a dict, got {type(params)}")
+            
+            # 获取前端配置
+            config_dict = params.get('config', {})
+            logger.debug(f"Received config_dict type: {type(config_dict)}")
+            logger.debug(f"Received config_dict keys: {list(config_dict.keys()) if isinstance(config_dict, dict) else 'N/A'}")
+            
+            # 如果 config 是字符串，尝试解析为 JSON
+            if isinstance(config_dict, str):
+                import json
+                try:
+                    config_dict = json.loads(config_dict)
+                    logger.debug(f"Parsed config_dict from JSON string")
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse config as JSON: {e}")
+                    raise ValueError(f"config must be a dict or valid JSON string, got: {config_dict}")
+            
+            # 确保 config_dict 是字典
+            if not isinstance(config_dict, dict):
+                logger.error(f"Invalid config type: {type(config_dict)}, value: {config_dict}")
+                raise ValueError(f"config must be a dict, got {type(config_dict)}")
+            
+            # 验证 config_dict 的结构（检查一些关键字段）
+            if config_dict:
+                logger.debug(f"Config dict has {len(config_dict)} top-level keys")
+                # 检查一些可能被错误序列化的字段
+                for key, value in config_dict.items():
+                    if isinstance(value, str) and key in ['languageSettings', 'timeZone', 'computerName', 'accountSettings']:
+                        logger.warning(f"Key '{key}' has string value, might need JSON parsing: {value[:100] if len(str(value)) > 100 else value}")
+                        # 尝试解析为 JSON
+                        import json
+                        try:
+                            config_dict[key] = json.loads(value)
+                            logger.debug(f"Successfully parsed '{key}' from JSON string")
+                        except (json.JSONDecodeError, TypeError):
+                            pass  # 不是 JSON 字符串，继续
+            
+            # 转换为 Python Configuration 对象
+            from unattend_generator import config_dict_to_configuration
+            config = config_dict_to_configuration(config_dict, self.unattend_generator)
+            
+            # 生成 XML
+            xml_bytes = self.unattend_generator.generate_xml(config)
+            
+            # 返回 base64 编码的 XML（便于 JSON 传输）
+            import base64
+            xml_base64 = base64.b64encode(xml_bytes).decode('ascii')
+            
+            return {
+                "xml": xml_base64,
+                "size": len(xml_bytes)
+            }
+        except Exception as e:
+            logger.error(f"Export XML failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
+    
+    def _handle_unattend_import_xml(self, params: dict[str, Any]) -> dict[str, Any]:
+        """处理导入 XML 请求"""
+        if not self.unattend_generator:
+            raise Exception("Unattend generator not initialized")
+        
+        try:
+            # 获取 XML 内容（base64 编码）
+            xml_base64 = params.get('xml', '')
+            if not xml_base64:
+                raise ValueError("XML content is required")
+            
+            # 解码 XML
+            import base64
+            xml_bytes = base64.b64decode(xml_base64)
+            
+            # 解析 XML
+            config_dict = self.unattend_generator.parse_xml(xml_bytes)
+            
+            return {
+                "config": config_dict
+            }
+        except Exception as e:
+            logger.error(f"Import XML failed: {e}")
+            raise
+    
+    def _handle_unattend_get_data(self, params: dict[str, Any]) -> dict[str, Any]:
+        """处理获取配置数据请求（支持 i18n）"""
+        if not self.unattend_generator:
+            raise Exception("Unattend generator not initialized")
+        
+        try:
+            # 获取语言代码（用于 i18n 适配）
+            lang = params.get('lang', 'en')
+            # 如果语言代码是 'zh-CN' 或 'zh-TW'，转换为 'zh' 或 'zh-Hant'
+            if lang == 'zh-CN':
+                lang = 'zh'
+            elif lang == 'zh-TW':
+                lang = 'zh-Hant'
+            elif '-' in lang:
+                # 提取主要语言代码（如 'en-US' -> 'en'）
+                lang = lang.split('-')[0]
+            
+            # 如果语言代码改变，重新加载数据
+            if self.unattend_generator.lang != lang:
+                self.unattend_generator.lang = lang
+                self.unattend_generator._load_data()
+            
+            # 构建返回数据
+            result = {
+                "languages": [],
+                "locales": [],
+                "keyboards": [],
+                "timeZones": [],
+                "geoLocations": [],
+                "windowsEditions": [],
+                "bloatwareItems": []
+            }
+            
+            # 转换 ImageLanguage
+            for lang_id, lang_obj in self.unattend_generator.image_languages.items():
+                result["languages"].append({
+                    "id": lang_obj.id,
+                    "name": lang_obj.display_name
+                })
+            
+            # 转换 UserLocale
+            for locale_id, locale_obj in self.unattend_generator.user_locales.items():
+                result["locales"].append({
+                    "id": locale_obj.id,
+                    "name": locale_obj.display_name
+                })
+            
+            # 转换 KeyboardIdentifier
+            for kb_id, kb_obj in self.unattend_generator.keyboard_identifiers.items():
+                result["keyboards"].append({
+                    "id": kb_obj.id,
+                    "name": kb_obj.display_name,
+                    "type": kb_obj.type.value if hasattr(kb_obj.type, 'value') else str(kb_obj.type)
+                })
+            
+            # 转换 TimeOffset
+            for tz_id, tz_obj in self.unattend_generator.time_offsets.items():
+                result["timeZones"].append({
+                    "id": tz_obj.id,
+                    "name": tz_obj.display_name
+                })
+            
+            # 转换 GeoLocation
+            for geo_id, geo_obj in self.unattend_generator.geo_locations.items():
+                result["geoLocations"].append({
+                    "id": geo_obj.id,
+                    "name": geo_obj.display_name
+                })
+            
+            # 转换 WindowsEdition
+            for edition_id, edition_obj in self.unattend_generator.windows_editions.items():
+                result["windowsEditions"].append({
+                    "id": edition_obj.id,
+                    "name": edition_obj.display_name,
+                    "key": edition_obj.product_key if edition_obj.product_key else None,
+                    "index": edition_obj.index if edition_obj.index else None
+                })
+            
+            # 转换 Bloatware
+            for bloatware_id, bloatware_obj in self.unattend_generator.bloatwares.items():
+                result["bloatwareItems"].append({
+                    "id": bloatware_obj.id,
+                    "name": bloatware_obj.display_name
+                })
+            
+            return result
+        except Exception as e:
+            logger.error(f"Get data failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
 
 
 def main():
@@ -863,7 +1102,13 @@ def main():
             }
         }
         logger.error(f"Internal server error: {e}")
-        print(json.dumps(error_response, ensure_ascii=False), flush=True)  # Keep print for IPC communication
+        try:
+            json_str = json.dumps(error_response, ensure_ascii=False)
+            print(json_str, flush=True)  # Keep print for IPC communication
+        except UnicodeEncodeError:
+            # 如果仍然有编码问题，使用 ensure_ascii=True
+            json_str = json.dumps(error_response, ensure_ascii=True)
+            print(json_str, flush=True)
         sys.exit(1)
 
 

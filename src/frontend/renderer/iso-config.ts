@@ -618,6 +618,8 @@ function createDefaultConfig(): UnattendConfig {
 class UnattendConfigManager {
   private config: UnattendConfig
   private panel: HTMLElement | null = null
+  private presetData: typeof PRESET_DATA | null = null
+  private dataLoaded: boolean = false
 
   constructor() {
     this.config = createDefaultConfig()
@@ -646,22 +648,128 @@ class UnattendConfigManager {
     }
   }
 
-  // 获取预设数据
-  getPresetData() {
-    return PRESET_DATA
+  // 获取预设数据（从后端加载）
+  async getPresetData(): Promise<typeof PRESET_DATA> {
+    // 如果已经加载过，直接返回
+    if (this.dataLoaded && this.presetData) {
+      return this.presetData
+    }
+    
+    // 如果还没有加载，从后端获取
+    if (!window.electronAPI) {
+      console.warn('Electron API 不可用，使用默认预设数据')
+      return PRESET_DATA
+    }
+
+    try {
+      // 获取当前语言设置（从 i18n）
+      const currentLang = localStorage.getItem('language') || 'en'
+      
+      const request = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'unattend_get_data',
+        params: {
+          lang: currentLang
+        }
+      }
+
+      const response = await window.electronAPI.sendToBackend(request)
+      if (response.error) {
+        console.error('获取配置数据失败:', response.error.message)
+        return PRESET_DATA
+      }
+
+      if (response.result) {
+        // 转换后端返回的数据格式为前端需要的格式
+        this.presetData = {
+          languages: response.result.languages || [],
+          locales: response.result.locales || [],
+          keyboards: response.result.keyboards || [],
+          timeZones: response.result.timeZones || [],
+          geoLocations: response.result.geoLocations || [],
+          windowsEditions: response.result.windowsEditions || [],
+          bloatwareItems: response.result.bloatwareItems || []
+        }
+        this.dataLoaded = true
+        return this.presetData
+      }
+
+      return PRESET_DATA
+    } catch (error: any) {
+      console.error('获取配置数据失败:', error)
+      return PRESET_DATA
+    }
   }
 
-  // 导入配置（从XML解析，TODO: 后端实现）
+  // 导入配置（从XML解析）
   async importFromXml(xmlContent: string): Promise<void> {
-    // TODO: 调用后端解析XML并更新配置
-    console.log('Import from XML (TODO: implement backend)', xmlContent)
+    if (!window.electronAPI) {
+      throw new Error('Electron API 不可用')
+    }
+
+    try {
+      // 将 XML 内容转换为 base64
+      const xmlBase64 = btoa(unescape(encodeURIComponent(xmlContent)))
+
+      const request = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'unattend_import_xml',
+        params: {
+          xml: xmlBase64
+        }
+      }
+
+      const response = await window.electronAPI.sendToBackend(request)
+      if (response.error) {
+        throw new Error(response.error.message || '导入失败')
+      }
+
+      // 更新配置
+      if (response.result?.config) {
+        this.updateConfig(response.result.config)
+        // 重新渲染所有模块以反映新配置
+        this.renderAllModules().catch(console.error)
+      }
+    } catch (error: any) {
+      console.error('导入 XML 失败:', error)
+      throw error
+    }
   }
 
-  // 导出配置（生成XML，TODO: 后端实现）
+  // 导出配置（生成XML）
   async exportToXml(): Promise<string> {
-    // TODO: 调用后端生成XML
-    console.log('Export to XML (TODO: implement backend)', this.config)
-    return ''
+    if (!window.electronAPI) {
+      throw new Error('Electron API 不可用')
+    }
+
+    try {
+      const request = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'unattend_export_xml',
+        params: {
+          config: this.config
+        }
+      }
+
+      const response = await window.electronAPI.sendToBackend(request)
+      if (response.error) {
+        throw new Error(response.error.message || '导出失败')
+      }
+
+      // 解码 base64 返回的 XML
+      if (response.result?.xml) {
+        const xmlContent = decodeURIComponent(escape(atob(response.result.xml)))
+        return xmlContent
+      }
+
+      throw new Error('导出结果为空')
+    } catch (error: any) {
+      console.error('导出 XML 失败:', error)
+      throw error
+    }
   }
 
   // 初始化UI
@@ -724,14 +832,14 @@ class UnattendConfigManager {
   }
 
   // 渲染所有模块
-  public renderAllModules() {
+  public async renderAllModules() {
     if (!this.panel) return
 
     // 0. Import and Export cards (在最顶部)
     this.renderImportExport()
 
     // 1. Region, Language and Time Zone (合并模块1和6)
-    this.renderRegionLanguageTimeZone()
+    await this.renderRegionLanguageTimeZone()
 
     // 2. Setup settings
     this.renderSetupSettings()
@@ -743,7 +851,7 @@ class UnattendConfigManager {
     this.renderPartitioning()
 
     // 6. Windows Edition and Source (合并模块8和9)
-    this.renderWindowsEditionAndSource()
+    await this.renderWindowsEditionAndSource()
 
     // 7. UI and Personalization (合并模块14、15、16、17、18、25)
     this.renderFileExplorer()
@@ -761,7 +869,7 @@ class UnattendConfigManager {
     this.renderStickyKeys()
 
     // 10. System Optimization (合并模块16、22、26)
-    this.renderSystemOptimization()
+    await this.renderSystemOptimization()
 
     // 11. Advanced Settings (合并模块5、10、20、28)
     this.renderAdvancedSettings()
@@ -809,24 +917,63 @@ class UnattendConfigManager {
 
   // 处理导入
   private async handleImport() {
-    // TODO: 实现导入功能（调用后端）
     if (window.electronAPI?.showOpenDialog) {
-      const result = await window.electronAPI.showOpenDialog({
-        filters: [{ name: 'XML Files', extensions: ['xml'] }],
-        properties: ['openFile']
-      })
-      if (!result.canceled && result.filePaths?.[0]) {
-        // TODO: 读取文件并调用后端解析
-        console.log('Import file:', result.filePaths[0])
+      try {
+        const result = await window.electronAPI.showOpenDialog({
+          filters: [{ name: 'XML Files', extensions: ['xml'] }],
+          properties: ['openFile']
+        })
+        if (!result.canceled && result.filePaths?.[0]) {
+          // 读取文件
+          const filePath = result.filePaths[0]
+          const fileContent = await window.electronAPI.readFile(filePath)
+
+          if (fileContent) {
+            // 调用后端解析 XML
+            await this.importFromXml(fileContent)
+            alert('导入成功！')
+          } else {
+            alert('读取文件失败')
+          }
+        }
+      } catch (error: any) {
+        alert(`导入失败: ${error.message || '未知错误'}`)
+        console.error('Import error:', error)
       }
     }
   }
 
   // 处理导出
   private async handleExport() {
-    // TODO: 实现导出功能（调用后端生成XML）
-    const xml = await this.exportToXml()
-    console.log('Export XML:', xml)
+    try {
+      // 调用后端生成 XML
+      const xml = await this.exportToXml()
+
+      // 保存文件
+      if (window.electronAPI?.showSaveDialog) {
+        const result = await window.electronAPI.showSaveDialog({
+          filters: [{ name: 'XML Files', extensions: ['xml'] }],
+          defaultPath: 'autounattend.xml'
+        })
+
+        if (!result.canceled && result.filePath) {
+          await window.electronAPI.writeFile(result.filePath, xml)
+          alert('导出成功！')
+        }
+      } else {
+        // 如果没有保存对话框，使用下载
+        const blob = new Blob([xml], { type: 'application/xml' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'autounattend.xml'
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch (error: any) {
+      alert(`导出失败: ${error.message || '未知错误'}`)
+      console.error('Export error:', error)
+    }
   }
 
   // 渲染导入和导出卡片
@@ -890,11 +1037,11 @@ class UnattendConfigManager {
   }
 
   // 渲染模块1: Region, Language and Time Zone
-  private renderRegionLanguageTimeZone() {
+  private async renderRegionLanguageTimeZone() {
     const contentDiv = this.getSectionContent('config-region-language')
     if (!contentDiv) return
 
-    const preset = this.getPresetData()
+    const preset = await this.getPresetData()
     const lang = this.config.languageSettings
     const tz = this.config.timeZone
 
@@ -984,7 +1131,7 @@ class UnattendConfigManager {
       this.updateModule('languageSettings', {
         mode: value ? 'interactive' : 'unattended'
       })
-      this.renderRegionLanguageTimeZone()
+      this.renderRegionLanguageTimeZone().catch(console.error)
     })
 
     // 设置 Windows display language ComboCard 事件监听
@@ -1007,7 +1154,7 @@ class UnattendConfigManager {
       this.updateModule('timeZone', {
         mode: value ? 'implicit' : 'explicit'
       })
-      this.renderRegionLanguageTimeZone()
+      this.renderRegionLanguageTimeZone().catch(console.error)
     })
 
     // 设置时区选择 ComboCard 事件监听
@@ -2355,13 +2502,13 @@ End If`,
   }
 
   // 渲染模块8+9: Windows Edition and Source (合并)
-  private renderWindowsEditionAndSource() {
+  private async renderWindowsEditionAndSource() {
     const contentDiv = this.getSectionContent('config-windows-edition')
     if (!contentDiv) return
 
     const edition = this.config.windowsEdition
     const source = this.config.sourceImage
-    const preset = this.getPresetData()
+    const preset = await this.getPresetData()
 
     // 1. Windows Edition Mode - RadioContainer (带嵌套)
     const editionModeRadioHtml = createRadioContainer({
@@ -2487,7 +2634,7 @@ End If`,
         mode = value as 'interactive' | 'firmware'
       }
       this.updateModule('windowsEdition', { mode })
-      this.renderWindowsEditionAndSource()
+      this.renderWindowsEditionAndSource().catch(console.error)
     }, true)
 
     // 2. Generic edition select (嵌套)
@@ -2507,7 +2654,7 @@ End If`,
     // 4. Source image mode
     setupRadioContainer('source-image-mode-container', 'source-image-mode', (value) => {
       this.updateModule('sourceImage', { mode: value as 'automatic' | 'index' | 'name' })
-      this.renderWindowsEditionAndSource()
+      this.renderWindowsEditionAndSource().catch(console.error)
     }, true)
 
     // 5. Source image index (嵌套)
@@ -3260,14 +3407,14 @@ End If`,
 
   // 渲染模块16: System tweaks
   // 渲染模块10: System Optimization (合并System tweaks、Remove bloatware、Express settings)
-  private renderSystemOptimization() {
+  private async renderSystemOptimization() {
     const contentDiv = this.getSectionContent('config-system-optimization')
     if (!contentDiv) return
 
     const tweaks = this.config.systemTweaks
     const bloatware = this.config.bloatware
     const express = this.config.expressSettings
-    const preset = this.getPresetData()
+    const preset = await this.getPresetData()
 
     // 1. System Tweaks - MultiColumnCheckboxContainer (非嵌入式，显示头部)
     const systemTweaksHtml = createMultiColumnCheckboxContainer({
@@ -3334,13 +3481,14 @@ End If`,
 
     // 2. Remove Bloatware - MultiColumnCheckboxContainer (非嵌入式，显示头部)
     // 先构建选项和值
-    const bloatwareOptions = preset.bloatwareItems.map(item => ({
-      value: item,
-      label: item
+    const bloatwareOptions = preset.bloatwareItems.map((item: any) => ({
+      value: item.id || item,
+      label: item.name || item
     }))
     const bloatwareValues: Record<string, boolean> = {}
-    preset.bloatwareItems.forEach(item => {
-      bloatwareValues[item] = bloatware.items.includes(item)
+    preset.bloatwareItems.forEach((item: any) => {
+      const itemId = item.id || item
+      bloatwareValues[itemId] = bloatware.items.includes(itemId)
     })
 
     const removeBloatwareHtml = createMultiColumnCheckboxContainer({
@@ -4481,12 +4629,12 @@ End If`,
   }
 
   // 渲染模块26: Remove bloatware
-  private renderBloatware() {
+  private async renderBloatware() {
     const contentDiv = this.getSectionContent('config-bloatware')
     if (!contentDiv) return
 
     const bloatware = this.config.bloatware
-    const preset = this.getPresetData()
+    const preset = await this.getPresetData()
 
     contentDiv.innerHTML = `
       <div class="card-expandable expanded">
@@ -4504,12 +4652,16 @@ End If`,
             <fluent-button id="config-bloatware-deselect-all" appearance="outline">Deselect all</fluent-button>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-            ${preset.bloatwareItems.map(item => `
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" class="bloatware-item" value="${item}" ${bloatware.items.includes(item) ? 'checked' : ''}>
-                <span>${item}</span>
-              </label>
-            `).join('')}
+            ${preset.bloatwareItems.map((item: any) => {
+              const itemId = item.id || item
+              const itemName = item.name || item
+              return `
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" class="bloatware-item" value="${itemId}" ${bloatware.items.includes(itemId) ? 'checked' : ''}>
+                  <span>${itemName}</span>
+                </label>
+              `
+            }).join('')}
           </div>
         </div>
       </div>
@@ -4521,16 +4673,16 @@ End If`,
 
     if (selectAllBtn) {
       selectAllBtn.addEventListener('click', () => {
-        const allItems = preset.bloatwareItems.map(i => i)
+        const allItems = preset.bloatwareItems.map((i: any) => i.id || i)
         this.updateModule('bloatware', { items: allItems })
-        this.renderBloatware()
+        this.renderBloatware().catch(console.error)
       })
     }
 
     if (deselectAllBtn) {
       deselectAllBtn.addEventListener('click', () => {
         this.updateModule('bloatware', { items: [] })
-        this.renderBloatware()
+        this.renderBloatware().catch(console.error)
       })
     }
 
@@ -5284,7 +5436,7 @@ export function initIsoConfig() {
     window.addEventListener('language-changed', () => {
       console.log('Language changed, re-rendering ISO config modules')
       if (configManager) {
-        configManager.renderAllModules()
+        configManager.renderAllModules().catch(console.error)
       }
     })
   }
