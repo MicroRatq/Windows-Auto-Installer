@@ -8,6 +8,7 @@ import sys
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 from xml.etree import ElementTree as ET
@@ -288,6 +289,8 @@ class CSharpDLLWrapper:
                 return None
             
             # 检查返回类型
+            if result is None:
+                return None
             result_type = result.GetType()
             config_type = self.types['Configuration']
             
@@ -549,62 +552,525 @@ def normalize_dict_for_comparison(d: Dict[str, Any]) -> Dict[str, Any]:
 # XML 对比工具
 # ========================================
 
+def normalize_text(text: str | None) -> str:
+    """规范化文本内容：去除首尾空白，将多个空白字符压缩为单个空格"""
+    if text is None:
+        return ""
+    # 去除首尾空白，将多个空白字符（包括换行、制表符等）压缩为单个空格
+    import re
+    normalized = re.sub(r'\s+', ' ', text.strip())
+    return normalized
+
+
+def get_element_path(elem: ET.Element | None, namespaces: dict, include_root: bool = True) -> str:
+    """生成元素的完整路径（考虑命名空间和属性）
+    
+    注意：由于 ElementTree 不直接支持向上遍历，此函数仅用于生成当前元素的路径标识
+    """
+    if elem is None:
+        return "None"
+    
+    # 获取元素标签（去除命名空间前缀）
+    tag = elem.tag
+    if '}' in tag:
+        tag = tag.split('}')[1]
+    
+    # 构建路径部分
+    path_part = tag
+    
+    # 添加关键属性（如果有）
+    key_attrs = []
+    if 'name' in elem.attrib:
+        key_attrs.append(f"@name='{elem.attrib['name']}'")
+    if 'pass' in elem.attrib:
+        key_attrs.append(f"@pass='{elem.attrib['pass']}'")
+    if 'path' in elem.attrib:
+        key_attrs.append(f"@path='{elem.attrib['path']}'")
+    
+    # 对于有序元素，添加 Order 信息
+    if tag in ['RunSynchronousCommand', 'SynchronousCommand']:
+        order_elem = elem.find(f".//{{{namespaces.get('u', 'urn:schemas-microsoft-com:unattend')}}}Order")
+        if order_elem is not None and order_elem.text:
+            key_attrs.append(f"Order={order_elem.text}")
+    
+    if key_attrs:
+        path_part += "[" + ", ".join(key_attrs) + "]"
+    
+    return path_part
+
+
+def compare_attributes(elem1: ET.Element, elem2: ET.Element, path: str, differences: list):
+    """对比两个元素的所有属性（包括命名空间属性）"""
+    attrs1 = dict(elem1.attrib)
+    attrs2 = dict(elem2.attrib)
+    
+    # 获取所有属性名（包括命名空间属性）
+    all_attrs = set(attrs1.keys()) | set(attrs2.keys())
+    
+    for attr_name in sorted(all_attrs):
+        val1 = attrs1.get(attr_name)
+        val2 = attrs2.get(attr_name)
+        
+        if val1 != val2:
+            attr_path = f"{path}/@{attr_name}"
+            if val1 is None:
+                differences.append({
+                    'path': attr_path,
+                    'type': '属性缺失（第一个XML）',
+                    'expected': val2,
+                    'actual': None
+                })
+            elif val2 is None:
+                differences.append({
+                    'path': attr_path,
+                    'type': '属性缺失（第二个XML）',
+                    'expected': val1,
+                    'actual': None
+                })
+            else:
+                differences.append({
+                    'path': attr_path,
+                    'type': '属性值不匹配',
+                    'expected': val1,
+                    'actual': val2
+                })
+
+
+def compare_elements_recursive(elem1: ET.Element | None, elem2: ET.Element | None, 
+                                path: str, differences: list, namespaces: dict):
+    """递归对比两个元素及其所有子元素
+    
+    注意：elem1 是生成的 XML，elem2 是原始的 XML
+    """
+    # 处理 None 值
+    if elem1 is None and elem2 is None:
+        return
+    if elem1 is None:
+        differences.append({
+            'path': path,
+            'type': '元素缺失（生成的XML）',
+            'expected': get_element_path(elem2, namespaces, include_root=False) if elem2 is not None else None,  # elem2 是原始 XML（期望值）
+            'actual': None  # elem1 是生成的 XML（实际值）
+        })
+        return
+    if elem2 is None:
+        differences.append({
+            'path': path,
+            'type': '元素缺失（原始XML）',
+            'expected': None,  # elem2 是原始 XML（期望值）
+            'actual': get_element_path(elem1, namespaces, include_root=False)  # elem1 是生成的 XML（实际值）
+        })
+        return
+    
+    # 对比标签名
+    tag1 = elem1.tag
+    tag2 = elem2.tag
+    if tag1 != tag2:
+        differences.append({
+            'path': path,
+            'type': '元素标签不匹配',
+            'expected': tag2,  # elem2 是原始 XML（期望值）
+            'actual': tag1     # elem1 是生成的 XML（实际值）
+        })
+        return
+    
+    # 对比属性
+    compare_attributes(elem1, elem2, path, differences)
+    
+    # 对比文本内容（如果元素没有子元素）
+    if len(list(elem1)) == 0 and len(list(elem2)) == 0:
+        text1 = normalize_text(elem1.text)
+        text2 = normalize_text(elem2.text)
+        if text1 != text2:
+            differences.append({
+                'path': path,
+                'type': '文本内容不匹配',
+                'expected': text2[:200] + ('...' if len(text2) > 200 else ''),  # elem2 是原始 XML（期望值）
+                'actual': text1[:200] + ('...' if len(text1) > 200 else '')    # elem1 是生成的 XML（实际值）
+            })
+    else:
+        # 对比 tail 文本（如果有）
+        tail1 = normalize_text(elem1.tail)
+        tail2 = normalize_text(elem2.tail)
+        if tail1 != tail2:
+            differences.append({
+                'path': path + '/@tail',
+                'type': '尾部文本不匹配',
+                'expected': tail2,  # elem2 是原始 XML（期望值）
+                'actual': tail1     # elem1 是生成的 XML（实际值）
+            })
+    
+    # 处理子元素
+    children1 = list(elem1)
+    children2 = list(elem2)
+    
+    # 判断是否需要按顺序对比
+    tag_name = elem1.tag.split('}')[-1] if '}' in elem1.tag else elem1.tag
+    is_ordered = tag_name in ['RunSynchronous', 'FirstLogonCommands', 'RunSynchronousCommand', 'SynchronousCommand']
+    
+    if is_ordered:
+        # 有序元素：按 Order 排序后对比
+        def get_order(elem: ET.Element) -> int:
+            order_elem = elem.find(f".//{{{namespaces.get('u', 'urn:schemas-microsoft-com:unattend')}}}Order")
+            if order_elem is not None and order_elem.text:
+                try:
+                    return int(order_elem.text)
+                except ValueError:
+                    return 0
+            return 0
+        
+        children1_sorted = sorted(children1, key=get_order)
+        children2_sorted = sorted(children2, key=get_order)
+        
+        max_len = max(len(children1_sorted), len(children2_sorted))
+        for i in range(max_len):
+            child1 = children1_sorted[i] if i < len(children1_sorted) else None
+            child2 = children2_sorted[i] if i < len(children2_sorted) else None
+            
+            child_tag = child1.tag.split('}')[-1] if child1 and '}' in child1.tag else (child2.tag.split('}')[-1] if child2 and '}' in child2.tag else 'unknown')
+            child_path = f"{path}/{child_tag}"
+            
+            # 添加 Order 信息到路径
+            if child1:
+                order_elem = child1.find(f".//{{{namespaces.get('u', 'urn:schemas-microsoft-com:unattend')}}}Order")
+                if order_elem is not None and order_elem.text:
+                    child_path += f"[Order={order_elem.text}]"
+            elif child2:
+                order_elem = child2.find(f".//{{{namespaces.get('u', 'urn:schemas-microsoft-com:unattend')}}}Order")
+                if order_elem is not None and order_elem.text:
+                    child_path += f"[Order={order_elem.text}]"
+            
+            compare_elements_recursive(child1, child2, child_path, differences, namespaces)
+    else:
+        # 无序元素：按关键属性匹配
+        # 对于 LocalAccount，按 Name 匹配
+        if tag_name == 'LocalAccounts':
+            # 构建子元素映射
+            children1_map = {}
+            children2_map = {}
+            
+            for child in children1:
+                name_elem = child.find(f".//{{{namespaces.get('u', 'urn:schemas-microsoft-com:unattend')}}}Name")
+                if name_elem is not None and name_elem.text:
+                    key = normalize_text(name_elem.text)
+                    children1_map[key] = child
+            
+            for child in children2:
+                name_elem = child.find(f".//{{{namespaces.get('u', 'urn:schemas-microsoft-com:unattend')}}}Name")
+                if name_elem is not None and name_elem.text:
+                    key = normalize_text(name_elem.text)
+                    children2_map[key] = child
+            
+            # 对比所有键
+            all_keys = set(children1_map.keys()) | set(children2_map.keys())
+            for key in sorted(all_keys):
+                child1 = children1_map.get(key)
+                child2 = children2_map.get(key)
+                child_path = f"{path}/LocalAccount[@Name='{key}']"
+                compare_elements_recursive(child1, child2, child_path, differences, namespaces)
+        else:
+            # 其他情况：按位置对比
+            max_len = max(len(children1), len(children2))
+            for i in range(max_len):
+                child1 = children1[i] if i < len(children1) else None
+                child2 = children2[i] if i < len(children2) else None
+                
+                child_tag = child1.tag.split('}')[-1] if child1 and '}' in child1.tag else (child2.tag.split('}')[-1] if child2 and '}' in child2.tag else 'unknown')
+                child_path = f"{path}/{child_tag}[{i}]"
+                
+                compare_elements_recursive(child1, child2, child_path, differences, namespaces)
+
+
+def compare_extensions(ext1: ET.Element | None, ext2: ET.Element | None, 
+                       differences: list, namespaces: dict):
+    """专门对比 Extensions 部分（ExtractScript 和 File 元素）"""
+    if ext1 is None and ext2 is None:
+        return
+    if ext1 is None:
+        differences.append({
+            'path': '/unattend/Extensions',
+            'type': 'Extensions 部分缺失（生成的XML）',
+            'expected': '存在',  # 原始 XML 中存在（期望值）
+            'actual': None       # 生成的 XML 中缺失（实际值）
+        })
+        return
+    if ext2 is None:
+        differences.append({
+            'path': '/unattend/Extensions',
+            'type': 'Extensions 部分缺失（原始XML）',
+            'expected': None,     # 原始 XML 中缺失（期望值）
+            'actual': '存在'      # 生成的 XML 中存在（实际值）
+        })
+        return
+    
+    ext_ns = namespaces.get('ext', 'https://schneegans.de/windows/unattend-generator/')
+    
+    # 对比 ExtractScript
+    script1 = ext1.find(f"{{{ext_ns}}}ExtractScript")
+    script2 = ext2.find(f"{{{ext_ns}}}ExtractScript")
+    
+    if script1 is not None and script2 is not None:
+        text1 = normalize_text(script1.text)  # 生成的 XML（实际值）
+        text2 = normalize_text(script2.text)  # 原始的 XML（期望值）
+        if text1 != text2:
+            differences.append({
+                'path': '/unattend/Extensions/ExtractScript',
+                'type': 'ExtractScript 内容不匹配',
+                'expected': text2[:500] + ('...' if len(text2) > 500 else ''),  # 原始 XML（期望值）
+                'actual': text1[:500] + ('...' if len(text1) > 500 else '')    # 生成的 XML（实际值）
+            })
+    elif script1 is None and script2 is not None:
+        differences.append({
+            'path': '/unattend/Extensions/ExtractScript',
+            'type': 'ExtractScript 缺失（生成的XML）',
+            'expected': '存在',  # 原始 XML 中存在（期望值）
+            'actual': None       # 生成的 XML 中缺失（实际值）
+        })
+    elif script1 is not None and script2 is None:
+        differences.append({
+            'path': '/unattend/Extensions/ExtractScript',
+            'type': 'ExtractScript 缺失（原始XML）',
+            'expected': None,     # 原始 XML 中缺失（期望值）
+            'actual': '存在'      # 生成的 XML 中存在（实际值）
+        })
+    
+    # 对比 File 元素（按 path 属性匹配）
+    files1 = ext1.findall(f"{{{ext_ns}}}File")
+    files2 = ext2.findall(f"{{{ext_ns}}}File")
+    
+    files1_map = {}
+    files2_map = {}
+    
+    for file_elem in files1:
+        path_attr = file_elem.get('path', '')
+        if path_attr:
+            files1_map[path_attr] = file_elem
+    
+    for file_elem in files2:
+        path_attr = file_elem.get('path', '')
+        if path_attr:
+            files2_map[path_attr] = file_elem
+    
+    # 对比所有文件
+    all_paths = set(files1_map.keys()) | set(files2_map.keys())
+    for file_path in sorted(all_paths):
+        file1 = files1_map.get(file_path)
+        file2 = files2_map.get(file_path)
+        
+        if file1 is None:
+            differences.append({
+                'path': f'/unattend/Extensions/File[@path="{file_path}"]',
+                'type': '文件缺失（生成的XML）',
+                'expected': '存在',  # 原始 XML 中存在（期望值）
+                'actual': None       # 生成的 XML 中缺失（实际值）
+            })
+        elif file2 is None:
+            differences.append({
+                'path': f'/unattend/Extensions/File[@path="{file_path}"]',
+                'type': '文件缺失（原始XML）',
+                'expected': None,     # 原始 XML 中缺失（期望值）
+                'actual': '存在'      # 生成的 XML 中存在（实际值）
+            })
+        else:
+            # 对比文件内容
+            content1 = normalize_text(file1.text)  # 生成的 XML（实际值）
+            content2 = normalize_text(file2.text)  # 原始的 XML（期望值）
+            if content1 != content2:
+                # 对于大文件，只显示前500个字符
+                preview1 = content1[:500] + ('...' if len(content1) > 500 else '')
+                preview2 = content2[:500] + ('...' if len(content2) > 500 else '')
+                differences.append({
+                    'path': f'/unattend/Extensions/File[@path="{file_path}"]',
+                    'type': '文件内容不匹配',
+                    'expected': preview2,  # 原始 XML（期望值）
+                    'actual': preview1     # 生成的 XML（实际值）
+                })
+
+
 def compare_xml(python_xml: bytes, csharp_xml: bytes, test_name: str) -> bool:
-    """对比两个 XML，返回是否一致"""
+    """对比两个 XML，返回是否一致（完整对比所有内容）"""
     logger.info(f"\n{'='*60}")
     logger.info(f"Comparing XML for: {test_name}")
     logger.info(f"{'='*60}")
+
+    def extract_numeric_entities(xml_bytes: bytes, label: str) -> list[dict]:
+        """提取数字字符引用，区分十进制与十六进制"""
+        text = xml_bytes.decode('utf-8', errors='ignore')
+        entities = []
+        for m in re.finditer(r'&#(x?[0-9A-Fa-f]+);', text):
+            raw = m.group(0)
+            val = m.group(1)
+            is_hex = val.lower().startswith('x')
+            # 计算行列
+            line = text.count('\n', 0, m.start()) + 1
+            col = m.start() - text.rfind('\n', 0, m.start())
+            entities.append({
+                'raw': raw,
+                'value': val,
+                'is_hex': is_hex,
+                'line': line,
+                'col': col,
+                'label': label,
+            })
+        return entities
+
+    def check_numeric_entities(python_bytes: bytes, other_bytes: bytes, differences: list, label_python: str, label_other: str):
+        """对比数字实体格式，强调十六进制要求"""
+        py_entities = extract_numeric_entities(python_bytes, label_python)
+        other_entities = extract_numeric_entities(other_bytes, label_other)
+
+        # 1) Python 中是否存在十进制实体
+        for ent in py_entities:
+            if not ent['is_hex']:
+                differences.append({
+                    'path': f"@{label_python}:{ent['line']}:{ent['col']}",
+                    'type': '数字字符引用使用十进制',
+                    'expected': '使用十六进制（形如 &#xhhhh;）',
+                    'actual': ent['raw']
+                })
+
+        # 2) 同一位置实体格式差异（长度与顺序一致时尝试逐个对比）
+        if len(py_entities) == len(other_entities):
+            for i, (p, o) in enumerate(zip(py_entities, other_entities), start=1):
+                if p['raw'] != o['raw']:
+                    differences.append({
+                        'path': f"@entity[{i}]",
+                        'type': '数字字符引用格式不一致',
+                        'expected': f"{label_other} 使用 {o['raw']}",
+                        'actual': f"{label_python} 使用 {p['raw']}"
+                    })
+        else:
+            differences.append({
+                'path': '@entity_count',
+                'type': '数字字符引用数量不一致',
+                'expected': f"{label_other}: {len(other_entities)}",
+                'actual': f"{label_python}: {len(py_entities)}"
+            })
     
     try:
+        # 首先对比原始文本中的数字字符引用格式（解析前即可发现十进制引用）
+        differences = []
+        check_numeric_entities(python_xml, csharp_xml, differences, 'python_xml', 'original_xml')
+
         # 解析 XML
         python_root = ET.fromstring(python_xml)
         csharp_root = ET.fromstring(csharp_xml)
         
-        # 对比关键节点
-        ns_uri = 'urn:schemas-microsoft-com:unattend'
-        differences = []
+        # 注册命名空间
+        namespaces = {
+            'u': 'urn:schemas-microsoft-com:unattend',
+            'wcm': 'http://schemas.microsoft.com/WMIConfig/2002/State',
+            'ext': 'https://schneegans.de/windows/unattend-generator/'
+        }
         
-        # 对比语言设置组件
-        python_pe = python_root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core-WinPE']")
-        csharp_pe = csharp_root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core-WinPE']")
+        # 存储所有差异
+        # 对比根元素属性
+        compare_attributes(python_root, csharp_root, '/unattend', differences)
         
-        if (python_pe is None) != (csharp_pe is None):
-            differences.append("WinPE component existence mismatch")
-        elif python_pe is not None:
-            python_ui = python_pe.find(f"{{{ns_uri}}}UILanguage")
-            csharp_ui = csharp_pe.find(f"{{{ns_uri}}}UILanguage")
-            if (python_ui is None) != (csharp_ui is None):
-                differences.append("UILanguage in WinPE mismatch")
-            elif python_ui is not None and python_ui.text != csharp_ui.text:
-                differences.append(f"UILanguage in WinPE: Python='{python_ui.text}', C#='{csharp_ui.text}'")
+        # 对比所有 settings pass
+        settings_passes = ['offlineServicing', 'windowsPE', 'generalize', 'specialize', 
+                          'auditSystem', 'auditUser', 'oobeSystem']
         
-        python_oobe = python_root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core']")
-        csharp_oobe = csharp_root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core']")
+        python_settings = {}
+        csharp_settings = {}
         
-        if (python_oobe is None) != (csharp_oobe is None):
-            differences.append("OOBE component existence mismatch")
-        elif python_oobe is not None:
-            for elem_name in ['InputLocale', 'SystemLocale', 'UserLocale', 'UILanguage']:
-                python_elem = python_oobe.find(f"{{{ns_uri}}}{elem_name}")
-                csharp_elem = csharp_oobe.find(f"{{{ns_uri}}}{elem_name}")
-                if (python_elem is None) != (csharp_elem is None):
-                    differences.append(f"{elem_name} existence mismatch")
-                elif python_elem is not None and python_elem.text != csharp_elem.text:
-                    differences.append(f"{elem_name}: Python='{python_elem.text}', C#='{csharp_elem.text}'")
+        for settings_elem in python_root.findall(f"{{{namespaces['u']}}}settings"):
+            pass_attr = settings_elem.get('pass', '')
+            if pass_attr:
+                python_settings[pass_attr] = settings_elem
         
-        # 对比时区设置
-        python_tz = python_root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-Shell-Setup']/{{{ns_uri}}}TimeZone")
-        csharp_tz = csharp_root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-Shell-Setup']/{{{ns_uri}}}TimeZone")
+        for settings_elem in csharp_root.findall(f"{{{namespaces['u']}}}settings"):
+            pass_attr = settings_elem.get('pass', '')
+            if pass_attr:
+                csharp_settings[pass_attr] = settings_elem
         
-        if (python_tz is None) != (csharp_tz is None):
-            differences.append("TimeZone existence mismatch")
-        elif python_tz is not None and python_tz.text != csharp_tz.text:
-            differences.append(f"TimeZone: Python='{python_tz.text}', C#='{csharp_tz.text}'")
+        # 对比每个 pass
+        all_passes = set(python_settings.keys()) | set(csharp_settings.keys())
+        for pass_name in sorted(all_passes):
+            python_pass = python_settings.get(pass_name)
+            csharp_pass = csharp_settings.get(pass_name)
+            pass_path = f"/unattend/settings[@pass='{pass_name}']"
+            
+            if python_pass is None:
+                differences.append({
+                    'path': pass_path,
+                    'type': 'settings pass 缺失（生成的XML）',
+                    'expected': '存在',  # 原始 XML 中存在（期望值）
+                    'actual': None       # 生成的 XML 中缺失（实际值）
+                })
+                continue
+            if csharp_pass is None:
+                differences.append({
+                    'path': pass_path,
+                    'type': 'settings pass 缺失（原始XML）',
+                    'expected': None,     # 原始 XML 中缺失（期望值）
+                    'actual': '存在'      # 生成的 XML 中存在（实际值）
+                })
+                continue
+            
+            # 对比 settings 属性
+            compare_attributes(python_pass, csharp_pass, pass_path, differences)
+            
+            # 对比所有 component
+            python_components = {}
+            csharp_components = {}
+            
+            for comp in python_pass.findall(f"{{{namespaces['u']}}}component"):
+                comp_name = comp.get('name', '')
+                if comp_name:
+                    python_components[comp_name] = comp
+            
+            for comp in csharp_pass.findall(f"{{{namespaces['u']}}}component"):
+                comp_name = comp.get('name', '')
+                if comp_name:
+                    csharp_components[comp_name] = comp
+            
+            # 对比每个 component
+            all_components = set(python_components.keys()) | set(csharp_components.keys())
+            for comp_name in sorted(all_components):
+                python_comp = python_components.get(comp_name)
+                csharp_comp = csharp_components.get(comp_name)
+                comp_path = f"{pass_path}/component[@name='{comp_name}']"
+                
+                if python_comp is None:
+                    differences.append({
+                        'path': comp_path,
+                        'type': 'component 缺失（生成的XML）',
+                        'expected': '存在',  # 原始 XML 中存在（期望值）
+                        'actual': None       # 生成的 XML 中缺失（实际值）
+                    })
+                    continue
+                if csharp_comp is None:
+                    differences.append({
+                        'path': comp_path,
+                        'type': 'component 缺失（原始XML）',
+                        'expected': None,     # 原始 XML 中缺失（期望值）
+                        'actual': '存在'      # 生成的 XML 中存在（实际值）
+                    })
+                    continue
+                
+                # 递归对比 component 及其所有子元素
+                compare_elements_recursive(python_comp, csharp_comp, comp_path, differences, namespaces)
         
+        # 对比 Extensions 部分
+        python_ext = python_root.find(f"{{{namespaces['ext']}}}Extensions")
+        csharp_ext = csharp_root.find(f"{{{namespaces['ext']}}}Extensions")
+        compare_extensions(python_ext, csharp_ext, differences, namespaces)
+        
+        # 报告差异
         if differences:
-            logger.error("✗ Differences found:")
-            for diff in differences:
-                logger.error(f"  - {diff}")
+            logger.error(f"✗ 发现 {len(differences)} 个差异:")
+            for i, diff in enumerate(differences[:50], 1):  # 只显示前50个差异
+                logger.error(f"  {i}. 路径: {diff['path']}")
+                logger.error(f"     类型: {diff['type']}")
+                if diff.get('expected') is not None:
+                    logger.error(f"     期望值: {diff['expected']}")
+                if diff.get('actual') is not None:
+                    logger.error(f"     实际值: {diff['actual']}")
+                logger.error("")
+            
+            if len(differences) > 50:
+                logger.error(f"  ... 还有 {len(differences) - 50} 个差异未显示")
             
             # 保存 XML 文件用于调试
             output_dir = project_root / 'test' / 'output'
@@ -612,22 +1078,40 @@ def compare_xml(python_xml: bytes, csharp_xml: bytes, test_name: str) -> bool:
             
             python_file = output_dir / f'{test_name}_python.xml'
             csharp_file = output_dir / f'{test_name}_csharp.xml'
+            diff_file = output_dir / f'{test_name}_differences.txt'
             
             with open(python_file, 'wb') as f:
                 f.write(python_xml)
             with open(csharp_file, 'wb') as f:
                 f.write(csharp_xml)
             
-            logger.info(f"\n  XML files saved to:")
-            logger.info(f"    Python: {python_file}")
-            logger.info(f"    C#:     {csharp_file}")
+            # 保存详细的差异报告
+            with open(diff_file, 'w', encoding='utf-8') as f:
+                f.write(f"XML 对比差异报告: {test_name}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(f"总共发现 {len(differences)} 个差异\n\n")
+                
+                for i, diff in enumerate(differences, 1):
+                    f.write(f"差异 #{i}:\n")
+                    f.write(f"  路径: {diff['path']}\n")
+                    f.write(f"  类型: {diff['type']}\n")
+                    if diff.get('expected') is not None:
+                        f.write(f"  期望值: {diff['expected']}\n")
+                    if diff.get('actual') is not None:
+                        f.write(f"  实际值: {diff['actual']}\n")
+                    f.write("\n")
+            
+            logger.info(f"\n  文件已保存:")
+            logger.info(f"    Python XML:  {python_file}")
+            logger.info(f"    C# XML:      {csharp_file}")
+            logger.info(f"    差异报告:    {diff_file}")
             return False
         else:
-            logger.info("✓ XML structures match!")
+            logger.info("✓ XML 完全匹配！所有内容都一致。")
             return True
             
     except Exception as e:
-        logger.error(f"✗ Comparison failed: {e}")
+        logger.error(f"✗ 对比失败: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -643,8 +1127,8 @@ def test_xml_import_export():
     logger.info("Test: XML Import/Export")
     logger.info("="*60)
     
-    # 读取测试 XML 文件
-    xml_file = project_root / 'ref' / 'autounattend.xml'
+    # 读取测试 XML 文件（使用 test.xml）
+    xml_file = project_root / 'ref' / 'test.xml'
     if not xml_file.exists():
         logger.error(f"✗ Test XML file not found: {xml_file}")
         return False
@@ -682,53 +1166,53 @@ def test_xml_import_export():
         traceback.print_exc()
         return False
     
-    # C# DLL 解析
-    logger.info("\n1.2 C# DLL parsing...")
-    csharp_wrapper = CSharpDLLWrapper()
-    csharp_config_dict = None
+    # # C# DLL 解析
+    # logger.info("\n1.2 C# DLL parsing...")
+    # csharp_wrapper = CSharpDLLWrapper()
+    # csharp_config_dict = None
     
-    if csharp_wrapper.dll_loaded:
-        csharp_config_dict = csharp_wrapper.parse_xml(xml_content)
-        if csharp_config_dict is not None:
-            logger.info(f"✓ C# DLL parsed XML successfully")
-            logger.info(f"  Parsed {len(csharp_config_dict)} top-level keys")
+    # if csharp_wrapper.dll_loaded:
+    #     csharp_config_dict = csharp_wrapper.parse_xml(xml_content)
+    #     if csharp_config_dict is not None:
+    #         logger.info(f"✓ C# DLL parsed XML successfully")
+    #         logger.info(f"  Parsed {len(csharp_config_dict)} top-level keys")
             
-            # 保存解析结果
-            csharp_parse_file = output_dir / 'csharp_parse_result.json'
-            with open(csharp_parse_file, 'w', encoding='utf-8') as f:
-                json.dump(csharp_config_dict, f, indent=2, ensure_ascii=False)
-            logger.info(f"  Saved parse result to: {csharp_parse_file}")
-        else:
-            logger.warning("⚠ C# DLL parsing not available or returned None")
-    else:
-        logger.info("  (C# DLL parsing skipped - DLL not loaded)")
+    #         # 保存解析结果
+    #         csharp_parse_file = output_dir / 'csharp_parse_result.json'
+    #         with open(csharp_parse_file, 'w', encoding='utf-8') as f:
+    #             json.dump(csharp_config_dict, f, indent=2, ensure_ascii=False)
+    #         logger.info(f"  Saved parse result to: {csharp_parse_file}")
+    #     else:
+    #         logger.warning("⚠ C# DLL parsing not available or returned None")
+    # else:
+    #     logger.info("  (C# DLL parsing skipped - DLL not loaded)")
     
-    # 对比解析结果
-    if csharp_config_dict is not None:
-        logger.info("\n1.3 Comparing parse results...")
-        python_normalized = normalize_dict_for_comparison(python_config_dict)
-        csharp_normalized = normalize_dict_for_comparison(csharp_config_dict)
+    # # 对比解析结果
+    # if csharp_config_dict is not None:
+    #     logger.info("\n1.3 Comparing parse results...")
+    #     python_normalized = normalize_dict_for_comparison(python_config_dict)
+    #     csharp_normalized = normalize_dict_for_comparison(csharp_config_dict)
         
-        differences = compare_dicts(python_normalized, csharp_normalized)
-        if differences:
-            logger.error(f"✗ Found {len(differences)} differences in parse results:")
-            for diff in differences[:20]:  # 只显示前20个差异
-                logger.error(f"  - {diff}")
-            if len(differences) > 20:
-                logger.error(f"  ... and {len(differences) - 20} more differences")
+    #     differences = compare_dicts(python_normalized, csharp_normalized)
+    #     if differences:
+    #         logger.error(f"✗ Found {len(differences)} differences in parse results:")
+    #         for diff in differences[:20]:  # 只显示前20个差异
+    #             logger.error(f"  - {diff}")
+    #         if len(differences) > 20:
+    #             logger.error(f"  ... and {len(differences) - 20} more differences")
             
-            # 保存差异报告
-            diff_file = output_dir / 'parse_differences.txt'
-            with open(diff_file, 'w', encoding='utf-8') as f:
-                f.write("Parse Result Differences\n")
-                f.write("="*60 + "\n\n")
-                for diff in differences:
-                    f.write(f"{diff}\n")
-            logger.info(f"  Saved differences to: {diff_file}")
-        else:
-            logger.info("✓ Parse results match!")
-    else:
-        logger.info("  (Parse result comparison skipped - C# parsing not available)")
+    #         # 保存差异报告
+    #         diff_file = output_dir / 'parse_differences.txt'
+    #         with open(diff_file, 'w', encoding='utf-8') as f:
+    #             f.write("Parse Result Differences\n")
+    #             f.write("="*60 + "\n\n")
+    #             for diff in differences:
+    #                 f.write(f"{diff}\n")
+    #         logger.info(f"  Saved differences to: {diff_file}")
+    #     else:
+    #         logger.info("✓ Parse results match!")
+    # else:
+    #     logger.info("  (Parse result comparison skipped - C# parsing not available)")
     
     # ========================================
     # 步骤 2: 生成测试
@@ -760,62 +1244,68 @@ def test_xml_import_export():
         return False
     
     # C# DLL 生成（使用 Python 解析的结果）
-    logger.info("\n2.2 C# DLL generation (from Python parsed config)...")
-    csharp_generated_xml = None
+    # logger.info("\n2.2 C# DLL generation (from Python parsed config)...")
+    # csharp_generated_xml = None
     
-    if csharp_wrapper.dll_loaded:
-        # 使用 Python 解析的配置字典来生成 C# XML
-        csharp_generated_xml = csharp_wrapper.generate_xml_from_config_dict(python_config_dict)
-        if csharp_generated_xml is not None:
-            logger.info(f"✓ C# DLL generated XML ({len(csharp_generated_xml)} bytes)")
+    # if csharp_wrapper.dll_loaded:
+    #     # 使用 Python 解析的配置字典来生成 C# XML
+    #     csharp_generated_xml = csharp_wrapper.generate_xml_from_config_dict(python_config_dict)
+    #     if csharp_generated_xml is not None:
+    #         logger.info(f"✓ C# DLL generated XML ({len(csharp_generated_xml)} bytes)")
             
-            # 保存生成的 XML
-            csharp_gen_file = output_dir / 'csharp_generated.xml'
-            with open(csharp_gen_file, 'wb') as f:
-                f.write(csharp_generated_xml)
-            logger.info(f"  Saved generated XML to: {csharp_gen_file}")
-        else:
-            logger.warning("⚠ C# DLL generation not available or returned None")
-    else:
-        logger.info("  (C# DLL generation skipped - DLL not loaded)")
+    #         # 保存生成的 XML
+    #         csharp_gen_file = output_dir / 'csharp_generated.xml'
+    #         with open(csharp_gen_file, 'wb') as f:
+    #             f.write(csharp_generated_xml)
+    #         logger.info(f"  Saved generated XML to: {csharp_gen_file}")
+    #     else:
+    #         logger.warning("⚠ C# DLL generation not available or returned None")
+    # else:
+    #     logger.info("  (C# DLL generation skipped - DLL not loaded)")
     
-    # 对比生成的 XML
-    if csharp_generated_xml is not None:
-        logger.info("\n2.3 Comparing generated XML...")
-        if compare_xml(python_generated_xml, csharp_generated_xml, "generated_xml"):
-            logger.info("✓ Generated XML structures match!")
-        else:
-            logger.error("✗ Generated XML structures differ!")
-    else:
-        logger.info("  (Generated XML comparison skipped - C# generation not available)")
+    # # 对比生成的 XML
+    # if csharp_generated_xml is not None:
+    #     logger.info("\n2.3 Comparing generated XML...")
+    #     if compare_xml(python_generated_xml, csharp_generated_xml, "generated_xml"):
+    #         logger.info("✓ Generated XML structures match!")
+    #     else:
+    #         logger.error("✗ Generated XML structures differ!")
+    # else:
+    #     logger.info("  (Generated XML comparison skipped - C# generation not available)")
     
     # ========================================
-    # 步骤 3: 往返测试（Parse -> Generate -> Parse）
+    # 步骤 3: 往返测试（Parse -> Generate，对比生成的 XML 与原始 XML）
     # ========================================
     logger.info("\n" + "-"*60)
-    logger.info("Step 3: Round-trip test (Parse -> Generate -> Parse)")
+    logger.info("Step 3: Round-trip test (Parse -> Generate, compare XML)")
     logger.info("-"*60)
     
-    logger.info("\n3.1 Re-parsing Python generated XML...")
+    logger.info("\n3.1 Comparing generated XML with original XML...")
     try:
-        python_roundtrip_dict = generator.parse_xml(python_generated_xml)
-        logger.info(f"✓ Re-parsed Python generated XML successfully")
-        
-        # 对比原始解析结果和往返解析结果
-        python_original_normalized = normalize_dict_for_comparison(python_config_dict)
-        python_roundtrip_normalized = normalize_dict_for_comparison(python_roundtrip_dict)
-        
-        roundtrip_differences = compare_dicts(python_original_normalized, python_roundtrip_normalized)
-        if roundtrip_differences:
-            logger.warning(f"⚠ Found {len(roundtrip_differences)} differences in round-trip:")
-            for diff in roundtrip_differences[:10]:  # 只显示前10个差异
-                logger.warning(f"  - {diff}")
-            if len(roundtrip_differences) > 10:
-                logger.warning(f"  ... and {len(roundtrip_differences) - 10} more differences")
+        # 对比生成的 XML 和原始 XML
+        if compare_xml(python_generated_xml, xml_content, "roundtrip_original_vs_generated"):
+            logger.info("✓ Generated XML matches original XML structure!")
         else:
-            logger.info("✓ Round-trip test passed! (Parse -> Generate -> Parse)")
+            logger.warning("⚠ Generated XML differs from original XML structure")
+        
+        # 保存对比结果
+        output_dir = project_root / 'test' / 'output'
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        original_file = output_dir / 'original.xml'
+        generated_file = output_dir / 'roundtrip_generated.xml'
+        
+        with open(original_file, 'wb') as f:
+            f.write(xml_content)
+        with open(generated_file, 'wb') as f:
+            f.write(python_generated_xml)
+        
+        logger.info(f"\n  XML files saved to:")
+        logger.info(f"    Original:  {original_file}")
+        logger.info(f"    Generated: {generated_file}")
+        
     except Exception as e:
-        logger.error(f"✗ Round-trip test failed: {e}")
+        logger.error(f"✗ Round-trip XML comparison failed: {e}")
         import traceback
         traceback.print_exc()
     

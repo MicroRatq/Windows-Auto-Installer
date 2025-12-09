@@ -30,8 +30,8 @@ import { t } from './i18n'
 interface LanguageSettings {
   mode: 'interactive' | 'unattended'
   uiLanguage?: string // Windows显示语言
-  locale?: string // 用户区域
-  keyboard?: string // 键盘布局
+  systemLocale?: string // 用户区域（与后端字段名对齐）
+  inputLocale?: string // 键盘布局（与后端字段名对齐）
   locale2?: string // 第二语言
   keyboard2?: string // 第二键盘布局
   locale3?: string // 第三语言
@@ -618,8 +618,6 @@ function createDefaultConfig(): UnattendConfig {
 class UnattendConfigManager {
   private config: UnattendConfig
   private panel: HTMLElement | null = null
-  private presetData: typeof PRESET_DATA | null = null
-  private dataLoaded: boolean = false
 
   constructor() {
     this.config = createDefaultConfig()
@@ -648,58 +646,9 @@ class UnattendConfigManager {
     }
   }
 
-  // 获取预设数据（从后端加载）
-  async getPresetData(): Promise<typeof PRESET_DATA> {
-    // 如果已经加载过，直接返回
-    if (this.dataLoaded && this.presetData) {
-      return this.presetData
-    }
-    
-    // 如果还没有加载，从后端获取
-    if (!window.electronAPI) {
-      console.warn('Electron API 不可用，使用默认预设数据')
-      return PRESET_DATA
-    }
-
-    try {
-      // 获取当前语言设置（从 i18n）
-      const currentLang = localStorage.getItem('language') || 'en'
-      
-      const request = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'unattend_get_data',
-        params: {
-          lang: currentLang
-        }
-      }
-
-      const response = await window.electronAPI.sendToBackend(request)
-      if (response.error) {
-        console.error('获取配置数据失败:', response.error.message)
-        return PRESET_DATA
-      }
-
-      if (response.result) {
-        // 转换后端返回的数据格式为前端需要的格式
-        this.presetData = {
-          languages: response.result.languages || [],
-          locales: response.result.locales || [],
-          keyboards: response.result.keyboards || [],
-          timeZones: response.result.timeZones || [],
-          geoLocations: response.result.geoLocations || [],
-          windowsEditions: response.result.windowsEditions || [],
-          bloatwareItems: response.result.bloatwareItems || []
-        }
-        this.dataLoaded = true
-        return this.presetData
-      }
-
-      return PRESET_DATA
-    } catch (error: any) {
-      console.error('获取配置数据失败:', error)
-      return PRESET_DATA
-    }
+  // 获取预设数据
+  getPresetData() {
+    return PRESET_DATA
   }
 
   // 导入配置（从XML解析）
@@ -730,7 +679,7 @@ class UnattendConfigManager {
       if (response.result?.config) {
         this.updateConfig(response.result.config)
         // 重新渲染所有模块以反映新配置
-        this.renderAllModules().catch(console.error)
+        this.renderAllModules()
       }
     } catch (error: any) {
       console.error('导入 XML 失败:', error)
@@ -832,14 +781,14 @@ class UnattendConfigManager {
   }
 
   // 渲染所有模块
-  public async renderAllModules() {
+  public renderAllModules() {
     if (!this.panel) return
 
     // 0. Import and Export cards (在最顶部)
     this.renderImportExport()
 
     // 1. Region, Language and Time Zone (合并模块1和6)
-    await this.renderRegionLanguageTimeZone()
+    this.renderRegionLanguageTimeZone()
 
     // 2. Setup settings
     this.renderSetupSettings()
@@ -851,7 +800,7 @@ class UnattendConfigManager {
     this.renderPartitioning()
 
     // 6. Windows Edition and Source (合并模块8和9)
-    await this.renderWindowsEditionAndSource()
+    this.renderWindowsEditionAndSource()
 
     // 7. UI and Personalization (合并模块14、15、16、17、18、25)
     this.renderFileExplorer()
@@ -869,7 +818,7 @@ class UnattendConfigManager {
     this.renderStickyKeys()
 
     // 10. System Optimization (合并模块16、22、26)
-    await this.renderSystemOptimization()
+    this.renderSystemOptimization()
 
     // 11. Advanced Settings (合并模块5、10、20、28)
     this.renderAdvancedSettings()
@@ -1037,11 +986,11 @@ class UnattendConfigManager {
   }
 
   // 渲染模块1: Region, Language and Time Zone
-  private async renderRegionLanguageTimeZone() {
+  private renderRegionLanguageTimeZone() {
     const contentDiv = this.getSectionContent('config-region-language')
     if (!contentDiv) return
 
-    const preset = await this.getPresetData()
+    const preset = this.getPresetData()
     const lang = this.config.languageSettings
     const tz = this.config.timeZone
 
@@ -1077,7 +1026,7 @@ class UnattendConfigManager {
         icon: 'languages',
         controlType: 'select',
         options: preset.locales.map(l => ({ value: l.id, label: l.name })),
-        value: lang.locale || ''
+        value: lang.systemLocale || ''
       })
       : ''
 
@@ -1090,7 +1039,7 @@ class UnattendConfigManager {
         icon: 'keyboard',
         controlType: 'select',
         options: preset.keyboards.map(k => ({ value: k.id, label: k.name })),
-        value: lang.keyboard || ''
+        value: lang.inputLocale || ''
       })
       : ''
 
@@ -1131,7 +1080,7 @@ class UnattendConfigManager {
       this.updateModule('languageSettings', {
         mode: value ? 'interactive' : 'unattended'
       })
-      this.renderRegionLanguageTimeZone().catch(console.error)
+      this.renderRegionLanguageTimeZone()
     })
 
     // 设置 Windows display language ComboCard 事件监听
@@ -1141,11 +1090,11 @@ class UnattendConfigManager {
       })
 
       setupComboCard('config-first-language-card', (value) => {
-        this.updateModule('languageSettings', { locale: value as string })
+        this.updateModule('languageSettings', { systemLocale: value as string })
       })
 
       setupComboCard('config-first-keyboard-card', (value) => {
-        this.updateModule('languageSettings', { keyboard: value as string })
+        this.updateModule('languageSettings', { inputLocale: value as string })
       })
     }
 
@@ -1154,7 +1103,7 @@ class UnattendConfigManager {
       this.updateModule('timeZone', {
         mode: value ? 'implicit' : 'explicit'
       })
-      this.renderRegionLanguageTimeZone().catch(console.error)
+      this.renderRegionLanguageTimeZone()
     })
 
     // 设置时区选择 ComboCard 事件监听
@@ -2502,13 +2451,13 @@ End If`,
   }
 
   // 渲染模块8+9: Windows Edition and Source (合并)
-  private async renderWindowsEditionAndSource() {
+  private renderWindowsEditionAndSource() {
     const contentDiv = this.getSectionContent('config-windows-edition')
     if (!contentDiv) return
 
     const edition = this.config.windowsEdition
     const source = this.config.sourceImage
-    const preset = await this.getPresetData()
+    const preset = this.getPresetData()
 
     // 1. Windows Edition Mode - RadioContainer (带嵌套)
     const editionModeRadioHtml = createRadioContainer({
@@ -2634,7 +2583,7 @@ End If`,
         mode = value as 'interactive' | 'firmware'
       }
       this.updateModule('windowsEdition', { mode })
-      this.renderWindowsEditionAndSource().catch(console.error)
+      this.renderWindowsEditionAndSource()
     }, true)
 
     // 2. Generic edition select (嵌套)
@@ -2654,7 +2603,7 @@ End If`,
     // 4. Source image mode
     setupRadioContainer('source-image-mode-container', 'source-image-mode', (value) => {
       this.updateModule('sourceImage', { mode: value as 'automatic' | 'index' | 'name' })
-      this.renderWindowsEditionAndSource().catch(console.error)
+      this.renderWindowsEditionAndSource()
     }, true)
 
     // 5. Source image index (嵌套)
@@ -3407,14 +3356,14 @@ End If`,
 
   // 渲染模块16: System tweaks
   // 渲染模块10: System Optimization (合并System tweaks、Remove bloatware、Express settings)
-  private async renderSystemOptimization() {
+  private renderSystemOptimization() {
     const contentDiv = this.getSectionContent('config-system-optimization')
     if (!contentDiv) return
 
     const tweaks = this.config.systemTweaks
     const bloatware = this.config.bloatware
     const express = this.config.expressSettings
-    const preset = await this.getPresetData()
+    const preset = this.getPresetData()
 
     // 1. System Tweaks - MultiColumnCheckboxContainer (非嵌入式，显示头部)
     const systemTweaksHtml = createMultiColumnCheckboxContainer({
@@ -3481,14 +3430,13 @@ End If`,
 
     // 2. Remove Bloatware - MultiColumnCheckboxContainer (非嵌入式，显示头部)
     // 先构建选项和值
-    const bloatwareOptions = preset.bloatwareItems.map((item: any) => ({
-      value: item.id || item,
-      label: item.name || item
+    const bloatwareOptions = preset.bloatwareItems.map(item => ({
+      value: item,
+      label: item
     }))
     const bloatwareValues: Record<string, boolean> = {}
-    preset.bloatwareItems.forEach((item: any) => {
-      const itemId = item.id || item
-      bloatwareValues[itemId] = bloatware.items.includes(itemId)
+    preset.bloatwareItems.forEach(item => {
+      bloatwareValues[item] = bloatware.items.includes(item)
     })
 
     const removeBloatwareHtml = createMultiColumnCheckboxContainer({
@@ -4629,12 +4577,12 @@ End If`,
   }
 
   // 渲染模块26: Remove bloatware
-  private async renderBloatware() {
+  private renderBloatware() {
     const contentDiv = this.getSectionContent('config-bloatware')
     if (!contentDiv) return
 
     const bloatware = this.config.bloatware
-    const preset = await this.getPresetData()
+    const preset = this.getPresetData()
 
     contentDiv.innerHTML = `
       <div class="card-expandable expanded">
@@ -4652,16 +4600,12 @@ End If`,
             <fluent-button id="config-bloatware-deselect-all" appearance="outline">Deselect all</fluent-button>
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
-            ${preset.bloatwareItems.map((item: any) => {
-              const itemId = item.id || item
-              const itemName = item.name || item
-              return `
-                <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" class="bloatware-item" value="${itemId}" ${bloatware.items.includes(itemId) ? 'checked' : ''}>
-                  <span>${itemName}</span>
-                </label>
-              `
-            }).join('')}
+            ${preset.bloatwareItems.map(item => `
+              <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" class="bloatware-item" value="${item}" ${bloatware.items.includes(item) ? 'checked' : ''}>
+                <span>${item}</span>
+              </label>
+            `).join('')}
           </div>
         </div>
       </div>
@@ -4673,16 +4617,16 @@ End If`,
 
     if (selectAllBtn) {
       selectAllBtn.addEventListener('click', () => {
-        const allItems = preset.bloatwareItems.map((i: any) => i.id || i)
+        const allItems = preset.bloatwareItems.map(i => i)
         this.updateModule('bloatware', { items: allItems })
-        this.renderBloatware().catch(console.error)
+        this.renderBloatware()
       })
     }
 
     if (deselectAllBtn) {
       deselectAllBtn.addEventListener('click', () => {
         this.updateModule('bloatware', { items: [] })
-        this.renderBloatware().catch(console.error)
+        this.renderBloatware()
       })
     }
 
@@ -5436,7 +5380,7 @@ export function initIsoConfig() {
     window.addEventListener('language-changed', () => {
       console.log('Language changed, re-rendering ISO config modules')
       if (configManager) {
-        configManager.renderAllModules().catch(console.error)
+        configManager.renderAllModules()
       }
     })
   }

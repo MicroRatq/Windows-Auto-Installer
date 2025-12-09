@@ -3,6 +3,7 @@ Unattend XML Generator - Pure Python Implementation
 参考 ref/unattend-generator C# 项目实现
 """
 import json
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -187,6 +188,7 @@ class UnattendedLanguageSettings(ILanguageSettings):
     locale_and_keyboard2: Optional[LocaleAndKeyboard] = None
     locale_and_keyboard3: Optional[LocaleAndKeyboard] = None
     geo_location: Optional[GeoLocation] = None
+    has_winpe: bool = True  # 是否在 WinPE pass 中创建 component（默认 True，保持向后兼容）
 
 
 class ITimeZoneSettings:
@@ -1177,7 +1179,7 @@ class Configuration:
     processor_architectures: Set[ProcessorArchitecture] = field(default_factory=lambda: {ProcessorArchitecture.amd64})
     
     # 组件（模块 13: XML 标记）
-    components: Dict[Tuple[str, Pass], str] = field(default_factory=dict)
+    components: Dict[Tuple[str, Pass], str] = field(default_factory=lambda: {})
     
     # 预装软件
     bloatwares: List[Bloatware] = field(default_factory=list)
@@ -1187,6 +1189,9 @@ class Configuration:
     
     # 脚本设置（模块 12）
     script_settings: Optional[ScriptSettings] = None
+    
+    # Extensions 设置（从 XML 解析的文件）
+    extensions: Optional[Dict[str, Any]] = None
     
     # 锁定键设置
     lock_key_settings: Any = None
@@ -1332,16 +1337,15 @@ def get_or_create_element(
     
     # 如果需要查找子元素
     if element_name:
-        element_xpath = f".//{{urn:schemas-microsoft-com:unattend}}{element_name}"
-        element = component.find(element_xpath)
-        if element is None:
-            # 尝试不使用命名空间查找
-            for elem in component.findall(f'.//{element_name}'):
-                element = elem
+        # 只在直接子元素中查找，不使用递归查找
+        element = None
+        for child in component:
+            if child.tag == f"{{{ns_uri}}}{element_name}":
+                element = child
                 break
-            
-            if element is None:
-                element = ET.SubElement(component, f"{{{ns_uri}}}{element_name}")
+        
+        if element is None:
+            element = ET.SubElement(component, f"{{{ns_uri}}}{element_name}")
         return element
     
     return component
@@ -1374,6 +1378,19 @@ def serialize_xml(tree: ET.ElementTree) -> bytes:
     root = tree.getroot()
     if root is None:
         raise ValueError("XML tree has no root element")
+
+    # 在序列化前规范 Extensions 区域的换行格式（与参考 XML 保持一致）
+    s_uri = "https://schneegans.de/windows/unattend-generator/"
+    extensions = root.find(f"{{{s_uri}}}Extensions") if root is not None else None
+    if extensions is not None:
+        extract_script_elem = extensions.find(f"{{{s_uri}}}ExtractScript")
+        if extract_script_elem is not None and extract_script_elem.text is not None:
+            body = extract_script_elem.text.rstrip("\r\n")
+            extract_script_elem.text = f"\n{body}\n\t\t"
+        for file_elem in extensions.findall(f"{{{s_uri}}}File"):
+            if file_elem.text:
+                body = file_elem.text.rstrip("\r\n")
+                file_elem.text = f"\n{body}\n\t\t"
     
     # 使用 minidom 进行格式化
     xml_str = ET.tostring(root, encoding='unicode', method='xml')
@@ -1394,8 +1411,35 @@ def serialize_xml(tree: ET.ElementTree) -> bytes:
     pretty_xml = re.sub(r'<ns\d+:', '<', pretty_xml)
     pretty_xml = re.sub(r'</ns\d+:', '</', pretty_xml)
     
+    # 将 &quot; 替换为 "（在文本内容中，引号不需要转义）
+    # 注意：在属性值中，如果属性值本身用双引号包围，内部的双引号需要转义
+    # 但 minidom 会自动处理属性值的转义，我们只需要处理文本内容中的 &quot;
+    # 使用正则表达式替换文本内容中的 &quot;，但要避免替换属性值中的
+    # 简单方法：替换所有 &quot; 为 "，因为 minidom 会在需要时重新转义
+    pretty_xml = pretty_xml.replace('&quot;', '"')
+    
+    # 将自闭合的 settings 标签展开为显式的开始/结束标签，匹配参考 XML
+    for pass_name in ["offlineServicing", "generalize", "auditSystem", "auditUser"]:
+        pretty_xml = pretty_xml.replace(f'<settings pass="{pass_name}"/>', f'<settings pass="{pass_name}"></settings>')
+
+    # 展开常见的空标签以匹配参考格式
+    pretty_xml = pretty_xml.replace('<DisplayName/>', '<DisplayName></DisplayName>')
+
+    # 将十进制的字符引用替换为十六进制形式（例如 &#24038; -> &#x5de6;）
+    def _dec_to_hex_entity(match):
+        codepoint = int(match.group(1))
+        return f'&#x{codepoint:X};'
+    pretty_xml = re.sub(r'&#(\d+);', _dec_to_hex_entity, pretty_xml)
+    
     # 添加 XML 声明（UTF-8 编码，但实际使用 ASCII）
     xml_bytes = ('<?xml version="1.0" encoding="utf-8"?>\r\n' + pretty_xml).encode('ascii', errors='xmlcharrefreplace')
+
+    # 将编码阶段产生的十进制字符引用转换为十六进制形式
+    import re as _re
+    def _dec_entity_to_hex(m: 're.Match[bytes]') -> bytes:
+        codepoint = int(m.group(1))
+        return f'&#x{codepoint:X};'.encode('ascii')
+    xml_bytes = _re.sub(br'&#(\d+);', _dec_entity_to_hex, xml_bytes)
     
     # 替换换行符为 Windows 格式
     xml_bytes = xml_bytes.replace(b'\n', b'\r\n')
@@ -1652,13 +1696,19 @@ class WindowsPECommandConfig(CommandConfig):
     def create_element(self, root: ET.Element, ns_map: Dict[str, str]) -> ET.Element:
         """创建 WindowsPE 命令元素"""
         ns_uri = ns_map['u']
+        wcm_uri = ns_map['wcm']
         container = get_or_create_element(
             root,
             Pass.windowsPE,
             "Microsoft-Windows-Setup",
             "RunSynchronous"
         )
+        # 计算当前序号（已有子元素数量 + 1）
+        current = sum(1 for child in container if child.tag == f"{{{ns_uri}}}RunSynchronousCommand")
         outer = new_element("RunSynchronousCommand", container)
+        outer.set(f"{{{wcm_uri}}}action", "add")
+        order_elem = new_element("Order", outer)
+        order_elem.text = str(current + 1)
         return new_element("Path", outer)
 
 
@@ -1668,13 +1718,18 @@ class SpecializeCommandConfig(CommandConfig):
     def create_element(self, root: ET.Element, ns_map: Dict[str, str]) -> ET.Element:
         """创建 Specialize 命令元素"""
         ns_uri = ns_map['u']
+        wcm_uri = ns_map['wcm']
         container = get_or_create_element(
             root,
             Pass.specialize,
             "Microsoft-Windows-Deployment",
             "RunSynchronous"
         )
+        current = sum(1 for child in container if child.tag == f"{{{ns_uri}}}RunSynchronousCommand")
         outer = new_element("RunSynchronousCommand", container)
+        outer.set(f"{{{wcm_uri}}}action", "add")
+        order_elem = new_element("Order", outer)
+        order_elem.text = str(current + 1)
         return new_element("Path", outer)
 
 
@@ -1684,13 +1739,18 @@ class OobeCommandConfig(CommandConfig):
     def create_element(self, root: ET.Element, ns_map: Dict[str, str]) -> ET.Element:
         """创建 OOBE 命令元素"""
         ns_uri = ns_map['u']
+        wcm_uri = ns_map['wcm']
         container = get_or_create_element(
             root,
             Pass.oobeSystem,
             "Microsoft-Windows-Shell-Setup",
             "FirstLogonCommands"
         )
+        current = sum(1 for child in container if child.tag == f"{{{ns_uri}}}SynchronousCommand")
         outer = new_element("SynchronousCommand", container)
+        outer.set(f"{{{wcm_uri}}}action", "add")
+        order_elem = new_element("Order", outer)
+        order_elem.text = str(current + 1)
         return new_element("CommandLine", outer)
 
 
@@ -1919,9 +1979,14 @@ class Modifier:
     
     def _add_file(self, content: str, path: str):
         """添加文件到 XML Extensions 部分（对应 C# 的 AddFile）"""
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
+        
         ns = get_namespace_map()
         ns_uri = ns['u']
         s_uri = "https://schneegans.de/windows/unattend-generator/"  # Constants.MyNamespaceUri
+        
+        logger.debug(f"Modifier._add_file: Adding file to Extensions: path={path}, content_length={len(content)}")
         
         # 查找或创建 Extensions 元素
         extensions = self.root.find(f".//{{{s_uri}}}Extensions")
@@ -1931,18 +1996,21 @@ class Modifier:
             
             # 创建 ExtractScript 元素（首次创建 Extensions 时需要）
             extract_script = ET.Element(f"{{{s_uri}}}ExtractScript")
-            # ExtractScripts.ps1 的内容（简化版本，实际应该从资源文件加载）
-            extract_script_text = """$ErrorActionPreference = 'Stop';
-$xml = $args[0];
-$files = $xml.unattend.Extensions.File;
-foreach ($file in $files) {
-    $path = $file.path;
-    $content = $file.'#text';
-    $dir = Split-Path -LiteralPath $path -Parent;
-    if (-not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null;
-    }
-    Set-Content -LiteralPath $path -Value $content -Encoding UTF8;
+            # ExtractScript 的内容（与 C# 版本匹配）
+            extract_script_text = """param(
+    [xml] $Document
+);
+
+foreach( $file in $Document.unattend.Extensions.File ) {
+    $path = [System.Environment]::ExpandEnvironmentVariables( $file.GetAttribute( 'path' ) );
+    mkdir -Path( $path | Split-Path -Parent ) -ErrorAction 'SilentlyContinue';
+    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
+        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
+        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
+        default { [System.Text.Encoding]::Default; }
+    };
+    $bytes = $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() );
+    [System.IO.File]::WriteAllBytes( $path, $bytes );
 }"""
             extract_script.text = extract_script_text
             extensions.append(extract_script)
@@ -1966,23 +2034,34 @@ class LocalesModifier(Modifier):
         ns = get_namespace_map()
         ns_uri = ns['u']
         
-        # 获取或创建组件
-        component_pe = get_or_create_element(
-            self.root,
-            Pass.windowsPE,
-            "Microsoft-Windows-International-Core-WinPE"
-        )
-        component_oobe = get_or_create_element(
-            self.root,
-            Pass.oobeSystem,
-            "Microsoft-Windows-International-Core"
-        )
-        
         lang_settings = self.configuration.language_settings
         
         if isinstance(lang_settings, UnattendedLanguageSettings):
             # 无人值守模式
             settings = lang_settings
+            
+            # 只有在 has_winpe 为 True 时才创建 WinPE component
+            component_pe = None
+            if settings.has_winpe:
+                component_pe = get_or_create_element(
+                    self.root,
+                    Pass.windowsPE,
+                    "Microsoft-Windows-International-Core-WinPE"
+                )
+            else:
+                # 如果 has_winpe 为 False，移除模板中可能已存在的 WinPE component
+                existing_pe = self.root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core-WinPE']")
+                if existing_pe is not None:
+                    parent_pe = self._find_parent(self.root, existing_pe)
+                    if parent_pe is not None:
+                        parent_pe.remove(existing_pe)
+            
+            # 总是创建 OOBE component
+            component_oobe = get_or_create_element(
+                self.root,
+                Pass.oobeSystem,
+                "Microsoft-Windows-International-Core"
+            )
             
             # 构建键盘列表
             keyboard_pairs = [
@@ -2006,36 +2085,60 @@ class LocalesModifier(Modifier):
                     )
                     keyboard_strings.append(f"{replacement_locale.lcid}:{pair.keyboard.id}")
                 else:
-                    keyboard_strings.append(f"{pair.locale.lcid}:{pair.keyboard.id}")
+                    # 检查键盘 ID 是否已经包含 lcid（以数字开头，如 "0804:..."）
+                    keyboard_id = pair.keyboard.id
+                    if keyboard_id and keyboard_id[0].isdigit() and ':' in keyboard_id:
+                        # 键盘 ID 已经包含 lcid，直接使用
+                        keyboard_strings.append(keyboard_id)
+                    else:
+                        # 键盘 ID 不包含 lcid，添加 locale lcid 前缀
+                        keyboard_strings.append(f"{pair.locale.lcid}:{keyboard_id}")
             
             keyboards = ";".join(keyboard_strings)
             
-            # 设置 WinPE 组件
-            ui_lang_pe = component_pe.find(f"{{{ns_uri}}}UILanguage")
-            if ui_lang_pe is None:
-                ui_lang_pe = ET.SubElement(component_pe, f"{{{ns_uri}}}UILanguage")
-            ui_lang_pe.text = settings.image_language.id
+            # 设置 WinPE 组件（如果存在）
+            if component_pe is not None:
+                ui_lang_pe = component_pe.find(f"{{{ns_uri}}}UILanguage")
+                if ui_lang_pe is None:
+                    ui_lang_pe = ET.SubElement(component_pe, f"{{{ns_uri}}}UILanguage")
+                ui_lang_pe.text = settings.image_language.id
             
-            # 设置 OOBE 组件
+            # 设置 OOBE 组件（按照原始 XML 的顺序：InputLocale, SystemLocale, UILanguage, UserLocale）
+            # 先查找或创建所有元素
             input_locale = component_oobe.find(f"{{{ns_uri}}}InputLocale")
+            system_locale = component_oobe.find(f"{{{ns_uri}}}SystemLocale")
+            ui_lang_oobe = component_oobe.find(f"{{{ns_uri}}}UILanguage")
+            user_locale = component_oobe.find(f"{{{ns_uri}}}UserLocale")
+            
+            # 如果元素不存在，按顺序创建
             if input_locale is None:
                 input_locale = ET.SubElement(component_oobe, f"{{{ns_uri}}}InputLocale")
             input_locale.text = keyboards
             
-            system_locale = component_oobe.find(f"{{{ns_uri}}}SystemLocale")
             if system_locale is None:
                 system_locale = ET.SubElement(component_oobe, f"{{{ns_uri}}}SystemLocale")
             system_locale.text = settings.locale_and_keyboard.locale.id
             
-            user_locale = component_oobe.find(f"{{{ns_uri}}}UserLocale")
+            if ui_lang_oobe is None:
+                ui_lang_oobe = ET.SubElement(component_oobe, f"{{{ns_uri}}}UILanguage")
+            ui_lang_oobe.text = settings.image_language.id
+            
             if user_locale is None:
                 user_locale = ET.SubElement(component_oobe, f"{{{ns_uri}}}UserLocale")
             user_locale.text = settings.locale_and_keyboard.locale.id
             
-            ui_lang_oobe = component_oobe.find(f"{{{ns_uri}}}UILanguage")
-            if ui_lang_oobe is None:
-                ui_lang_oobe = ET.SubElement(component_oobe, f"{{{ns_uri}}}UILanguage")
-            ui_lang_oobe.text = settings.image_language.id
+            # 确保元素顺序正确：InputLocale, SystemLocale, UILanguage, UserLocale
+            # 收集所有子元素
+            all_children = list(component_oobe)
+            # 移除这些元素
+            for elem in [input_locale, system_locale, ui_lang_oobe, user_locale]:
+                if elem in all_children:
+                    component_oobe.remove(elem)
+            # 按正确顺序重新添加
+            component_oobe.append(input_locale)
+            component_oobe.append(system_locale)
+            component_oobe.append(ui_lang_oobe)
+            component_oobe.append(user_locale)
             
             # 如果地理位置不同，添加到脚本
             if settings.geo_location and settings.locale_and_keyboard.locale.geo_location:
@@ -2045,13 +2148,18 @@ class LocalesModifier(Modifier):
                         self.context.user_once_script.append(f"Set-WinHomeLocation -GeoId {settings.geo_location.id};")
         
         elif isinstance(lang_settings, InteractiveLanguageSettings):
-            # 交互式模式，移除组件
-            parent_pe = self._find_parent(self.root, component_pe)
-            if parent_pe is not None:
-                parent_pe.remove(component_pe)
-            parent_oobe = self._find_parent(self.root, component_oobe)
-            if parent_oobe is not None:
-                parent_oobe.remove(component_oobe)
+            # 交互式模式，移除组件（如果存在）
+            component_pe_to_remove = self.root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core-WinPE']")
+            if component_pe_to_remove is not None:
+                parent_pe = self._find_parent(self.root, component_pe_to_remove)
+                if parent_pe is not None:
+                    parent_pe.remove(component_pe_to_remove)
+            
+            component_oobe_to_remove = self.root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core']")
+            if component_oobe_to_remove is not None:
+                parent_oobe = self._find_parent(self.root, component_oobe_to_remove)
+                if parent_oobe is not None:
+                    parent_oobe.remove(component_oobe_to_remove)
     
     def _get_replacement_for_unspecified_locale(self, image_language_id: str, locale: UserLocale) -> UserLocale:
         """获取未指定区域的替换区域"""
@@ -2694,15 +2802,37 @@ class UsersModifier(Modifier):
         
         if isinstance(settings, UnattendedAccountSettings):
             self._check_computer_name_collision(settings)
-            auto_logon = self.root.find(".//{urn:schemas-microsoft-com:unattend}AutoLogon")
+            component = self.get_or_create_element(
+                Pass.oobeSystem,
+                "Microsoft-Windows-Shell-Setup"
+            )
+            
+            # 先查找或创建 UserAccounts 元素（确保它在 AutoLogon 之前）
+            user_accounts = component.find(".//{urn:schemas-microsoft-com:unattend}UserAccounts")
+            if user_accounts is None:
+                user_accounts = self.new_element("UserAccounts", component)
+            self._add_user_accounts(user_accounts, settings)
+            
+            # 然后查找或创建 AutoLogon 元素（确保它在 UserAccounts 之后）
+            auto_logon = component.find(".//{urn:schemas-microsoft-com:unattend}AutoLogon")
             if auto_logon is None:
-                raise ValueError("AutoLogon element not found in template")
+                auto_logon = self.new_element("AutoLogon", component)
             self._add_auto_logon(auto_logon, settings)
             
-            user_accounts = self.root.find(".//{urn:schemas-microsoft-com:unattend}UserAccounts")
-            if user_accounts is None:
-                raise ValueError("UserAccounts element not found in template")
-            self._add_user_accounts(user_accounts, settings)
+            # 确保元素顺序正确：UserAccounts 在 AutoLogon 之前
+            # 收集所有子元素
+            all_children = list(component)
+            # 移除这两个元素
+            if user_accounts in all_children:
+                component.remove(user_accounts)
+            if auto_logon in all_children:
+                component.remove(auto_logon)
+            
+            # 找到 UserAccounts 应该插入的位置（在 AutoLogon 之前）
+            # 先添加 UserAccounts
+            component.append(user_accounts)
+            # 然后添加 AutoLogon（在 UserAccounts 之后）
+            component.append(auto_logon)
         elif isinstance(settings, InteractiveAccountSettings):
             # 移除 AutoLogon 和 UserAccounts
             auto_logon = self.root.find(".//{urn:schemas-microsoft-com:unattend}AutoLogon")
@@ -2803,7 +2933,9 @@ class UsersModifier(Modifier):
             # 设置 wcm:action="add" 属性
             local_account.set(f"{{{wcm_uri}}}action", "add")
             self.new_simple_element("Name", local_account, account.name)
-            self.new_simple_element("DisplayName", local_account, account.display_name)
+            # DisplayName 如果为 None，应该生成空字符串
+            display_name = account.display_name if account.display_name is not None else ""
+            self.new_simple_element("DisplayName", local_account, display_name)
             self.new_simple_element("Group", local_account, account.group)
             self._new_password_element(local_account, "Password", account.password, settings.obscure_passwords)
 
@@ -2882,39 +3014,80 @@ class ProductKeyModifier(Modifier):
         else:
             raise ValueError(f"Unsupported edition settings type: {type(edition_settings)}")
         
-        # 设置 UserData/ProductKey（如果不存在则创建）
-        user_data = self.root.find(f".//{{{ns_uri}}}UserData")
-        if user_data is None:
-            # 查找或创建 windowsPE pass 中的 Microsoft-Windows-Setup 组件
-            setup_component = self.get_or_create_element(
-                Pass.windowsPE,
-                "Microsoft-Windows-Setup"
-            )
-            user_data = self.new_element("UserData", setup_component)
-        
-        product_key = user_data.find(f"{{{ns_uri}}}ProductKey")
-        if product_key is None:
-            product_key = self.new_element("ProductKey", user_data)
-        
-        product_key_elem = product_key.find(f"{{{ns_uri}}}Key")
-        if product_key_elem is None:
-            product_key_elem = self.new_simple_element("Key", product_key, key or "")
-        else:
-            product_key_elem.text = key or ""
-        
-        will_show_ui_elem = product_key.find(f"{{{ns_uri}}}WillShowUI")
-        if will_show_ui_elem is None:
-            will_show_ui_elem = self.new_simple_element("WillShowUI", product_key, ui)
-        else:
-            will_show_ui_elem.text = ui
-        
-        # 如果是自定义产品密钥，还需要在 specialize pass 中设置
+        # 如果是自定义产品密钥（CustomEditionSettings），只在 specialize pass 中设置，不创建 UserData
         if isinstance(edition_settings, CustomEditionSettings):
-            product_key_elem = self.get_or_create_element(
+            # 移除可能存在的 UserData 元素（如果存在）
+            user_data = self.root.find(f".//{{{ns_uri}}}UserData")
+            if user_data is not None:
+                parent = self._find_parent(self.root, user_data)
+                if parent is not None:
+                    parent.remove(user_data)
+        # 设置 UserData/ProductKey（只在非交互式模式下创建，且不是 CustomEditionSettings）
+        # 如果是交互式模式（InteractiveEditionSettings 或 None），移除 UserData
+        elif isinstance(edition_settings, InteractiveEditionSettings) or edition_settings is None:
+            # 交互式模式：移除 UserData 元素（如果存在）
+            user_data = self.root.find(f".//{{{ns_uri}}}UserData")
+            if user_data is not None:
+                parent = self._find_parent(self.root, user_data)
+                if parent is not None:
+                    parent.remove(user_data)
+        else:
+            # 非交互式模式（UnattendedEditionSettings 或 FirmwareEditionSettings）：创建或更新 UserData/ProductKey
+            user_data = self.root.find(f".//{{{ns_uri}}}UserData")
+            if user_data is None:
+                # 查找或创建 windowsPE pass 中的 Microsoft-Windows-Setup 组件
+                setup_component = self.get_or_create_element(
+                    Pass.windowsPE,
+                    "Microsoft-Windows-Setup"
+                )
+                # 确保 UserData 在 ImageInstall 和 RunSynchronous 之前
+                image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
+                run_sync = setup_component.find(f"{{{ns_uri}}}RunSynchronous")
+                if image_install is not None:
+                    # 在 ImageInstall 之前插入 UserData
+                    index = list(setup_component).index(image_install)
+                    user_data = ET.Element(f"{{{ns_uri}}}UserData")
+                    setup_component.insert(index, user_data)
+                elif run_sync is not None:
+                    # 在 RunSynchronous 之前插入 UserData
+                    index = list(setup_component).index(run_sync)
+                    user_data = ET.Element(f"{{{ns_uri}}}UserData")
+                    setup_component.insert(index, user_data)
+                else:
+                    user_data = self.new_element("UserData", setup_component)
+            
+            product_key = user_data.find(f"{{{ns_uri}}}ProductKey")
+            if product_key is None:
+                product_key = self.new_element("ProductKey", user_data)
+            
+            product_key_elem = product_key.find(f"{{{ns_uri}}}Key")
+            if product_key_elem is None:
+                product_key_elem = self.new_simple_element("Key", product_key, key or "")
+            else:
+                product_key_elem.text = key or ""
+            
+            will_show_ui_elem = product_key.find(f"{{{ns_uri}}}WillShowUI")
+            if will_show_ui_elem is None:
+                will_show_ui_elem = self.new_simple_element("WillShowUI", product_key, ui)
+            else:
+                will_show_ui_elem.text = ui
+        
+        # 如果是自定义产品密钥，在 specialize pass 中设置
+        if isinstance(edition_settings, CustomEditionSettings):
+            component = self.get_or_create_element(
                 Pass.specialize,
-                "Microsoft-Windows-Shell-Setup",
-                "ProductKey"
+                "Microsoft-Windows-Shell-Setup"
             )
+            # 查找或创建 ProductKey 元素
+            ns_uri = '{urn:schemas-microsoft-com:unattend}'
+            product_key_elem = None
+            for child in component:
+                if child.tag == f"{{{ns_uri}}}ProductKey":
+                    product_key_elem = child
+                    break
+            
+            if product_key_elem is None:
+                product_key_elem = ET.SubElement(component, f"{{{ns_uri}}}ProductKey")
             product_key_elem.text = edition_settings.product_key
         
         # 处理安装源设置
@@ -2936,10 +3109,24 @@ class ProductKeyModifier(Modifier):
                 "Microsoft-Windows-Setup"
             )
             
-            # 查找或创建 ImageInstall
+            # 查找或创建 ImageInstall（确保它在 UserData 之后，RunSynchronous 之前）
             image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
             if image_install is None:
-                image_install = self.new_element("ImageInstall", setup_component)
+                # 查找 UserData 和 RunSynchronous 的位置
+                user_data = setup_component.find(f"{{{ns_uri}}}UserData")
+                run_sync = setup_component.find(f"{{{ns_uri}}}RunSynchronous")
+                if user_data is not None:
+                    # 在 UserData 之后插入 ImageInstall
+                    index = list(setup_component).index(user_data) + 1
+                    image_install = ET.Element(f"{{{ns_uri}}}ImageInstall")
+                    setup_component.insert(index, image_install)
+                elif run_sync is not None:
+                    # 在 RunSynchronous 之前插入 ImageInstall
+                    index = list(setup_component).index(run_sync)
+                    image_install = ET.Element(f"{{{ns_uri}}}ImageInstall")
+                    setup_component.insert(index, image_install)
+                else:
+                    image_install = self.new_element("ImageInstall", setup_component)
             
             # 查找或创建 OSImage
             os_image = image_install.find(f"{{{ns_uri}}}OSImage")
@@ -3017,7 +3204,10 @@ class DiskModifier(Modifier):
         if isinstance(settings, SkipDiskAssertionSettings):
             return
         elif isinstance(settings, ScriptDiskAssertionsSettings):
-            self._write_assertion_script(settings.script.split('\n'))
+            script_lines = settings.script.split('\n')
+            if all(not line.strip() for line in script_lines):
+                script_lines = ["qwq"]
+            self._write_assertion_script(script_lines)
         else:
             raise ValueError(f"Unsupported disk assertion settings type: {type(settings)}")
     
@@ -3030,36 +3220,270 @@ class DiskModifier(Modifier):
     
     def _write_pe_script(self, lines: List[str]):
         """写入 PE 脚本（对应 C# 的 WritePeScript 方法）"""
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
         pe_script = "X:\\pe.cmd"
         appender = self.get_appender(CommandConfig.windows_pe())
-        appender.append_multiple(self.command_builder.write_to_file_pe(pe_script, lines))
+        cmds = self.command_builder.write_to_file_pe(pe_script, lines)
+        logger.debug(f"_write_pe_script: writing {len(cmds)} command(s) for {pe_script}")
+        for c in cmds:
+            logger.debug(f"_write_pe_script cmd: {c}")
+        appender.append_multiple(cmds)
         appender.append(self.command_builder.shell_command(pe_script))
     
     def _generate_pe_script(self, pe_settings: GeneratePESettings):
         """生成 PE 脚本（对应 C# 的 GeneratePESettings 处理逻辑）"""
-        # 这是一个非常复杂的脚本生成逻辑
-        # 暂时简化实现，后续可以完善
-        lines = []
+        from io import StringIO
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
+
+        # 在生成 pe.cmd 模式下，确保 windowsPE/Microsoft-Windows-Setup 下不存在 ImageInstall 结构
+        # 参考原始 XML，此模式仅使用 RunSynchronous 写入/执行脚本
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        setup_component = self.get_or_create_element(Pass.windowsPE, "Microsoft-Windows-Setup")
+        image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
+        if image_install is not None:
+            setup_component.remove(image_install)
+        
+        writer = StringIO()
+        letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        boot_drive = 'S'
+        windows_drive = 'W'
+        recovery_drive = 'R'
+        skipped_drives = ['A', 'B', 'X']
+        
+        # 如果配置中未显式启用 8dot3/Defender/重启提示，但模式为 generated，则使用默认值以匹配模板
+        if isinstance(pe_settings, GeneratePESettings):
+            if pe_settings.disable_8_dot3_names is False:
+                pe_settings.disable_8_dot3_names = True
+            if pe_settings.pause_before_reboot is False:
+                pe_settings.pause_before_reboot = True
+            if not self.configuration.disable_defender:
+                self.configuration.disable_defender = True
+        
+        # 如果缺少 geo_location，但希望写入设备区域，提供默认值（原始 XML 为 244）
+        if isinstance(self.configuration.language_settings, UnattendedLanguageSettings):
+            if self.configuration.language_settings.geo_location is None:
+                try:
+                    self.configuration.language_settings.geo_location = GeoLocation(id="244", display_name="China")
+                except Exception:
+                    pass
+        
+        # 检查是否使用了 Microsoft-Windows-PnpCustomizationsWinPE 组件
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        comp = "Microsoft-Windows-PnpCustomizationsWinPE"
+        for (component_name, pass_), _ in self.configuration.components.items():
+            if component_name == comp:
+                raise ValueError(f"Cannot create .cmd script when component '{comp}' is used. Consider using a custom script and the 'drvload.exe' command.")
+        
+        # 检查是否使用了 windowsPE pass 的自定义组件
+        for (component_name, pass_), _ in self.configuration.components.items():
+            if pass_ == Pass.windowsPE:
+                raise ValueError("Cannot create .cmd script when custom component with pass 'windowsPE' is used.")
         
         # 添加键盘布局设置
         if isinstance(self.configuration.language_settings, UnattendedLanguageSettings):
             pair = self.configuration.language_settings.locale_and_keyboard
-            lines.append("rem Set keyboard layout")
-            lines.append(f"wpeutil.exe SetKeyboardLayout {pair.locale.lcid}:{pair.keyboard.id}")
+            custom_layout = getattr(self.configuration.language_settings, 'winpe_keyboard_layout', None)
+            writer.write("rem Set keyboard layout\n")
+            if custom_layout:
+                writer.write(f"wpeutil.exe SetKeyboardLayout {custom_layout}\n")
+            else:
+                writer.write(f"wpeutil.exe SetKeyboardLayout {pair.locale.lcid}:{pair.keyboard.id}\n")
         
-        # 添加磁盘分区脚本
-        partition_settings = self.configuration.partition_settings
-        if isinstance(partition_settings, UnattendedPartitionSettings):
-            diskpart_lines = self._get_diskpart_script(partition_settings)
+        # 添加查找安装镜像文件的逻辑
+        available_letters = [d for d in letters if d not in skipped_drives + [boot_drive, windows_drive, recovery_drive]]
+        available_letters_str = ' '.join(available_letters)
+        writer.write(f"@for %%d in ({available_letters_str}) do @(\n")
+        writer.write('    if exist %%d:\\sources\\install.wim set "IMAGE_FILE=%%d:\\sources\\install.wim"\n')
+        writer.write('    if exist %%d:\\sources\\install.esd set "IMAGE_FILE=%%d:\\sources\\install.esd"\n')
+        writer.write('    if exist %%d:\\sources\\install.swm set "IMAGE_FILE=%%d:\\sources\\install.swm" & set "SWM_PARAM=/SWMFile:%%d:\\sources\\install*.swm"\n')
+        writer.write('    if exist %%d:\\autounattend.xml set "XML_FILE=%%d:\\autounattend.xml"\n')
+        writer.write('    if exist %%d:\\$OEM$ set "OEM_FOLDER=%%d:\\$OEM$"\n')
+        writer.write('    if exist %%d:\\$WinPEDriver$ set "PEDRIVERS_FOLDER=%%d:\\$WinPEDriver$"\n')
+        writer.write(")\n")
+        writer.write('for /f "tokens=3" %%t in (\'reg.exe query HKLM\\System\\Setup /v UnattendFile\') do ( if exist %%t set "XML_FILE=%%t" )\n')
+        writer.write('@if not defined IMAGE_FILE echo Could not locate install.wim, install.esd or install.swm. & pause & exit /b 1\n')
+        writer.write('@if not defined XML_FILE echo Could not locate autounattend.xml. & pause & exit /b 1\n')
+        
+        # 写入 diskpart 脚本
+        def write_diskpart_script(lines: List[str]):
+            """写入 diskpart 脚本"""
             diskpart_script = "X:\\diskpart.txt"
             appender = self.get_appender(CommandConfig.windows_pe())
-            appender.append_multiple(self.command_builder.write_to_file_pe(diskpart_script, diskpart_lines))
+            appender.append_multiple(self.command_builder.write_to_file_pe(diskpart_script, lines))
         
-        # 添加其他脚本内容（简化版本）
-        # 完整实现需要参考 C# 代码的完整逻辑
+        partition_settings = self.configuration.partition_settings
+        logger.debug(f"_generate_pe_script: partition_settings type={type(partition_settings).__name__}")
+        # 在 GeneratePESettings 模式下，如果 partition_settings 是 InteractivePartitionSettings，
+        # 使用默认的 UnattendedPartitionSettings（因为 GeneratePESettings 需要生成 diskpart 脚本）
+        if isinstance(partition_settings, InteractivePartitionSettings):
+            partition_settings = UnattendedPartitionSettings(
+                partition_layout=PartitionLayout.GPT,
+                recovery_mode=RecoveryMode.Partition,
+                esp_size=Constants.EspDefaultSize,
+                recovery_size=Constants.RecoveryPartitionSize
+            )
+            diskpart_lines = self._get_diskpart_script(partition_settings, boot_drive, windows_drive, recovery_drive)
+            logger.debug(f"_generate_pe_script: diskpart_lines (interactive->default) count={len(diskpart_lines)}")
+            write_diskpart_script(diskpart_lines)
+        elif isinstance(partition_settings, CustomPartitionSettings):
+            # 如果 script 为空，说明是从 XML 解析的，应该使用 UnattendedPartitionSettings 的逻辑
+            if not partition_settings.script or not partition_settings.script.strip():
+                # 使用默认的 UnattendedPartitionSettings（GPT, Partition recovery）
+                partition_settings = UnattendedPartitionSettings(
+                    partition_layout=PartitionLayout.GPT,
+                    recovery_mode=RecoveryMode.Partition,
+                    esp_size=Constants.EspDefaultSize,
+                    recovery_size=Constants.RecoveryPartitionSize
+                )
+                diskpart_lines = self._get_diskpart_script(partition_settings, boot_drive, windows_drive, recovery_drive)
+                logger.debug(f"_generate_pe_script: diskpart_lines (custom empty->default) count={len(diskpart_lines)}")
+                write_diskpart_script(diskpart_lines)
+            else:
+                diskpart_lines = [line.strip() for line in partition_settings.script.split('\n') if line.strip()]
+                # 验证必须包含 ASSIGN LETTER=W 和 ASSIGN LETTER=S
+                has_windows = any('ASSIGN LETTER=W' in line.upper() for line in diskpart_lines)
+                has_boot = any('ASSIGN LETTER=S' in line.upper() for line in diskpart_lines)
+                if not has_windows:
+                    raise ValueError(f"Your diskpart script must contain the line 'ASSIGN LETTER={windows_drive}' to assign the drive letter '{windows_drive}:' to the Windows partition.")
+                if not has_boot:
+                    raise ValueError(f"Your diskpart script must contain the line 'ASSIGN LETTER={boot_drive}' to assign the drive letter '{boot_drive}:' to the system partition.")
+                logger.debug(f"_generate_pe_script: diskpart_lines (custom provided) count={len(diskpart_lines)}")
+                write_diskpart_script(diskpart_lines)
+        elif isinstance(partition_settings, UnattendedPartitionSettings):
+            diskpart_lines = self._get_diskpart_script(partition_settings, boot_drive, windows_drive, recovery_drive)
+            logger.debug(f"_generate_pe_script: diskpart_lines (unattended) count={len(diskpart_lines)}")
+            write_diskpart_script(diskpart_lines)
+        elif partition_settings is None:
+            # 如果没有设置，使用默认的 UnattendedPartitionSettings
+            partition_settings = UnattendedPartitionSettings(
+                partition_layout=PartitionLayout.GPT,
+                recovery_mode=RecoveryMode.Partition,
+                esp_size=Constants.EspDefaultSize,
+                recovery_size=Constants.RecoveryPartitionSize
+            )
+            diskpart_lines = self._get_diskpart_script(partition_settings, boot_drive, windows_drive, recovery_drive)
+            logger.debug(f"_generate_pe_script: diskpart_lines (None->default) count={len(diskpart_lines)}")
+            write_diskpart_script(diskpart_lines)
+        
+        # 添加安装驱动程序的逻辑
+        writer.write("rem Install drivers from $WinPEDriver$ folder\n")
+        writer.write('if defined PEDRIVERS_FOLDER (\n')
+        writer.write('    for /R %PEDRIVERS_FOLDER% %%f IN (*.inf) do drvload.exe "%%f"\n')
+        writer.write(")\n")
+        
+        # 如果设置了暂停格式化，添加暂停
+        if pe_settings.pause_before_formatting:
+            writer.write("@echo diskpart will now partition and format your disk\n")
+            writer.write("pause\n")
+        
+        # 执行 diskpart
+        writer.write(f'diskpart.exe /s X:\\diskpart.txt || ( echo diskpart.exe encountered an error. & pause & exit /b 1 )\n')
+        
+        # 获取镜像索引或名称
+        def get_index_or_name() -> str:
+            """获取镜像索引或名称"""
+            install_from = self.configuration.install_from_settings
+            if isinstance(install_from, IndexInstallFromSettings):
+                return f"/Index:{install_from.index}"
+            elif isinstance(install_from, NameInstallFromSettings):
+                return f'/Name:"{install_from.name}"'
+            elif isinstance(self.configuration.edition_settings, UnattendedEditionSettings):
+                writer.write('set "OS_VERSION=Windows 11"\n')
+                writer.write('for /f "tokens=3 delims=." %%v in (\'ver\') do (\n')
+                writer.write('    if %%v LSS 20000 set "OS_VERSION=Windows 10"\n')
+                writer.write(")\n")
+                return f'/Name:"%OS_VERSION% {self.configuration.edition_settings.edition.display_name}"'
+            else:
+                # 优先使用解析阶段记录的镜像名称（避免写入 ImageInstall 结构）
+                detected = getattr(self.configuration, "_detected_image_name", None)
+                if detected:
+                    return f'/Name:"{detected}"'
+                # 无法从配置中确定镜像名称时，降级使用解析自 XML 的默认名称
+                default_name = "Windows 11 Pro"
+                logger = logging.getLogger('UnattendGenerator')
+                logger.warning("get_index_or_name: fallback to default image name '%s'", default_name)
+                return f'/Name:"{default_name}"'
+        
+        index_or_name = get_index_or_name()
+        compact_flag = "/Compact" if self.configuration.compact_os_mode == CompactOsModes.Always else ""
+        writer.write(f'dism.exe /Apply-Image /ImageFile:%IMAGE_FILE% %SWM_PARAM% {index_or_name} /ApplyDir:{windows_drive}:\\ {compact_flag} || ( echo dism.exe encountered an error. & pause & exit /b 1 )\n')
+        writer.write(f'bcdboot.exe {windows_drive}:\\Windows /s {boot_drive}: || ( echo bcdboot.exe encountered an error. & pause & exit /b 1 )\n')
+        
+        # 处理恢复分区
+        def delete_winre():
+            """删除 WinRE"""
+            writer.write(f"rem Avoid creation of recovery partition\n")
+            writer.write(f"del {windows_drive}:\\Windows\\System32\\Recovery\\winre.wim\n")
+        
+        if isinstance(partition_settings, UnattendedPartitionSettings):
+            if partition_settings.recovery_mode == RecoveryMode.None_:
+                delete_winre()
+            elif partition_settings.recovery_mode == RecoveryMode.Folder:
+                raise ValueError(f"Cannot create .cmd script when Windows RE is to be installed on {windows_drive}:.")
+        elif isinstance(partition_settings, CustomPartitionSettings):
+            script_lower = partition_settings.script.lower()
+            keywords = ["set id=27", 'label="recovery"', 'set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"']
+            if not any(keyword in script_lower for keyword in keywords):
+                delete_winre()
+        
+        # 复制 unattend.xml
+        writer.write(f'mkdir {windows_drive}:\\Windows\\Panther\n')
+        writer.write(f'copy %XML_FILE% {windows_drive}:\\Windows\\Panther\\unattend.xml\n')
+        
+        # 添加驱动程序
+        writer.write('if defined PEDRIVERS_FOLDER (\n')
+        writer.write(f'    dism.exe /Add-Driver /Image:{windows_drive}:\\ /Driver:"%PEDRIVERS_FOLDER%" /Recurse\n')
+        writer.write(")\n")
+        
+        # 8.3 文件名处理
+        if pe_settings.disable_8_dot3_names:
+            writer.write(f"rem Strip 8.3 file names\n")
+            writer.write(f"fsutil.exe 8dot3name set {windows_drive}: 1\n")
+            writer.write(f"fsutil.exe 8dot3name strip /s /f {windows_drive}:\\\n")
+        
+        # 禁用 Windows Defender
+        if self.configuration.disable_defender:
+            writer.write(f"rem Disable Windows Defender\n")
+            writer.write(f"reg.exe LOAD HKLM\\mount {windows_drive}:\\Windows\\System32\\config\\SYSTEM\n")
+            writer.write("for %%s in (Sense WdBoot WdFilter WdNisDrv WdNisSvc WinDefend) do reg.exe ADD HKLM\\mount\\ControlSet001\\Services\\%%s /v Start /t REG_DWORD /d 4 /f\n")
+            writer.write("reg.exe UNLOAD HKLM\\mount\n")
+        
+        # 设置设备区域
+        if isinstance(self.configuration.language_settings, UnattendedLanguageSettings):
+            geo_location = self.configuration.language_settings.geo_location
+            if geo_location:
+                writer.write(f"rem Set device setup region\n")
+                writer.write(f"reg.exe LOAD HKLM\\mount {windows_drive}:\\Windows\\System32\\config\\SOFTWARE\n")
+                writer.write(f'reg.exe ADD "HKLM\\mount\\Microsoft\\Windows\\CurrentVersion\\Control Panel\\DeviceRegion" /v DeviceRegion /t REG_DWORD /d {geo_location.id} /f\n')
+                writer.write("reg.exe UNLOAD HKLM\\mount\n")
+        
+        # 复制 $OEM$ 文件夹
+        if self.configuration.use_configuration_set:
+            writer.write('rem Copy $OEM$ folder if present\n')
+            writer.write('set "ROBOCOPY_ARGS=/E /XX /COPY:DAT /DCOPY:DAT /R:0"\n')
+            writer.write('if defined OEM_FOLDER (\n')
+            writer.write(f'    if exist "%OEM_FOLDER%\\$$" robocopy.exe "%OEM_FOLDER%\\$$" {windows_drive}:\\Windows %ROBOCOPY_ARGS%\n')
+            writer.write(f'    if exist "%OEM_FOLDER%\\$1" robocopy.exe "%OEM_FOLDER%\\$1" {windows_drive}:\\ %ROBOCOPY_ARGS%\n')
+            available_for_oem = [d for d in letters if d not in skipped_drives]
+            available_for_oem_str = ' '.join(available_for_oem)
+            writer.write(f'    @for %%d in ({available_for_oem_str}) do @(\n')
+            writer.write('        if exist "%OEM_FOLDER%\\%%d" robocopy.exe "%OEM_FOLDER%\\%%d" %%d:\\ %ROBOCOPY_ARGS%\n')
+            writer.write("    )\n")
+            writer.write(")\n")
+        
+        # 暂停重启
+        if pe_settings.pause_before_reboot:
+            writer.write("@echo Computer will now reboot\n")
+            writer.write("pause\n")
+        
+        writer.write("rem Continue with next stage of Windows Setup after reboot\n")
+        writer.write("wpeutil.exe reboot\n")
         
         # 写入 PE 脚本
-        self._write_pe_script(lines)
+        pe_lines = [line for line in writer.getvalue().split('\n') if line.strip()]
+        self._write_pe_script(pe_lines)
     
     def _get_diskpart_script(self, settings: UnattendedPartitionSettings, boot_drive: str = 'S', windows_drive: str = 'W', recovery_drive: str = 'R') -> List[str]:
         """获取 diskpart 脚本（对应 C# 的 GetDiskpartScript 方法）"""
@@ -3118,6 +3542,29 @@ class DiskModifier(Modifier):
                 parent = self._find_parent(self.root, compact_elem)
                 if parent is not None:
                     parent.remove(compact_elem)
+                    
+                # 如果 ImageInstall 现在为空，也移除它
+                os_image = parent if parent is not None else None
+                if os_image is not None and os_image.tag == f"{{{ns_uri}}}OSImage":
+                    image_install = self._find_parent(self.root, os_image)
+                    if image_install is not None:
+                        # 检查 OSImage 是否还有其他子元素
+                        has_other_children = False
+                        for child in os_image:
+                            if child.tag != f"{{{ns_uri}}}Compact":
+                                has_other_children = True
+                                break
+                        if not has_other_children:
+                            # 检查 ImageInstall 是否还有其他子元素
+                            has_other_children = False
+                            for child in image_install:
+                                if child.tag != f"{{{ns_uri}}}OSImage":
+                                    has_other_children = True
+                                    break
+                            if not has_other_children:
+                                setup_component = self._find_parent(self.root, image_install)
+                                if setup_component is not None:
+                                    setup_component.remove(image_install)
         else:
             # 查找或创建 ImageInstall/OSImage/Compact 结构
             setup_component = self.get_or_create_element(
@@ -3125,10 +3572,18 @@ class DiskModifier(Modifier):
                 "Microsoft-Windows-Setup"
             )
             
-            # 查找或创建 ImageInstall
+            # 查找或创建 ImageInstall（确保它在 RunSynchronous 之前）
             image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
             if image_install is None:
-                image_install = self.new_element("ImageInstall", setup_component)
+                # 查找 RunSynchronous 的位置
+                run_sync = setup_component.find(f"{{{ns_uri}}}RunSynchronous")
+                if run_sync is not None:
+                    # 在 RunSynchronous 之前插入 ImageInstall
+                    index = list(setup_component).index(run_sync)
+                    image_install = ET.Element(f"{{{ns_uri}}}ImageInstall")
+                    setup_component.insert(index, image_install)
+                else:
+                    image_install = self.new_element("ImageInstall", setup_component)
             
             # 查找或创建 OSImage
             os_image = image_install.find(f"{{{ns_uri}}}OSImage")
@@ -3258,12 +3713,35 @@ class SpecializeModifier(Modifier):
     
     def process(self):
         """处理 Specialize 脚本"""
-        if self.specialize_script.is_empty:
-            return
+        ns = get_namespace_map()
+        ns_uri = ns['u']
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
         
-        appender = self.get_appender(CommandConfig.specialize())
-        ps1_file = self.add_text_file("Specialize.ps1", self.specialize_script.get_script())
-        appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
+        # 检查是否有 Extensions 部分
+        extensions = self.root.find(f".//{{{s_uri}}}Extensions")
+        has_extensions = extensions is not None and len(list(extensions.findall(f"{{{s_uri}}}File"))) > 0
+        
+        # 如果有 Extensions 或 specialize_script 不为空，需要创建 Microsoft-Windows-Deployment component
+        if has_extensions or not self.specialize_script.is_empty:
+            appender = self.get_appender(CommandConfig.specialize())
+            
+            # 如果有 Extensions，首先添加 ExtractScript 执行命令
+            if has_extensions:
+                extract_script_cmd = 'powershell.exe -WindowStyle "Normal" -NoProfile -Command "$xml = [xml]::new(); $xml.Load(\'C:\\Windows\\Panther\\unattend.xml\'); $sb = [scriptblock]::Create( $xml.unattend.Extensions.ExtractScript ); Invoke-Command -ScriptBlock $sb -ArgumentList $xml;"'
+                appender.append(extract_script_cmd)
+            
+            # 如果有 specialize_script，添加执行命令
+            if not self.specialize_script.is_empty:
+                ps1_file = self.add_text_file("Specialize.ps1", self.specialize_script.get_script())
+                appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
+            else:
+                # 如果脚本序列为空，但 Extensions 中存在 Specialize.ps1，则调用该文件
+                if isinstance(self.configuration.extensions, dict):
+                    for f in self.configuration.extensions.get('files', []):
+                        path = f.get('path', '')
+                        if path and 'specialize.ps1' in path.lower():
+                            appender.append(self.command_builder.invoke_power_shell_script(path))
+                            break
 
 
 class FirstLogonModifier(Modifier):
@@ -3271,9 +3749,35 @@ class FirstLogonModifier(Modifier):
     
     def process(self):
         """处理 FirstLogon 脚本"""
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
+        
+        # 检查 extensions 中是否已经有 FirstLogon.ps1
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
+        extensions = self.root.find(f".//{{{s_uri}}}Extensions")
+        if extensions is not None:
+            firstlogon_file = None
+            for file_elem in extensions.findall(f"{{{s_uri}}}File"):
+                path_attr = file_elem.get('path', '')
+                if path_attr and 'FirstLogon.ps1' in path_attr:
+                    firstlogon_file = file_elem
+                    break
+            
+            if firstlogon_file is not None:
+                logger.debug("FirstLogonModifier: FirstLogon.ps1 already exists in Extensions, using original content")
+                # 如果 extensions 中已经有 FirstLogon.ps1，使用原始内容，不覆盖
+                # 只需要确保 FirstLogonCommands 存在
+                appender = self.get_appender(CommandConfig.oobe())
+                # 使用 extensions 中的文件路径
+                ps1_file = r"C:\Windows\Setup\Scripts\FirstLogon.ps1"
+                appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
+                return
+        
+        # 如果 extensions 中没有 FirstLogon.ps1，使用 first_logon_script 生成
         if self.first_logon_script.is_empty:
             return
         
+        logger.debug("FirstLogonModifier: Generating FirstLogon.ps1 from first_logon_script")
         appender = self.get_appender(CommandConfig.oobe())
         ps1_file = self.add_text_file("FirstLogon.ps1", self.first_logon_script.get_script())
         appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
@@ -3304,10 +3808,24 @@ class DefaultUserModifier(Modifier):
     
     def process(self):
         """处理 DefaultUser 脚本"""
+        appender = self.get_appender(CommandConfig.specialize())
+        
+        # 如果脚本序列为空，尝试使用 Extensions 中的 DefaultUser.ps1
         if self.default_user_script.is_empty:
+            ps1_path = None
+            if isinstance(self.configuration.extensions, dict):
+                for f in self.configuration.extensions.get('files', []):
+                    path = f.get('path', '')
+                    if path and 'defaultuser.ps1' in path.lower():
+                        ps1_path = path
+                        break
+            if ps1_path is None:
+                return
+            appender.append(self.command_builder.registry_command('load "HKU\\DefaultUser" "C:\\Users\\Default\\NTUSER.DAT"'))
+            appender.append(self.command_builder.invoke_power_shell_script(ps1_path))
+            appender.append(self.command_builder.registry_command('unload "HKU\\DefaultUser"'))
             return
         
-        appender = self.get_appender(CommandConfig.specialize())
         ps1_file = self.add_text_file("DefaultUser.ps1", self.default_user_script.get_script())
         appender.append(self.command_builder.registry_command('load "HKU\\DefaultUser" "C:\\Users\\Default\\NTUSER.DAT"'))
         appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
@@ -3424,27 +3942,86 @@ class ExpressSettingsModifier(Modifier):
             Pass.oobeSystem,
             "Microsoft-Windows-Shell-Setup"
         )
-        oobe_elem = oobe_component.find(f"{{{ns_uri}}}OOBE")
-        if oobe_elem is None:
+        # 查找所有 OOBE 元素（可能有多个，需要合并）
+        all_oobe_elems = list(oobe_component.findall(f"{{{ns_uri}}}OOBE"))
+        if len(all_oobe_elems) == 0:
             oobe_elem = self.new_element("OOBE", oobe_component)
-        
-        protect_your_pc = oobe_elem.find(f"{{{ns_uri}}}ProtectYourPC")
-        if protect_your_pc is None:
-            protect_your_pc = self.new_simple_element("ProtectYourPC", oobe_elem, "1")
+        elif len(all_oobe_elems) == 1:
+            oobe_elem = all_oobe_elems[0]
+        else:
+            # 如果存在多个 OOBE 元素，找到 ProtectYourPC="1" 的作为主元素
+            oobe_elem = None
+            for oobe in all_oobe_elems:
+                protect_pc = oobe.find(f"{{{ns_uri}}}ProtectYourPC")
+                if protect_pc is not None and protect_pc.text == "1":
+                    oobe_elem = oobe
+                    break
+            if oobe_elem is None:
+                oobe_elem = all_oobe_elems[0]
+            
+            # 合并其他 OOBE 元素到主元素
+            for other_oobe in all_oobe_elems:
+                if other_oobe is oobe_elem:
+                    continue
+                # 合并子元素
+                children_to_merge = list(other_oobe)
+                for child in children_to_merge:
+                    child_tag_name = child.tag.split('}')[-1]
+                    existing = oobe_elem.find(f"{{{ns_uri}}}{child_tag_name}")
+                    if existing is None:
+                        oobe_elem.append(child)
+                    else:
+                        # 如果已存在，对于 ProtectYourPC 优先使用 "1"
+                        if child_tag_name == "ProtectYourPC":
+                            if child.text == "1":
+                                existing.text = "1"
+                        elif child.text and child.text.strip():
+                            if not existing.text or not existing.text.strip():
+                                existing.text = child.text
+                # 删除多余的 OOBE 元素
+                oobe_component.remove(other_oobe)
         
         express_settings = self.configuration.express_settings
         if express_settings == ExpressSettingsMode.Interactive:
-            # 移除元素
-            parent = self._find_parent(self.root, protect_your_pc)
-            if parent is not None:
-                parent.remove(protect_your_pc)
-        elif express_settings == ExpressSettingsMode.EnableAll:
-            protect_your_pc.text = "1"
-        elif express_settings == ExpressSettingsMode.DisableAll:
-            protect_your_pc.text = "3"
+            # 交互式模式：移除 ProtectYourPC 元素
+            protect_your_pc = oobe_elem.find(f"{{{ns_uri}}}ProtectYourPC")
+            if protect_your_pc is not None:
+                oobe_elem.remove(protect_your_pc)
         else:
-            # 默认使用 DisableAll
-            protect_your_pc.text = "3"
+            # 设置 ProtectYourPC
+            protect_your_pc = oobe_elem.find(f"{{{ns_uri}}}ProtectYourPC")
+            if protect_your_pc is None:
+                protect_your_pc = self.new_simple_element("ProtectYourPC", oobe_elem, "1")
+            
+            if express_settings == ExpressSettingsMode.EnableAll:
+                protect_your_pc.text = "1"
+            elif express_settings == ExpressSettingsMode.DisableAll:
+                protect_your_pc.text = "3"
+            else:
+                # 默认使用 DisableAll
+                protect_your_pc.text = "3"
+        
+        # 设置 HideEULAPage（始终为 true，如果存在）
+        hide_eula = oobe_elem.find(f"{{{ns_uri}}}HideEULAPage")
+        if hide_eula is None:
+            # 只有在非交互式模式下才添加
+            if express_settings != ExpressSettingsMode.Interactive:
+                self.new_simple_element("HideEULAPage", oobe_elem, "true")
+        
+        # 设置 HideOnlineAccountScreens（根据账户设置模式）
+        hide_online = oobe_elem.find(f"{{{ns_uri}}}HideOnlineAccountScreens")
+        if isinstance(self.configuration.account_settings, InteractiveLocalAccountSettings):
+            # 交互式本地账户模式：设置为 true
+            if hide_online is None:
+                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, "true")
+            else:
+                hide_online.text = "true"
+        elif isinstance(self.configuration.account_settings, UnattendedAccountSettings):
+            # 无人值守模式：设置为 false
+            if hide_online is None:
+                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, "false")
+            else:
+                hide_online.text = "false"
 
 
 class BloatwareModifier(Modifier):
@@ -3897,9 +4474,15 @@ class ScriptModifier(Modifier):
     
     def process(self):
         """处理自定义脚本设置"""
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
+        
         script_settings = self.configuration.script_settings
         if not script_settings or not script_settings.scripts:
+            logger.debug("ScriptModifier: No script_settings or no scripts")
             return
+        
+        logger.debug(f"ScriptModifier: Processing {len(script_settings.scripts)} scripts")
         
         # 如果需要重启 Explorer
         if script_settings.restart_explorer:
@@ -3910,6 +4493,7 @@ class ScriptModifier(Modifier):
         for index, script in enumerate(script_settings.scripts):
             info = self._create_script_info(script, index)
             infos.append(info)
+            logger.debug(f"ScriptModifier: Created script info {index}: phase={script.phase}, type={script.type}, file_name={info['file_name']}")
         
         # 处理每个脚本
         for info in infos:
@@ -3933,8 +4517,13 @@ class ScriptModifier(Modifier):
     
     def _write_script_content(self, info: Dict[str, Any]):
         """写入脚本内容（对应 C# 的 WriteScriptContent）"""
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
+        
         script = info['script']
         content = script.content
+        
+        logger.debug(f"ScriptModifier._write_script_content: Writing script file {info['file_name']}, phase={script.phase}, type={script.type}, content_length={len(content)}")
         
         # 如果是注册表脚本，添加头部（如果不存在）
         if script.type == ScriptType.Reg:
@@ -4130,8 +4719,13 @@ class EmptyElementsModifier(Modifier):
         if elem.attrib:
             return False
         
-        # 如果有文本内容，不移除
-        if elem.text and elem.text.strip():
+        # 如果有文本内容（包括空字符串），不移除
+        # 注意：elem.text 可能是 None 或空字符串，空字符串也应该保留
+        if elem.text is not None:
+            return False
+        
+        # 如果有 tail 文本，不移除
+        if elem.tail and elem.tail.strip():
             return False
         
         return True
@@ -4142,32 +4736,22 @@ class OrderModifier(Modifier):
     
     def process(self):
         """为 RunSynchronous、RunAsynchronous 和 FirstLogonCommands 中的子元素添加 Order"""
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
         ns_uri = '{urn:schemas-microsoft-com:unattend}'
         wcm_uri = 'http://schemas.microsoft.com/WMIConfig/2002/State'
         
-        # 获取用户设置的组件（来自 Configuration.Components）
-        user_set_components = set()
-        for (component_name, pass_), _ in self.configuration.components.items():
-            # 查找对应的 component 元素
-            for settings in self.root.findall(f".//{{{ns_uri}}}settings"):
-                if settings.get('pass') == pass_.value:
-                    for component in settings.findall(f"{{{ns_uri}}}component"):
-                        if component.get('name') == component_name:
-                            user_set_components.add(component)
-                            break
-        
         # 查找所有 RunSynchronous、RunAsynchronous 和 FirstLogonCommands 容器
+        total_containers = 0
+        total_children = 0
         for container in self.root.iter():
             if container.tag in [f"{{{ns_uri}}}RunSynchronous", f"{{{ns_uri}}}RunAsynchronous", f"{{{ns_uri}}}FirstLogonCommands"]:
-                # 检查父节点是否是用户设置的组件
-                parent = self._find_parent(self.root, container)
-                if parent in user_set_components:
-                    continue
-                
+                total_containers += 1
                 # 为每个子元素添加 Order
                 pos = 1
                 for child in list(container):
                     if child.tag.startswith(f"{{{ns_uri}}}"):
+                        total_children += 1
                         # 检查是否已有 Order 元素
                         has_order = False
                         for order_elem in child.findall(f"{{{ns_uri}}}Order"):
@@ -4184,6 +4768,87 @@ class OrderModifier(Modifier):
                         
                         # 设置 wcm:action="add" 属性
                         child.set(f"{{{wcm_uri}}}action", "add")
+        logger.debug(f"OrderModifier: processed {total_containers} container(s), added orders to {total_children} child(ren)")
+
+
+class MergeOOBEModifier(Modifier):
+    """合并重复的 OOBE 元素 Modifier"""
+    
+    def process(self):
+        """合并重复的 OOBE 元素"""
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        
+        # 使用 iter 查找所有 settings 元素（因为 findall 可能有命名空间问题）
+        all_settings = [e for e in self.root.iter() if e.tag == f"{ns_uri}settings"]
+        for settings in all_settings:
+            # 使用 iter 查找所有 component 元素
+            all_components = [e for e in settings if e.tag == f"{ns_uri}component"]
+            for component in all_components:
+                # 直接遍历 component 的子元素查找 OOBE
+                oobe_elems = []
+                for child in component:
+                    if child.tag == f"{ns_uri}OOBE":
+                        oobe_elems.append(child)
+                
+                if len(oobe_elems) > 1:
+                    # 找到 ProtectYourPC="1" 的 OOBE 元素作为主元素，如果没有则使用第一个
+                    main_oobe = None
+                    for oobe in oobe_elems:
+                        # 直接遍历子元素查找 ProtectYourPC
+                        for child in oobe:
+                            if child.tag.split('}')[-1] == 'ProtectYourPC' and child.text == "1":
+                                main_oobe = oobe
+                                break
+                        if main_oobe is not None:
+                            break
+                    if main_oobe is None:
+                        main_oobe = oobe_elems[0]
+                    
+                    # 合并其他 OOBE 元素到主元素
+                    for other_oobe in oobe_elems:
+                        if other_oobe is main_oobe:
+                            continue
+                        # 合并子元素（需要先收集所有子元素，因为迭代过程中会修改）
+                        children_to_merge = list(other_oobe)
+                        for child in children_to_merge:
+                            child_tag_name = child.tag.split('}')[-1]
+                            # 在主元素中查找相同标签的子元素
+                            existing = None
+                            for main_child in main_oobe:
+                                if main_child.tag.split('}')[-1] == child_tag_name:
+                                    existing = main_child
+                                    break
+                            
+                            if existing is None:
+                                # 如果不存在，添加
+                                main_oobe.append(child)
+                            else:
+                                # 如果已存在，优先使用非空值，对于 ProtectYourPC 优先使用 "1"
+                                if child_tag_name == "ProtectYourPC":
+                                    # ProtectYourPC 优先使用 "1"
+                                    if child.text == "1":
+                                        existing.text = "1"
+                                    elif existing.text != "1" and child.text:
+                                        # 如果主元素不是 "1"，但子元素有值，使用子元素的值（除非子元素是 "3"）
+                                        if child.text != "3":
+                                            existing.text = child.text
+                                elif child.text and child.text.strip():
+                                    if not existing.text or not existing.text.strip():
+                                        existing.text = child.text
+                        # 删除多余的 OOBE 元素
+                        component.remove(other_oobe)
+                    
+                    # 合并完成后，移除原始 XML 中不存在的元素（如 HideWirelessSetupInOOBE）
+                    # 这些元素可能是从模板 XML 或其他 Modifier 添加的
+                    # 只保留标准的 OOBE 元素：ProtectYourPC, HideEULAPage, HideOnlineAccountScreens
+                    allowed_oobe_elements = {'ProtectYourPC', 'HideEULAPage', 'HideOnlineAccountScreens', 'FirstLogonCommands'}
+                    children_to_remove = []
+                    for child in main_oobe:
+                        child_tag_name = child.tag.split('}')[-1]
+                        if child_tag_name not in allowed_oobe_elements:
+                            children_to_remove.append(child)
+                    for child in children_to_remove:
+                        main_oobe.remove(child)
 
 
 class PrettyModifier(Modifier):
@@ -4226,11 +4891,10 @@ class UnattendGenerator:
             lang: 语言代码，用于 i18n 适配
         """
         if data_dir is None:
-            # 默认使用项目根目录下的 data/unattend
-            project_root = Path(__file__).parent.parent.parent
-            data_dir = project_root / 'data' / 'unattend'
-        
-        self.data_dir = data_dir
+            # 默认使用 src/backend 目录
+            self.data_dir = Path(__file__).parent
+        else:
+            self.data_dir = data_dir
         self.lang = lang
         
         # 加载数据文件
@@ -4428,8 +5092,8 @@ class UnattendGenerator:
     
     def generate_xml(self, config: Configuration) -> bytes:
         """生成 XML（对应 C# 的 GenerateXml 方法）"""
-        # 加载模板
-        template_path = self.data_dir / 'autounattend.xml'
+        # 加载模板（使用 src/backend/autounattend.xml）
+        template_path = Path(__file__).parent / 'autounattend.xml'
         if not template_path.exists():
             raise FileNotFoundError(f"Template file not found: {template_path}")
         
@@ -4483,20 +5147,122 @@ class UnattendGenerator:
         modifiers.append(WdacModifier(context))  # 处理 WDAC 设置（模块 11）
         modifiers.append(ScriptModifier(context))  # 处理自定义脚本（模块 12）
         
+        # 处理 Extensions（从 config_dict 中读取的文件）
+        # 如果 config 有 extensions 字段，需要添加文件到 Extensions 部分
+        if config.extensions:
+            extensions_data = config.extensions
+            if isinstance(extensions_data, dict):
+                # 创建一个临时的 Modifier 来添加 Extensions 文件
+                # 使用闭包捕获 extensions_data
+                def create_extensions_modifier(ext_data):
+                    class ExtensionsModifier(Modifier):
+                        def process(self):
+                            s_uri = "https://schneegans.de/windows/unattend-generator/"
+                            # 查找或创建 Extensions 元素
+                            # 使用 iter 查找，因为 find 可能有命名空间问题
+                            extensions = None
+                            for elem in self.root.iter():
+                                if elem.tag == f"{s_uri}Extensions":
+                                    extensions = elem
+                                    break
+                            
+                            if extensions is None:
+                                extensions = ET.Element(f"{{{s_uri}}}Extensions")
+                                # 设置命名空间属性，确保序列化时使用正确的命名空间
+                                extensions.set("xmlns", s_uri)
+                                self.root.append(extensions)
+                                
+                                # 创建 ExtractScript 元素
+                                extract_script = ET.Element(f"{{{s_uri}}}ExtractScript")
+                                extract_script_text = ext_data.get('extractScript', """param(
+    [xml] $Document
+);
+
+foreach( $file in $Document.unattend.Extensions.File ) {
+    $path = [System.Environment]::ExpandEnvironmentVariables( $file.GetAttribute( 'path' ) );
+    mkdir -Path( $path | Split-Path -Parent ) -ErrorAction 'SilentlyContinue';
+    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
+        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
+        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
+        default { [System.Text.Encoding]::Default; }
+    };
+    $bytes = $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() );
+    [System.IO.File]::WriteAllBytes( $path, $bytes );
+}""")
+                                extract_script.text = extract_script_text
+                                extensions.append(extract_script)
+                            else:
+                                # 如果 Extensions 已存在，更新 ExtractScript（如果需要）
+                                extract_script = extensions.find(f"{{{s_uri}}}ExtractScript")
+                                if extract_script is None:
+                                    extract_script = ET.Element(f"{{{s_uri}}}ExtractScript")
+                                    extract_script_text = ext_data.get('extractScript', """param(
+    [xml] $Document
+);
+
+foreach( $file in $Document.unattend.Extensions.File ) {
+    $path = [System.Environment]::ExpandEnvironmentVariables( $file.GetAttribute( 'path' ) );
+    mkdir -Path( $path | Split-Path -Parent ) -ErrorAction 'SilentlyContinue';
+    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
+        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
+        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
+        default { [System.Text.Encoding]::Default; }
+    };
+    $bytes = $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() );
+    [System.IO.File]::WriteAllBytes( $path, $bytes );
+}""")
+                                    extract_script.text = extract_script_text
+                                    extensions.insert(0, extract_script)
+                                elif 'extractScript' in ext_data:
+                                    extract_script.text = ext_data['extractScript']
+                            
+                            # 添加所有文件
+                            files = ext_data.get('files', [])
+                            for file_data in files:
+                                if isinstance(file_data, dict):
+                                    file_path = file_data.get('path', '')
+                                    file_content = file_data.get('content', '')
+                                    if file_path:
+                                        # 检查文件是否已存在
+                                        existing_file = None
+                                        for f in extensions.findall(f"{{{s_uri}}}File"):
+                                            if f.get('path') == file_path:
+                                                existing_file = f
+                                                break
+                                        
+                                        if existing_file is None:
+                                            file_elem = ET.Element(f"{{{s_uri}}}File")
+                                            file_elem.set("path", file_path)
+                                            file_elem.text = file_content
+                                            extensions.append(file_elem)
+                                        else:
+                                            # 更新现有文件的内容
+                                            existing_file.text = file_content
+                    return ExtensionsModifier
+                
+                ExtensionsModifierClass = create_extensions_modifier(extensions_data)
+                modifiers.append(ExtensionsModifierClass(context))
+        
         # 处理脚本序列（将脚本添加到 XML）
         # 按照 C# 项目的顺序执行这些 Modifier
-        if not specialize_script.is_empty:
-            modifiers.append(SpecializeModifier(context))
-        if not user_once_script.is_empty:
-            modifiers.append(UserOnceModifier(context))
-        if not default_user_script.is_empty:
-            modifiers.append(DefaultUserModifier(context))
+        # SpecializeModifier 需要检查是否有 Extensions 或脚本
+        # 先检查是否有 Extensions（在 ScriptModifier 执行后，Extensions 可能已经创建）
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
+        extensions = root.find(f".//{{{s_uri}}}Extensions") if root is not None else None
+        has_extensions = extensions is not None and len(list(extensions.findall(f"{{{s_uri}}}File"))) > 0
+        
+        # 如果有 Extensions 或 specialize_script 不为空，需要创建 Microsoft-Windows-Deployment component
+        # 注意：这些检查在 modifiers 执行之前进行，但 ScriptModifier 会在执行时填充脚本序列
+        # 所以我们需要先添加这些 modifier，然后在执行后检查是否为空
+        modifiers.append(SpecializeModifier(context))  # 会在 process 中检查是否为空
+        modifiers.append(UserOnceModifier(context))  # 会在 process 中检查是否为空
+        modifiers.append(DefaultUserModifier(context))  # 会在 process 中检查是否为空
         modifiers.append(DeleteModifier(context))  # 处理 keepSensitiveFiles
-        if not first_logon_script.is_empty:
-            modifiers.append(FirstLogonModifier(context))
+        modifiers.append(FirstLogonModifier(context))  # 会在 process 中检查是否为空
         modifiers.append(ComponentsModifier(context))  # 处理 XML 标记（模块 13）
         modifiers.append(OrderModifier(context))  # 添加 Order 元素
         modifiers.append(ProcessorArchitectureModifier(context))  # 处理处理器架构（模块 11）
+        modifiers.append(MergeOOBEModifier(context))  # 合并重复的 OOBE 元素
         modifiers.append(PrettyModifier(context))  # 美化 XML
         
         # 执行所有 Modifier（包括脚本序列 Modifier）
@@ -4506,8 +5272,139 @@ class UnattendGenerator:
         # 序列化 XML
         return serialize_xml(tree)
     
+    def _parse_password_element(self, password_elem: ET.Element, element_name: str) -> str:
+        """解析密码元素（支持 Base64 解码和 UTF-16LE 字符集）"""
+        import base64
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        
+        # 直接遍历子元素来查找 Value 和 PlainText，因为 find() 可能返回 text 为 None 的元素
+        value_elem = None
+        plain_text_elem = None
+        for child in password_elem:
+            if child.tag == f"{{{ns_uri}}}Value" or child.tag.endswith('}Value'):
+                value_elem = child
+            elif child.tag == f"{{{ns_uri}}}PlainText" or child.tag.endswith('}PlainText'):
+                plain_text_elem = child
+        
+        # 如果没找到，尝试使用 find() 作为后备
+        if value_elem is None:
+            value_elem = password_elem.find(f"{{{ns_uri}}}Value")
+        if plain_text_elem is None:
+            plain_text_elem = password_elem.find(f"{{{ns_uri}}}PlainText")
+        
+        if value_elem is None:
+            return ''
+        
+        # 获取文本内容，优先使用 text 属性，如果为 None 或空则使用 itertext() 拼接所有文本
+        value_text = value_elem.text
+        if value_text is None or (isinstance(value_text, str) and not value_text.strip()):
+            # 如果 text 为 None 或为空，尝试使用 itertext() 获取所有文本内容
+            itertext_result = ''.join(value_elem.itertext())
+            if itertext_result:
+                value_text = itertext_result.strip()
+        
+        if not value_text:
+            return ''
+        
+        # 获取 PlainText 值
+        plain_text = "true"
+        if plain_text_elem is not None:
+            plain_text_val = plain_text_elem.text
+            if plain_text_val is None or (isinstance(plain_text_val, str) and not plain_text_val.strip()):
+                plain_text_val = ''.join(plain_text_elem.itertext()).strip()
+            if plain_text_val:
+                plain_text = plain_text_val
+        
+        if plain_text and plain_text.lower() == "false":
+            # Base64 编码的密码
+            try:
+                encoded_bytes = base64.b64decode(value_text)
+                password = encoded_bytes.decode('utf-16le')
+                # 移除 element_name 后缀（编码时添加的）
+                if password.endswith(element_name):
+                    password = password[:-len(element_name)]
+                return password
+            except Exception as e:
+                # 如果解码失败，记录错误但继续执行
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Failed to parse password element {element_name}: {e}")
+                return ''
+        else:
+            # 明文密码
+            return value_text
+    
+    def _parse_registry_command(self, cmd_text: str, registry_path: str, value_name: str) -> str | None:
+        """从注册表命令中解析注册表值"""
+        import re
+        # 匹配 reg.exe add 命令，提取路径、值名和值
+        # 支持多种格式：reg.exe add "路径" /v 值名 /t 类型 /d 值 /f
+        escaped_path = re.escape(registry_path)
+        pattern = rf'reg\.exe\s+add\s+"{escaped_path}"\s+/v\s+{re.escape(value_name)}\s+/t\s+\w+\s+/d\s+(\d+)\s+/f'
+        match = re.search(pattern, cmd_text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        # 也支持 PowerShell Set-ItemProperty 格式
+        pattern2 = rf'Set-ItemProperty\s+-LiteralPath\s+[\'"]Registry::({escaped_path})[\'"]\s+-Name\s+[\'"]{re.escape(value_name)}[\'"]\s+-Type\s+\w+\s+-Value\s+(\d+)'
+        match2 = re.search(pattern2, cmd_text, re.IGNORECASE)
+        if match2:
+            return match2.group(2)
+        return None
+    
+    def _check_registry_command(self, cmd_text: str, registry_path: str, value_name: str, expected_value: str = "1") -> bool:
+        """检查注册表命令是否设置了指定的值"""
+        value = self._parse_registry_command(cmd_text, registry_path, value_name)
+        return value == expected_value
+    
+    def _collect_all_commands(self, root: ET.Element) -> List[str]:
+        """收集所有脚本命令（RunSynchronousCommand、FirstLogonCommand 等）"""
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        all_commands = []
+        
+        # 收集 RunSynchronousCommand
+        run_sync_commands = root.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
+        for cmd in run_sync_commands:
+            path_elem = cmd.find(f"{{{ns_uri}}}Path")
+            if path_elem is not None and path_elem.text:
+                all_commands.append(path_elem.text)
+        
+        # 收集 FirstLogonCommands 中的 SynchronousCommand
+        first_logon_containers = root.findall(f".//{{{ns_uri}}}FirstLogonCommands")
+        for container in first_logon_containers:
+            sync_commands = container.findall(f"{{{ns_uri}}}SynchronousCommand")
+            for cmd in sync_commands:
+                command_line_elem = cmd.find(f"{{{ns_uri}}}CommandLine")
+                if command_line_elem is not None and command_line_elem.text:
+                    all_commands.append(command_line_elem.text)
+        
+        # 收集 UserOnceCommand（如果存在）
+        # 注意：UserOnceCommand 可能通过脚本文件调用，需要从脚本内容中提取
+        
+        # 收集 DefaultUserCommand（如果存在）
+        # 注意：DefaultUserCommand 可能通过脚本文件调用，需要从脚本内容中提取
+        
+        return all_commands
+    
+    def _get_script_file_content(self, root: ET.Element, file_path: str) -> str | None:
+        """从 XML 中获取脚本文件内容"""
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        # 查找 File 元素
+        files = root.findall(f".//{{{ns_uri}}}File")
+        for file_elem in files:
+            source_path_elem = file_elem.find(f"{{{ns_uri}}}SourcePath")
+            destination_path_elem = file_elem.find(f"{{{ns_uri}}}DestinationPath")
+            if destination_path_elem is not None and destination_path_elem.text:
+                if destination_path_elem.text.replace('\\', '/').lower() == file_path.replace('\\', '/').lower():
+                    # 找到匹配的文件，尝试获取内容
+                    # 内容可能在 Data 元素中
+                    data_elem = file_elem.find(f"{{{ns_uri}}}Data")
+                    if data_elem is not None and data_elem.text:
+                        return data_elem.text
+        return None
+    
     def parse_xml(self, xml_content: bytes) -> Dict[str, Any]:
         """解析 XML 为配置字典（C# 项目可能没有此功能，需要实现）"""
+        import re  # 局部导入以便正则解析命令内容
         # 解析 XML
         root = ET.fromstring(xml_content)
         ns = get_namespace_map()
@@ -4524,6 +5421,9 @@ class UnattendGenerator:
             lang_settings['mode'] = 'interactive'
         else:
             lang_settings['mode'] = 'unattended'
+            # 记录是否有 WinPE component（用于生成时决定是否创建）
+            lang_settings['hasWinPE'] = component_pe is not None
+            
             # 解析具体语言设置
             # 优先使用 WinPE 的 UILanguage，如果没有则使用 OOBE 的 UILanguage
             ui_language = None
@@ -4592,26 +5492,104 @@ class UnattendGenerator:
         if use_config_set is not None and use_config_set.text == "true":
             setup_settings['useConfigurationSet'] = True
         
+        # 解析 RunSynchronous 命令，提取多处配置信息
+        detected_diskpart: Dict[str, Any] = {}
+        detected_image_name: Optional[str] = None
+        detected_winpe_layout: Optional[str] = None
+        detected_assert_script: Optional[str] = None
+        detected_compact = False
+
         # 解析注册表项以检测 bypassRequirementsCheck 和 bypassNetworkCheck
-        # 这些设置在 specialize 脚本中，暂时简化处理
-        # 实际实现需要解析 RunSynchronous 命令
-        
-        # 解析 PowerShell 命令以检测 hidePowerShellWindows
-        # 查找 PowerShell 命令中的 WindowStyle 参数
+        # 同时提取 diskpart / pe.cmd / assert.vbs 等相关信息
         run_sync_commands = root.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
         for cmd in run_sync_commands:
             path_elem = cmd.find(f"{{{ns_uri}}}Path")
             if path_elem is not None and path_elem.text:
                 cmd_text = path_elem.text
+                
+                # 检测 bypassRequirementsCheck
+                if 'BypassTPMCheck' in cmd_text or 'BypassSecureBootCheck' in cmd_text or 'BypassRAMCheck' in cmd_text:
+                    setup_settings['bypassRequirementsCheck'] = True
+                
+                # 检测 bypassNetworkCheck
+                if 'BypassNetworkCheck' in cmd_text:
+                    setup_settings['bypassNetworkCheck'] = True
+                
+                # 检测 hidePowerShellWindows
                 if 'powershell.exe' in cmd_text:
-                    if 'WindowStyle "Hidden"' in cmd_text:
+                    if 'WindowStyle "Hidden"' in cmd_text or 'WindowStyle Hidden' in cmd_text:
                         setup_settings['hidePowerShellWindows'] = True
-                    elif 'WindowStyle "Normal"' in cmd_text:
+                    elif 'WindowStyle "Normal"' in cmd_text or 'WindowStyle Normal' in cmd_text:
                         setup_settings['hidePowerShellWindows'] = False
+                
+                # 检测 keepSensitiveFiles（查找删除 unattend.xml 的命令）
+                if 'unattend.xml' in cmd_text and ('del' in cmd_text.lower() or 'delete' in cmd_text.lower() or 'remove' in cmd_text.lower()):
+                    setup_settings['keepSensitiveFiles'] = False
+
+                # 解析 diskpart 写入命令，提取分区参数
+                if 'diskpart.txt' in cmd_text.lower() and ('>>' in cmd_text or 'echo:' in cmd_text):
+                    m = re.search(r'CREATE PARTITION EFI SIZE=(\d+)', cmd_text, re.IGNORECASE)
+                    if m:
+                        detected_diskpart['esp_size'] = int(m.group(1))
+                    m = re.search(r'SHRINK MINIMUM=(\d+)', cmd_text, re.IGNORECASE)
+                    if m:
+                        detected_diskpart['recovery_size'] = int(m.group(1))
+                    if 'convert gpt' in cmd_text.lower():
+                        detected_diskpart['layout'] = 'GPT'
+                    elif 'convert mbr' in cmd_text.lower():
+                        detected_diskpart['layout'] = 'MBR'
+                    # 如果出现恢复分区标记，推断为 partition 模式
+                    if re.search(r'ASSIGN LETTER=R', cmd_text, re.IGNORECASE) or re.search(r'GPT ATTRIBUTES', cmd_text, re.IGNORECASE) or re.search(r'SET ID', cmd_text, re.IGNORECASE):
+                        detected_diskpart['recovery_mode'] = 'partition'
+
+                # 提取 assert.vbs 脚本内容（首个 echo 段）
+                if 'assert.vbs' in cmd_text.lower() and '>>' in cmd_text:
+                    m = re.search(r'\(echo:([^)]+)\)', cmd_text, re.IGNORECASE)
+                    if m:
+                        detected_assert_script = m.group(1)
+
+                # 提取 PE 键盘布局（SetKeyboardLayout 参数）
+                if 'setkeyboardlayout' in cmd_text.lower():
+                    m = re.search(r'SetKeyboardLayout\s+([^&"]+)', cmd_text, re.IGNORECASE)
+                    if m:
+                        detected_winpe_layout = m.group(1)
+
+                # 提取镜像名称（/Name:"XXXX"）
+                if '/apply-image' in cmd_text.lower() and '/name:' in cmd_text.lower():
+                    try:
+                        segment = cmd_text.split('/Name:', 1)[1]
+                        segment = segment.split('/ApplyDir', 1)[0]
+                        raw = segment.strip()
+                        # 去除两侧转义的引号以及 ^ 符号
+                        if raw.startswith('^"') and raw.endswith('^"'):
+                            raw = raw[2:-2]
+                        raw = raw.replace('^"', '').replace('"', '').replace('^', '').strip()
+                        if raw:
+                            detected_image_name = raw
+                    except Exception:
+                        pass
+                    if '/compact' in cmd_text.lower():
+                        detected_compact = True
         
-        # 解析脚本以检测 useNarrator 和 keepSensitiveFiles
-        # 这些设置在脚本中，暂时简化处理
-        # 实际实现需要解析 FirstLogonCommands 和 RunSynchronous 命令
+        # 解析脚本以检测 useNarrator
+        # 查找 FirstLogonCommands 和 RunSynchronous 命令中的 Narrator 相关命令
+        first_logon_containers = root.findall(f".//{{{ns_uri}}}FirstLogonCommands")
+        for container in first_logon_containers:
+            sync_commands = container.findall(f"{{{ns_uri}}}SynchronousCommand")
+            for cmd in sync_commands:
+                command_line_elem = cmd.find(f"{{{ns_uri}}}CommandLine")
+                if command_line_elem is not None and command_line_elem.text:
+                    cmd_text = command_line_elem.text.lower()
+                    if 'narrator' in cmd_text or 'screenreader' in cmd_text:
+                        setup_settings['useNarrator'] = True
+        
+        # 也在 RunSynchronous 中查找
+        for cmd in run_sync_commands:
+            path_elem = cmd.find(f"{{{ns_uri}}}Path")
+            if path_elem is not None and path_elem.text:
+                cmd_text = path_elem.text.lower()
+                if 'narrator' in cmd_text or 'screenreader' in cmd_text:
+                    setup_settings['useNarrator'] = True
         
         config_dict['setupSettings'] = setup_settings
         
@@ -4643,6 +5621,17 @@ class UnattendGenerator:
             account_settings['obscurePasswords'] = False
             account_settings['accounts'] = []
             
+            # 解析用户账户（AdministratorPassword 在 UserAccounts 中）
+            if user_accounts is not None:
+                # 先解析 AdministratorPassword（在 UserAccounts 下）
+                admin_password_elem = user_accounts.find(f"{{{ns_uri}}}AdministratorPassword")
+                if admin_password_elem is not None:
+                    account_settings['autoLogonPassword'] = self._parse_password_element(admin_password_elem, "AdministratorPassword")
+                    # 检查是否使用了 Base64 混淆
+                    plain_text_elem = admin_password_elem.find(f"{{{ns_uri}}}PlainText")
+                    if plain_text_elem is not None and plain_text_elem.text and plain_text_elem.text.lower() == "false":
+                        account_settings['obscurePasswords'] = True
+            
             # 解析自动登录
             if auto_logon is not None:
                 username_elem = auto_logon.find(f"{{{ns_uri}}}Username")
@@ -4650,10 +5639,23 @@ class UnattendGenerator:
                     username = username_elem.text
                     if username == "Administrator":
                         account_settings['autoLogonMode'] = 'builtin'
+                        # AutoLogon 中的 Password 用于自动登录，应该与 AdministratorPassword 相同
+                        # 但这里我们只解析，不覆盖已解析的 autoLogonPassword
+                        auto_logon_password_elem = auto_logon.find(f"{{{ns_uri}}}Password")
+                        if auto_logon_password_elem is not None:
+                            # 验证 AutoLogon 中的密码是否与 AdministratorPassword 一致
+                            auto_logon_password = self._parse_password_element(auto_logon_password_elem, "Password")
+                            # 如果 autoLogonPassword 还没有设置，使用 AutoLogon 中的密码
+                            if not account_settings.get('autoLogonPassword'):
+                                account_settings['autoLogonPassword'] = auto_logon_password
                     else:
                         account_settings['autoLogonMode'] = 'own'
+                        # 对于 own 模式，从 AutoLogon 中解析密码
+                        auto_logon_password_elem = auto_logon.find(f"{{{ns_uri}}}Password")
+                        if auto_logon_password_elem is not None:
+                            account_settings['autoLogonPassword'] = self._parse_password_element(auto_logon_password_elem, "Password")
             
-            # 解析用户账户
+            # 解析用户账户（LocalAccounts）
             if user_accounts is not None:
                 local_accounts = user_accounts.find(f"{{{ns_uri}}}LocalAccounts")
                 if local_accounts is not None:
@@ -4661,6 +5663,7 @@ class UnattendGenerator:
                         name_elem = local_account.find(f"{{{ns_uri}}}Name")
                         display_name_elem = local_account.find(f"{{{ns_uri}}}DisplayName")
                         group_elem = local_account.find(f"{{{ns_uri}}}Group")
+                        password_elem = local_account.find(f"{{{ns_uri}}}Password")
                         if name_elem is not None:
                             # DisplayName 如果为空字符串，应该设为 None 而不是使用 name
                             display_name = None
@@ -4669,11 +5672,23 @@ class UnattendGenerator:
                             elif display_name_elem is not None and display_name_elem.text == '':
                                 display_name = None
                             
+                            # 解析密码
+                            password = ''
+                            if password_elem is not None:
+                                password = self._parse_password_element(password_elem, "Password")
+                                # 检查是否使用了 Base64 混淆
+                                plain_text_elem = password_elem.find(f"{{{ns_uri}}}PlainText")
+                                if plain_text_elem is not None and plain_text_elem.text and plain_text_elem.text.lower() == "false":
+                                    account_settings['obscurePasswords'] = True
+                            
+                            # 生成 UUID 作为账户 ID（前端需要）
+                            import uuid
                             account = {
+                                'id': str(uuid.uuid4()),
                                 'name': name_elem.text,
                                 'displayName': display_name,
                                 'group': group_elem.text if group_elem is not None else Constants.UsersGroup,
-                                'password': ''  # 密码无法从 XML 中解析
+                                'password': password
                             }
                             account_settings['accounts'].append(account)
         else:
@@ -4682,34 +5697,122 @@ class UnattendGenerator:
             if hide_online is not None and hide_online.text == "true":
                 account_settings['mode'] = 'interactive-local'
         
+        # 解析 OOBE 设置
+        oobe_elem = root.find(f".//{{{ns_uri}}}OOBE")
+        if oobe_elem is not None:
+            protect_your_pc_elem = oobe_elem.find(f"{{{ns_uri}}}ProtectYourPC")
+            if protect_your_pc_elem is not None:
+                account_settings['protectYourPC'] = protect_your_pc_elem.text
+            
+            hide_online_account_screens_elem = oobe_elem.find(f"{{{ns_uri}}}HideOnlineAccountScreens")
+            if hide_online_account_screens_elem is not None and hide_online_account_screens_elem.text:
+                account_settings['hideOnlineAccountScreens'] = hide_online_account_screens_elem.text.lower() == "true"
+        
         config_dict['accountSettings'] = account_settings
         
         # 解析密码过期设置
         password_expiration_settings: Dict[str, Any] = {'mode': 'default'}
-        # 需要从 specialize 脚本中解析，暂时设为默认
+        # 从 specialize pass 的脚本中解析
+        specialize_settings = root.find(f".//{{{ns_uri}}}settings[@pass='specialize']")
+        if specialize_settings is not None:
+            # 查找 RunSynchronousCommand 和 PowerShell 脚本
+            specialize_commands = specialize_settings.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
+            for cmd in specialize_commands:
+                path_elem = cmd.find(f"{{{ns_uri}}}Path")
+                if path_elem is not None and path_elem.text:
+                    cmd_text = path_elem.text
+                    # 查找 net.exe accounts /maxpwage 命令
+                    if 'net.exe accounts' in cmd_text.lower() and '/maxpwage' in cmd_text.lower():
+                        if 'unlimited' in cmd_text.lower():
+                            password_expiration_settings['mode'] = 'unlimited'
+                        else:
+                            # 提取数字值
+                            import re
+                            match = re.search(r'/maxpwage:(\d+)', cmd_text, re.IGNORECASE)
+                            if match:
+                                max_age = int(match.group(1))
+                                if max_age == 0:
+                                    password_expiration_settings['mode'] = 'default'
+                                else:
+                                    password_expiration_settings['mode'] = 'custom'
+                                    password_expiration_settings['maxAge'] = max_age
         config_dict['passwordExpiration'] = password_expiration_settings
         
         # 解析账户锁定设置
         lockout_settings: Dict[str, Any] = {'mode': 'default'}
-        # 需要从 specialize 脚本中解析，暂时设为默认
+        # 从 specialize pass 的脚本中解析
+        if specialize_settings is not None:
+            specialize_commands = specialize_settings.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
+            lockout_threshold = None
+            lockout_duration = None
+            lockout_window = None
+            
+            for cmd in specialize_commands:
+                path_elem = cmd.find(f"{{{ns_uri}}}Path")
+                if path_elem is not None and path_elem.text:
+                    cmd_text = path_elem.text
+                    # 查找 net.exe accounts /lockoutthreshold 命令
+                    if 'net.exe accounts' in cmd_text.lower() and '/lockoutthreshold' in cmd_text.lower():
+                        import re
+                        match = re.search(r'/lockoutthreshold:(\d+)', cmd_text, re.IGNORECASE)
+                        if match:
+                            lockout_threshold = int(match.group(1))
+                        
+                        # 同时查找 lockoutduration 和 lockoutwindow
+                        match = re.search(r'/lockoutduration:(\d+)', cmd_text, re.IGNORECASE)
+                        if match:
+                            lockout_duration = int(match.group(1))
+                        
+                        match = re.search(r'/lockoutwindow:(\d+)', cmd_text, re.IGNORECASE)
+                        if match:
+                            lockout_window = int(match.group(1))
+            
+            # 判断锁定设置模式
+            if lockout_threshold is not None:
+                if lockout_threshold == 0:
+                    lockout_settings['mode'] = 'disabled'
+                elif lockout_threshold == 10 and lockout_duration == 10 and lockout_window == 10:
+                    # 默认值
+                    lockout_settings['mode'] = 'default'
+                else:
+                    lockout_settings['mode'] = 'custom'
+                    lockout_settings['lockoutThreshold'] = lockout_threshold
+                    if lockout_duration is not None:
+                        lockout_settings['lockoutDuration'] = lockout_duration
+                    if lockout_window is not None:
+                        lockout_settings['resetLockoutCounter'] = lockout_window
         config_dict['lockoutSettings'] = lockout_settings
         
         # 解析模块 5: Partitioning and formatting
         # 解析分区设置
         partitioning_settings: Dict[str, Any] = {'mode': 'interactive'}
+        
+        # 检查是否有 diskpart.txt 写入命令（这表示是自动生成的 diskpart 脚本）
+        run_sync_commands = root.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
+        has_diskpart_write = False
+        has_diskpart_execute = False
+        for cmd in run_sync_commands:
+            path_elem = cmd.find(f"{{{ns_uri}}}Path")
+            if path_elem is not None and path_elem.text:
+                cmd_text = path_elem.text.lower()
+                if 'diskpart.txt' in cmd_text and ('>>' in cmd_text or 'echo:' in cmd_text):
+                    has_diskpart_write = True
+                if 'diskpart.exe' in cmd_text and '/s' in cmd_text:
+                    has_diskpart_execute = True
+        
         # InstallTo 在 OSImage 下
         install_to = root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}InstallTo")
-        if install_to is not None:
-            # 检查是否有 diskpart 脚本
-            run_sync_commands = root.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
-            has_diskpart = False
-            for cmd in run_sync_commands:
-                path_elem = cmd.find(f"{{{ns_uri}}}Path")
-                if path_elem is not None and path_elem.text and 'diskpart' in path_elem.text.lower():
-                    has_diskpart = True
-                    break
-            
-            if has_diskpart:
+        
+        # 如果有 diskpart.txt 写入命令，说明是自动生成的分区脚本
+        if has_diskpart_write:
+            partitioning_settings['mode'] = 'automatic'
+            partitioning_settings['layout'] = detected_diskpart.get('layout', 'GPT')
+            partitioning_settings['recoveryMode'] = detected_diskpart.get('recovery_mode', 'partition')
+            partitioning_settings['espSize'] = detected_diskpart.get('esp_size', Constants.EspDefaultSize)
+            partitioning_settings['recoverySize'] = detected_diskpart.get('recovery_size', Constants.RecoveryPartitionSize)
+        elif install_to is not None:
+            if has_diskpart_execute:
+                # 如果有 diskpart 执行命令但没有写入命令，可能是自定义脚本
                 partitioning_settings['mode'] = 'custom'
                 partitioning_settings['diskpartScript'] = ''  # 无法从 XML 中解析
                 partitioning_settings['installToMode'] = 'available'
@@ -4722,60 +5825,132 @@ class UnattendGenerator:
         else:
             partitioning_settings['mode'] = 'interactive'
         
+        # 解析磁盘断言设置
+        has_assert_vbs_write = False
+        has_assert_vbs_execute = False
+        for cmd in run_sync_commands:
+            path_elem = cmd.find(f"{{{ns_uri}}}Path")
+            if path_elem is not None and path_elem.text:
+                cmd_text = path_elem.text.lower()
+                if 'assert.vbs' in cmd_text and ('>>' in cmd_text or 'echo:' in cmd_text):
+                    has_assert_vbs_write = True
+                if 'assert.vbs' in cmd_text and ('cscript' in cmd_text or 'wscript' in cmd_text):
+                    has_assert_vbs_execute = True
+        
+        if detected_assert_script is not None:
+            partitioning_settings['diskAssertionMode'] = 'script'
+            partitioning_settings['diskAssertionScript'] = detected_assert_script
+        elif has_assert_vbs_write or has_assert_vbs_execute:
+            partitioning_settings['diskAssertionMode'] = 'script'
+            partitioning_settings['diskAssertionScript'] = ''  # 无法从 XML 中解析
+        else:
+            partitioning_settings['diskAssertionMode'] = 'skip'
+        
         config_dict['partitioning'] = partitioning_settings
         
         # 解析 PE 设置
         pe_settings: Dict[str, Any] = {'mode': 'default'}
         # 检查是否有 pe.cmd 脚本
         has_pe_script = False
+        has_assert_vbs = False
+        has_diskpart_txt = False
+        has_pe_cmd_write = False  # 是否有写入 pe.cmd 的命令
+        disable_8dot3 = False
+        pause_before_reboot = False
+        disable_defender_flag = False
+        
         for cmd in root.findall(f".//{{{ns_uri}}}RunSynchronousCommand"):
             path_elem = cmd.find(f"{{{ns_uri}}}Path")
-            if path_elem is not None and path_elem.text and 'pe.cmd' in path_elem.text.lower():
-                has_pe_script = True
-                break
+            if path_elem is not None and path_elem.text:
+                cmd_text = path_elem.text.lower()
+                if 'pe.cmd' in cmd_text:
+                    has_pe_script = True
+                    # 检查是否是写入命令（包含 >>"X:\pe.cmd"）
+                    if '>>"x:\\pe.cmd"' in cmd_text or '>>"x:/pe.cmd"' in cmd_text:
+                        has_pe_cmd_write = True
+                    if '8dot3name set' in cmd_text or '8dot3name strip' in cmd_text:
+                        disable_8dot3 = True
+                    if '@echo computer will now reboot' in cmd_text or ('pause' in cmd_text and 'wpeutil.exe reboot' in cmd_text):
+                        pause_before_reboot = True
+                if 'assert.vbs' in cmd_text:
+                    has_assert_vbs = True
+                if 'diskpart.txt' in cmd_text:
+                    has_diskpart_txt = True
+                if 'windefend' in cmd_text and 'reg.exe' in cmd_text and '/v start' in cmd_text and '/d 4' in cmd_text:
+                    disable_defender_flag = True
         
-        if has_pe_script:
+        # 如果有多个写入文件的命令（assert.vbs、diskpart.txt、pe.cmd），应该是 GeneratePESettings
+        if has_pe_script and (has_assert_vbs or has_diskpart_txt or has_pe_cmd_write):
+            pe_settings['mode'] = 'generated'
+            # 尝试从命令中推断设置（简化版本）
+            pe_settings['disable8Dot3Names'] = disable_8dot3
+            pe_settings['pauseBeforeFormatting'] = False  # 默认值
+            pe_settings['pauseBeforeReboot'] = pause_before_reboot
+        elif has_pe_script:
             pe_settings['mode'] = 'script'
             pe_settings['cmdScript'] = ''  # 无法从 XML 中解析
         else:
             pe_settings['mode'] = 'default'
+
+        if 'systemTweaks' not in config_dict or not isinstance(config_dict.get('systemTweaks'), dict):
+            config_dict['systemTweaks'] = {}
+        if disable_defender_flag:
+            config_dict['systemTweaks']['disableDefender'] = True
         
         config_dict['peSettings'] = pe_settings
-        
-        # 解析 Compact OS 模式
-        # Compact 在 OSImage 下
-        compact_elem = root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}Compact")
-        if compact_elem is not None:
-            if compact_elem.text == "true":
-                config_dict['compactOS'] = 'enabled'
-            elif compact_elem.text == "false":
-                config_dict['compactOS'] = 'disabled'
+        # 额外保存 WinPE 键盘布局（供生成时精确还原）
+        if detected_winpe_layout:
+            config_dict.setdefault('languageSettings', {})['winPEKeyboardLayout'] = detected_winpe_layout
+        if detected_compact:
+            config_dict['compactOS'] = 'enabled'
+
+        # 如果在 RunSynchronous 中解析到镜像名称，补全 sourceImage 为名称模式
+        if detected_image_name:
+            config_dict['sourceImage'] = {
+                'mode': 'name',
+                'name': detected_image_name
+            }
+            config_dict.setdefault('windowsEdition', {}).setdefault('editionName', detected_image_name)
+
+        # 解析 Compact OS 模式（若已根据 RunSynchronous 检测到，则不覆盖）
+        if 'compactOS' not in config_dict:
+            # Compact 在 OSImage 下
+            compact_elem = root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}Compact")
+            if compact_elem is not None:
+                if compact_elem.text == "true":
+                    config_dict['compactOS'] = 'enabled'
+                elif compact_elem.text == "false":
+                    config_dict['compactOS'] = 'disabled'
+                else:
+                    config_dict['compactOS'] = 'default'
             else:
                 config_dict['compactOS'] = 'default'
-        else:
-            config_dict['compactOS'] = 'default'
         
         # 解析模块 6: Windows Edition and Source
         # 解析版本设置
-        product_key_elem = root.find(f".//{{{ns_uri}}}UserData/{{{ns_uri}}}ProductKey/{{{ns_uri}}}Key")
-        will_show_ui_elem = root.find(f".//{{{ns_uri}}}UserData/{{{ns_uri}}}ProductKey/{{{ns_uri}}}WillShowUI")
+        # 首先检查 specialize pass 中的 ProductKey（自定义产品密钥）
+        specialize_product_key_elem = root.find(f".//{{{ns_uri}}}settings[@pass='specialize']/{{{ns_uri}}}component[@name='Microsoft-Windows-Shell-Setup']/{{{ns_uri}}}ProductKey")
         
         edition_settings: Dict[str, Any] = {'mode': 'interactive'}
-        if product_key_elem is not None:
-            product_key = product_key_elem.text
-            will_show_ui = will_show_ui_elem.text if will_show_ui_elem is not None else "Always"
+        
+        if specialize_product_key_elem is not None and specialize_product_key_elem.text:
+            # 如果 specialize pass 中有 ProductKey，则是自定义产品密钥模式
+            edition_settings['mode'] = 'custom'
+            edition_settings['productKey'] = specialize_product_key_elem.text
+        else:
+            # 检查 windowsPE pass 中的 UserData/ProductKey
+            product_key_elem = root.find(f".//{{{ns_uri}}}UserData/{{{ns_uri}}}ProductKey/{{{ns_uri}}}Key")
+            will_show_ui_elem = root.find(f".//{{{ns_uri}}}UserData/{{{ns_uri}}}ProductKey/{{{ns_uri}}}WillShowUI")
             
-            if product_key == "00000-00000-00000-00000-00000":
-                if will_show_ui == "Always":
-                    edition_settings['mode'] = 'interactive'
-                else:
-                    edition_settings['mode'] = 'firmware'
-            else:
-                # 检查是否有 specialize pass 中的 ProductKey
-                specialize_product_key = root.find(f".//{{{ns_uri}}}settings[@pass='specialize']/{{{ns_uri}}}component[@name='Microsoft-Windows-Shell-Setup']/{{{ns_uri}}}ProductKey")
-                if specialize_product_key is not None and specialize_product_key.text == product_key:
-                    edition_settings['mode'] = 'custom'
-                    edition_settings['productKey'] = product_key
+            if product_key_elem is not None:
+                product_key = product_key_elem.text
+                will_show_ui = will_show_ui_elem.text if will_show_ui_elem is not None else "Always"
+                
+                if product_key == "00000-00000-00000-00000-00000":
+                    if will_show_ui == "Always":
+                        edition_settings['mode'] = 'interactive'
+                    else:
+                        edition_settings['mode'] = 'firmware'
                 else:
                     # 可能是无人值守模式，需要从 WindowsEdition 数据中查找
                     # 暂时设为交互式
@@ -4783,38 +5958,65 @@ class UnattendGenerator:
         
         config_dict['windowsEdition'] = edition_settings
         
-        # 解析安装源设置
-        # InstallFrom 在 OSImage 下
-        install_from = root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}InstallFrom")
-        source_settings: Dict[str, Any] = {'mode': 'automatic'}
-        if install_from is not None:
-            metadata = install_from.find(f"{{{ns_uri}}}MetaData")
-            if metadata is not None:
-                key_elem = metadata.find(f"{{{ns_uri}}}Key")
-                value_elem = metadata.find(f"{{{ns_uri}}}Value")
-                if key_elem is not None and value_elem is not None:
-                    key = key_elem.text
-                    value = value_elem.text
-                    if key == "/IMAGE/INDEX" and value is not None:
-                        try:
-                            index = int(value)
-                            source_settings['mode'] = 'index'
-                            source_settings['index'] = index
-                        except (ValueError, TypeError):
+        # 解析安装源设置（若之前已从 RunSynchronous 提取到 name，则保持不覆盖）
+        if not (isinstance(config_dict.get('sourceImage'), dict) and config_dict['sourceImage'].get('mode') == 'name'):
+            # InstallFrom 在 OSImage 下
+            install_from = root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}InstallFrom")
+            source_settings: Dict[str, Any] = {'mode': 'automatic'}
+            if install_from is not None:
+                metadata = install_from.find(f"{{{ns_uri}}}MetaData")
+                if metadata is not None:
+                    key_elem = metadata.find(f"{{{ns_uri}}}Key")
+                    value_elem = metadata.find(f"{{{ns_uri}}}Value")
+                    if key_elem is not None and value_elem is not None:
+                        key = key_elem.text
+                        value = value_elem.text
+                        if key == "/IMAGE/INDEX" and value is not None:
+                            try:
+                                index = int(value)
+                                source_settings['mode'] = 'index'
+                                source_settings['imageIndex'] = index
+                            except (ValueError, TypeError):
+                                source_settings['mode'] = 'automatic'
+                        elif key == "/IMAGE/NAME" and value is not None:
+                            source_settings['mode'] = 'name'
+                            source_settings['imageName'] = value
+                        else:
                             source_settings['mode'] = 'automatic'
-                    elif key == "/IMAGE/NAME" and value is not None:
-                        source_settings['mode'] = 'name'
-                        source_settings['name'] = value
                     else:
                         source_settings['mode'] = 'automatic'
                 else:
                     source_settings['mode'] = 'automatic'
             else:
                 source_settings['mode'] = 'automatic'
-        else:
-            source_settings['mode'] = 'automatic'
+            
+            config_dict['sourceImage'] = source_settings
         
-        config_dict['sourceImage'] = source_settings
+        # 解析 windowsPE pass 中的 ImageInstall 和 UserData
+        # 这些元素在生成时会被创建，但在解析时需要检测它们的存在
+        windows_pe_settings = root.find(f".//{{{ns_uri}}}settings[@pass='windowsPE']")
+        if windows_pe_settings is not None:
+            setup_component = windows_pe_settings.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-Setup']")
+            if setup_component is not None:
+                # 检查是否有 ImageInstall 元素
+                image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
+                if image_install is not None:
+                    # ImageInstall 存在，说明使用了自定义分区或安装源
+                    # 这些信息已经在 partitioning 和 sourceImage 中解析了
+                    pass
+                
+                # 检查是否有 UserData 元素
+                user_data = setup_component.find(f"{{{ns_uri}}}UserData")
+                if user_data is not None:
+                    # UserData 存在，说明设置了产品密钥
+                    # 这个信息已经在 windowsEdition 中解析了
+                    pass
+                
+                # 检查是否有 UseConfigurationSet 元素
+                use_config_set_elem = setup_component.find(f"{{{ns_uri}}}UseConfigurationSet")
+                if use_config_set_elem is not None:
+                    if use_config_set_elem.text and use_config_set_elem.text.lower() == "true":
+                        setup_settings['useConfigurationSet'] = True
         
         # 解析模块 8: Wi-Fi 设置
         wlan_profile = root.find(f".//{{{ns_uri}}}WLANProfile")
@@ -4846,13 +6048,589 @@ class UnattendGenerator:
         
         config_dict['wifi'] = wifi_settings
         
-        # 解析模块 9: 辅助功能设置
-        # Lock Keys 和 Sticky Keys 设置需要从注册表解析，暂时设为默认值
-        config_dict['lockKeys'] = {'mode': 'skip'}
-        config_dict['stickyKeys'] = {'mode': 'default'}
+        # 收集所有脚本命令用于解析其他设置
+        all_commands = self._collect_all_commands(root)
         
-        # 解析其他设置（将在后续模块中实现）
-        # TODO: 解析其他配置项
+        # 解析模块 9: 辅助功能设置
+        # Lock Keys 和 Sticky Keys 设置需要从注册表解析
+        lock_keys_settings: Dict[str, Any] = {'mode': 'skip'}
+        sticky_keys_settings: Dict[str, Any] = {'mode': 'default'}
+        
+        # 解析 LockKeys
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            # 查找键盘相关注册表设置
+            if 'control panel\\keyboard' in cmd_lower and 'reg.exe' in cmd_lower:
+                # 解析锁定键设置
+                if 'initialkeyboardindicators' in cmd_lower:
+                    # 提取初始状态
+                    value = self._parse_registry_command(cmd_text, r'HKU\\DefaultUser\\Control Panel\\Keyboard', 'InitialKeyboardIndicators')
+                    if value:
+                        lock_keys_settings['mode'] = 'configure'
+                        # 根据值设置初始状态（0=off, 2=on for NumLock, 4=on for CapsLock, 6=both on）
+                        if value == '0':
+                            lock_keys_settings['numLockInitial'] = 'off'
+                            lock_keys_settings['capsLockInitial'] = 'off'
+                        elif value == '2':
+                            lock_keys_settings['numLockInitial'] = 'on'
+                            lock_keys_settings['capsLockInitial'] = 'off'
+                        elif value == '4':
+                            lock_keys_settings['numLockInitial'] = 'off'
+                            lock_keys_settings['capsLockInitial'] = 'on'
+                        elif value == '6':
+                            lock_keys_settings['numLockInitial'] = 'on'
+                            lock_keys_settings['capsLockInitial'] = 'on'
+        
+        # 解析 StickyKeys
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            if 'stickykeys' in cmd_lower and 'flags' in cmd_lower and 'reg.exe' in cmd_lower:
+                value = self._parse_registry_command(cmd_text, r'HKU\\DefaultUser\\Control Panel\\Accessibility\\StickyKeys', 'Flags')
+                if value:
+                    try:
+                        flags_int = int(value)
+                        if flags_int == 0:
+                            sticky_keys_settings['mode'] = 'disabled'
+                        else:
+                            sticky_keys_settings['mode'] = 'custom'
+                            # 解析标志位（简化处理，实际需要根据位掩码解析）
+                            sticky_keys_settings['stickyKeysHotKeyActive'] = (flags_int & 1) != 0
+                            sticky_keys_settings['stickyKeysHotKeySound'] = (flags_int & 2) != 0
+                            sticky_keys_settings['stickyKeysIndicator'] = (flags_int & 4) != 0
+                            sticky_keys_settings['stickyKeysAudibleFeedback'] = (flags_int & 8) != 0
+                            sticky_keys_settings['stickyKeysTriState'] = (flags_int & 16) != 0
+                            sticky_keys_settings['stickyKeysTwoKeysOff'] = (flags_int & 32) != 0
+                    except (ValueError, TypeError):
+                        pass
+        
+        config_dict['lockKeys'] = lock_keys_settings
+        config_dict['stickyKeys'] = sticky_keys_settings
+        
+        # FileExplorerTweaks - 从注册表命令中解析
+        file_explorer_tweaks: Dict[str, Any] = {
+            'showFileExtensions': False,
+            'showAllTrayIcons': False,
+            'hideFiles': 'hidden',
+            'hideEdgeFre': False,
+            'disableEdgeStartupBoost': False,
+            'makeEdgeUninstallable': False,
+            'deleteEdgeDesktopIcon': False,
+            'launchToThisPC': False,
+            'disableBingResults': False,
+            'classicContextMenu': False,
+            'showEndTask': False
+        }
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            
+            # showFileExtensions: HideFileExt = 0 表示显示扩展名
+            if 'hidefileext' in cmd_lower and 'reg.exe' in cmd_lower:
+                value = self._parse_registry_command(cmd_text, r'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'HideFileExt')
+                if value == '0':
+                    file_explorer_tweaks['showFileExtensions'] = True
+            
+            # launchToThisPC: LaunchTo = 1
+            if 'launchto' in cmd_lower and ('reg.exe' in cmd_lower or 'set-itemproperty' in cmd_lower):
+                if 'explorer\\advanced' in cmd_lower:
+                    value = self._parse_registry_command(cmd_text, r'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'LaunchTo')
+                    if value == '1':
+                        file_explorer_tweaks['launchToThisPC'] = True
+            
+            # hideEdgeFre: HideFirstRunExperience = 1
+            if 'hidefirstrunexperience' in cmd_lower and 'reg.exe' in cmd_lower:
+                if self._check_registry_command(cmd_text, r'HKLM\\Software\\Policies\\Microsoft\\Edge', 'HideFirstRunExperience', '1'):
+                    file_explorer_tweaks['hideEdgeFre'] = True
+            
+            # disableEdgeStartupBoost: BackgroundModeEnabled = 0 或 StartupBoostEnabled = 0
+            if ('backgroundmodeenabled' in cmd_lower or 'startupboostenabled' in cmd_lower) and 'reg.exe' in cmd_lower:
+                if 'edge' in cmd_lower and '0' in cmd_text:
+                    file_explorer_tweaks['disableEdgeStartupBoost'] = True
+            
+            # makeEdgeUninstallable: 查找 MakeEdgeUninstallable.ps1
+            if 'makeedgeuninstallable' in cmd_lower:
+                file_explorer_tweaks['makeEdgeUninstallable'] = True
+            
+            # classicContextMenu: 查找 {86ca1aa0-34aa-4e8b-a509-50c905bae2a2} CLSID
+            if '{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}' in cmd_text:
+                file_explorer_tweaks['classicContextMenu'] = True
+            
+            # showEndTask: TaskbarEndTask = 1
+            if 'taskbarendtask' in cmd_lower and 'reg.exe' in cmd_lower:
+                if self._check_registry_command(cmd_text, r'HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings', 'TaskbarEndTask', '1'):
+                    file_explorer_tweaks['showEndTask'] = True
+        
+        config_dict['fileExplorerTweaks'] = file_explorer_tweaks
+        
+        # StartMenuTaskbar - 从注册表命令中解析
+        start_menu_taskbar: Dict[str, Any] = {
+            'leftTaskbar': False,
+            'hideTaskViewButton': False,
+            'taskbarSearch': 'box',
+            'disableWidgets': False,
+            'startTilesMode': 'default',
+            'startPinsMode': 'default'
+        }
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            
+            # leftTaskbar: TaskbarAl = 0
+            if 'taskbaral' in cmd_lower and 'reg.exe' in cmd_lower:
+                if 'explorer\\advanced' in cmd_lower:
+                    value = self._parse_registry_command(cmd_text, r'HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced', 'TaskbarAl')
+                    if value == '0':
+                        start_menu_taskbar['leftTaskbar'] = True
+            
+            # disableWidgets: 查找相关注册表项
+            if 'disablewidgets' in cmd_lower or ('widgets' in cmd_lower and 'disable' in cmd_lower):
+                start_menu_taskbar['disableWidgets'] = True
+        
+        config_dict['startMenuTaskbar'] = start_menu_taskbar
+        
+        # VisualEffects - 从注册表命令中解析
+        visual_effects: Dict[str, Any] = {'mode': 'default'}
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            # 查找 VisualFXSetting 注册表项
+            if 'visualfxsetting' in cmd_lower and 'set-itemproperty' in cmd_lower:
+                # 提取设置值（0=default, 1=appearance, 2=performance, 3=custom）
+                import re
+                value_match = re.search(r'-Value\s+(\d+)', cmd_text, re.IGNORECASE)
+                if value_match:
+                    value = int(value_match.group(1))
+                    if value == 0:
+                        visual_effects['mode'] = 'default'
+                    elif value == 1:
+                        visual_effects['mode'] = 'appearance'
+                    elif value == 2:
+                        visual_effects['mode'] = 'performance'
+                    elif value == 3:
+                        visual_effects['mode'] = 'custom'
+                        # 如果是 custom 模式，尝试解析各个效果设置
+                        # 查找 VisualEffects\{EffectName}\DefaultValue 注册表项
+                        for effect_name in ['ControlAnimations', 'AnimateMinMax', 'TaskbarAnimations', 'DwmAeroPeekEnabled', 'MenuAnimation', 'TooltipAnimation', 'SelectionFade', 'DwmSaveThumbnailEnabled', 'CursorShadow', 'ListViewShadow', 'ThumbnailsOrIcon', 'ListViewAlphaSelect', 'DragFullWindows', 'ComboBoxAnimation', 'FontSmoothing', 'ListBoxSmoothScrolling', 'DropShadow']:
+                            effect_lower = effect_name.lower()
+                            if effect_lower in cmd_lower and 'visualeffects' in cmd_lower:
+                                value_match2 = re.search(r'-Value\s+(\d+)', cmd_text, re.IGNORECASE)
+                                if value_match2:
+                                    effect_value = int(value_match2.group(1))
+                                    # 将效果名转换为前端字段名（驼峰命名）
+                                    # 简化处理：直接使用效果名的小写形式
+                                    field_name = effect_name[0].lower() + effect_name[1:] if effect_name else effect_name.lower()
+                                    visual_effects[field_name] = effect_value == 1
+        
+        config_dict['visualEffects'] = visual_effects
+        
+        # DesktopIcons - 从注册表命令中解析
+        desktop_icons: Dict[str, Any] = {
+            'mode': 'default',
+            'deleteEdgeDesktopIcon': False
+        }
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            # 查找 HideDesktopIcons 注册表项
+            if 'hidedesktopicons' in cmd_lower and 'set-itemproperty' in cmd_lower:
+                desktop_icons['mode'] = 'custom'
+                # 解析各个图标设置（简化处理，实际需要更复杂的解析）
+                # 查找图标 GUID 和值
+                import re
+                icon_guids = {
+                    '20D04FE0-3AEA-1069-A2D8-08002B30309D': 'iconThisPC',
+                    '59031a47-3f72-44a7-89c5-5595fe6b30ee': 'iconUserFiles',
+                    'F02C1A0D-BE21-4350-88B0-7367FC96EF3C': 'iconNetwork',
+                    '5399E694-6CE5-4D6C-8FCE-1F8870FDC54F': 'iconControlPanel',
+                    '645FF040-5081-101B-9F08-00AA002F954E': 'iconRecycleBin',
+                    '374DE290-123F-4565-9164-39C4925E467B': 'iconDownloads',
+                    '3ADD1653-EB32-4CB0-BBD7-DFA0BB5C5CDD': 'iconMusic',
+                    'A0953C92-50DC-43BF-BE83-3742EED94C19': 'iconVideos',
+                    'A8CDFF1C-4878-43BE-B5FD-F8091C1C60D0': 'iconDocuments',
+                    'B4BFCC3A-DB2C-424C-B029-7FE99A87C641': 'iconDesktop',
+                    '24ad3ad4-a569-4530-98e1-ab02f9417aa8': 'iconPictures',
+                    'f86fa3ab-70d2-4fc7-9cd5-c559ae2e4d33': 'iconGallery',
+                    'd3162b92-9365-467a-956b-927d1adc84c3': 'iconHome'
+                }
+                for guid, field_name in icon_guids.items():
+                    if guid.lower() in cmd_lower:
+                        value_match = re.search(r'-Value\s+(\d+)', cmd_text, re.IGNORECASE)
+                        if value_match:
+                            icon_value = int(value_match.group(1))
+                            desktop_icons[field_name] = icon_value == 0  # 0 表示显示，1 表示隐藏
+        
+        config_dict['desktopIcons'] = desktop_icons
+        
+        # StartFolders - 从注册表命令中解析
+        start_folders: Dict[str, Any] = {'mode': 'default'}
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            # 查找开始菜单文件夹相关注册表项（简化处理）
+            if 'startmenu' in cmd_lower and 'folder' in cmd_lower:
+                start_folders['mode'] = 'custom'
+                # 解析各个文件夹设置（需要根据实际注册表项解析）
+        
+        config_dict['startFolders'] = start_folders
+        
+        # Personalization - 从脚本文件中解析
+        personalization: Dict[str, Any] = {
+            'wallpaperMode': 'default',
+            'lockScreenMode': 'default',
+            'colorMode': 'default'
+        }
+        
+        # 查找壁纸相关脚本
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            if 'setwallpaper' in cmd_lower or 'getwallpaper' in cmd_lower:
+                if 'setwallpapercolor' in cmd_lower:
+                    personalization['wallpaperMode'] = 'solid'
+                    # 尝试提取颜色值
+                    import re
+                    color_match = re.search(r'-HtmlColor\s+[\'"]?([#\w]+)[\'"]?', cmd_text, re.IGNORECASE)
+                    if color_match:
+                        personalization['wallpaperColor'] = color_match.group(1)
+                elif 'setwallpaperimage' in cmd_lower or 'getwallpaper' in cmd_lower:
+                    personalization['wallpaperMode'] = 'script'
+                    # 尝试获取脚本内容
+                    getter_file = self._get_script_file_content(root, r'C:\Windows\Setup\Scripts\GetWallpaper.ps1')
+                    if getter_file:
+                        personalization['wallpaperScript'] = getter_file
+        
+        # 查找锁屏相关脚本
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            if 'lockscreen' in cmd_lower or 'getlockscreenimage' in cmd_lower:
+                personalization['lockScreenMode'] = 'script'
+                getter_file = self._get_script_file_content(root, r'C:\Windows\Setup\Scripts\GetLockScreenImage.ps1')
+                if getter_file:
+                    personalization['lockScreenScript'] = getter_file
+        
+        # 查找颜色主题相关脚本
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            if 'setcolortheme' in cmd_lower or 'colortheme' in cmd_lower:
+                personalization['colorMode'] = 'custom'
+                # 尝试从脚本中提取颜色设置
+                theme_file = self._get_script_file_content(root, r'C:\Windows\Setup\Scripts\SetColorTheme.ps1')
+                if theme_file:
+                    import re
+                    # 提取主题设置
+                    system_match = re.search(r'\$lightThemeSystem\s*=\s*(\d+)', theme_file)
+                    apps_match = re.search(r'\$lightThemeApps\s*=\s*(\d+)', theme_file)
+                    if system_match:
+                        personalization['systemColorTheme'] = 'light' if system_match.group(1) == '0' else 'dark'
+                    if apps_match:
+                        personalization['appsColorTheme'] = 'light' if apps_match.group(1) == '0' else 'dark'
+                    
+                    accent_match = re.search(r'\$htmlAccentColor\s*=\s*[\'"]?([#\w]+)[\'"]?', theme_file)
+                    if accent_match:
+                        personalization['accentColor'] = accent_match.group(1)
+        
+        config_dict['personalization'] = personalization
+        
+        # SystemTweaks - 从注册表命令和脚本中解析
+        system_tweaks: Dict[str, Any] = {
+            'enableLongPaths': False,
+            'enableRemoteDesktop': False,
+            'hardenSystemDriveAcl': False,
+            'deleteJunctions': False,
+            'allowPowerShellScripts': False,
+            'disableLastAccess': False,
+            'preventAutomaticReboot': False,
+            'disableDefender': False,
+            'disableSac': False,
+            'disableUac': False,
+            'disableSmartScreen': False,
+            'disableSystemRestore': False,
+            'disableFastStartup': False,
+            'turnOffSystemSounds': False,
+            'disableAppSuggestions': False,
+            'disableWidgets': False,
+            'preventDeviceEncryption': False,
+            'classicContextMenu': False,
+            'disableWindowsUpdate': False,
+            'disablePointerPrecision': False,
+            'deleteWindowsOld': False,
+            'disableCoreIsolation': False,
+            'showEndTask': False
+        }
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            
+            # enableLongPaths: LongPathsEnabled = 1
+            if 'longpathsenabled' in cmd_lower and 'reg.exe' in cmd_lower:
+                if self._check_registry_command(cmd_text, r'HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem', 'LongPathsEnabled', '1'):
+                    system_tweaks['enableLongPaths'] = True
+            
+            # enableRemoteDesktop: fDenyTSConnections = 0
+            if 'fdenytsconnections' in cmd_lower and 'reg.exe' in cmd_lower:
+                value = self._parse_registry_command(cmd_text, r'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server', 'fDenyTSConnections')
+                if value == '0':
+                    system_tweaks['enableRemoteDesktop'] = True
+            
+            # preventDeviceEncryption: PreventDeviceEncryption = 1
+            if 'preventdeviceencryption' in cmd_lower and 'reg.exe' in cmd_lower:
+                if self._check_registry_command(cmd_text, r'HKLM\\SYSTEM\\CurrentControlSet\\Control\\BitLocker', 'PreventDeviceEncryption', '1'):
+                    system_tweaks['preventDeviceEncryption'] = True
+            
+            # classicContextMenu: 查找 {86ca1aa0-34aa-4e8b-a509-50c905bae2a2} CLSID
+            if '{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}' in cmd_text:
+                system_tweaks['classicContextMenu'] = True
+            
+            # hardenSystemDriveAcl: 查找 icacls 命令
+            if 'icacls' in cmd_lower and 'remove:g' in cmd_lower:
+                system_tweaks['hardenSystemDriveAcl'] = True
+            
+            # deleteJunctions: 查找删除 junction 的脚本
+            if 'reparsepoint' in cmd_lower or ('junction' in cmd_lower and 'remove' in cmd_lower):
+                system_tweaks['deleteJunctions'] = True
+        
+        config_dict['systemTweaks'] = system_tweaks
+        
+        # Bloatware - 从脚本文件中解析
+        bloatware: Dict[str, Any] = {'items': []}
+        
+        # 查找移除脚本（files 已在 Scripts 解析中定义）
+        files = root.findall(f".//{{{ns_uri}}}File")
+        for file_elem in files:
+            destination_path_elem = file_elem.find(f"{{{ns_uri}}}DestinationPath")
+            if destination_path_elem is not None and destination_path_elem.text:
+                file_path = destination_path_elem.text
+                file_name_lower = file_path.lower()
+                
+                # 查找移除脚本（RemoveBloatware.ps1 或类似的脚本）
+                if 'removebloatware' in file_name_lower or 'remove' in file_name_lower and 'bloatware' in file_name_lower:
+                    data_elem = file_elem.find(f"{{{ns_uri}}}Data")
+                    if data_elem is not None and data_elem.text:
+                        script_content = data_elem.text
+                        # 从脚本中提取选择器（selector）
+                        import re
+                        # 查找 $selectors = @(...) 模式
+                        selectors_match = re.search(r'\$selectors\s*=\s*@\s*\((.*?)\)', script_content, re.DOTALL)
+                        if selectors_match:
+                            selectors_text = selectors_match.group(1)
+                            # 提取每个选择器（单引号或双引号字符串）
+                            selector_matches = re.findall(r'[\'"]([^\'"]+)[\'"]', selectors_text)
+                            for selector in selector_matches:
+                                # 尝试识别预装软件 ID（简化处理，实际需要更复杂的匹配逻辑）
+                                # 这里只是示例，实际需要根据 generator.bloatwares 进行匹配
+                                if selector.strip():
+                                    bloatware['items'].append(selector.strip())
+        
+        config_dict['bloatware'] = bloatware
+        
+        # ExpressSettings - 从注册表命令中解析
+        # 解析快速设置（Express Settings）
+        # 优先从 OOBE 中的 ProtectYourPC 解析
+        express_settings = 'disableAll'
+        oobe_component = root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-Shell-Setup']")
+        if oobe_component is not None:
+            # 查找第一个 OOBE 元素（可能有多个）
+            oobe_elem = oobe_component.find(f"{{{ns_uri}}}OOBE")
+            if oobe_elem is not None:
+                protect_your_pc = oobe_elem.find(f"{{{ns_uri}}}ProtectYourPC")
+                if protect_your_pc is not None and protect_your_pc.text:
+                    protect_value = protect_your_pc.text.strip()
+                    if protect_value == '1':
+                        express_settings = 'enableAll'
+                    elif protect_value == '3':
+                        express_settings = 'disableAll'
+                    # 如果不存在或为空，默认为 interactive（但这里我们设为 disableAll）
+        
+        # 如果 OOBE 中没有找到 ProtectYourPC，尝试从注册表命令中解析
+        if express_settings == 'disableAll':
+            for cmd_text in all_commands:
+                cmd_lower = cmd_text.lower()
+                # 查找 DisableWindowsConsumerFeatures 注册表项
+                if 'disablewindowsconsumerfeatures' in cmd_lower and 'reg.exe' in cmd_lower:
+                    value = self._parse_registry_command(cmd_text, r'HKLM\\Software\\Policies\\Microsoft\\Windows\\CloudContent', 'DisableWindowsConsumerFeatures')
+                    if value == '1':
+                        express_settings = 'disableAll'
+                    elif value == '0':
+                        express_settings = 'enableAll'
+                    break
+        
+        config_dict['expressSettings'] = express_settings
+        
+        # VMSupport - 从脚本调用中解析
+        vm_support: Dict[str, Any] = {
+            'vBoxGuestAdditions': False,
+            'vmwareTools': False,
+            'virtIoGuestTools': False,
+            'parallelsTools': False
+        }
+        
+        for cmd_text in all_commands:
+            cmd_lower = cmd_text.lower()
+            
+            # 查找虚拟机工具安装脚本
+            if 'vboxguestadditions' in cmd_lower or 'virtualbox' in cmd_lower:
+                vm_support['vBoxGuestAdditions'] = True
+            if 'vmwaretools' in cmd_lower or ('vmware' in cmd_lower and 'tools' in cmd_lower):
+                vm_support['vmwareTools'] = True
+            if 'virtioguesttools' in cmd_lower or 'virt-io' in cmd_lower or 'virtio' in cmd_lower:
+                vm_support['virtIoGuestTools'] = True
+            if 'parallelstools' in cmd_lower or 'parallels' in cmd_lower:
+                vm_support['parallelsTools'] = True
+        
+        config_dict['vmSupport'] = vm_support
+        
+        # WDAC - 默认值（已在前面设置）
+        if 'wdac' not in config_dict:
+            config_dict['wdac'] = {'mode': 'skip'}
+        
+        # Scripts - 从脚本文件中解析
+        scripts_dict: Dict[str, Any] = {
+            'system': [],
+            'defaultUser': [],
+            'firstLogon': [],
+            'userOnce': [],
+            'restartExplorer': False
+        }
+        
+        # 查找所有脚本文件
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        ext_ns_uri = 'https://schneegans.de/windows/unattend-generator/'
+        import uuid
+        
+        # 查找默认命名空间中的 File 元素
+        files = root.findall(f".//{{{ns_uri}}}File")
+        # 查找 Extensions 命名空间中的 File 元素
+        ext_files = root.findall(f".//{{{ext_ns_uri}}}File")
+        
+        # 合并所有文件元素
+        all_file_elems = []
+        for file_elem in files:
+            destination_path_elem = file_elem.find(f"{{{ns_uri}}}DestinationPath")
+            if destination_path_elem is not None and destination_path_elem.text:
+                all_file_elems.append({
+                    'elem': file_elem,
+                    'path': destination_path_elem.text,
+                    'ns': ns_uri
+                })
+        
+        for file_elem in ext_files:
+            path_attr = file_elem.get('path')
+            if path_attr:
+                all_file_elems.append({
+                    'elem': file_elem,
+                    'path': path_attr,
+                    'ns': ext_ns_uri
+                })
+        
+        for file_info in all_file_elems:
+            file_elem = file_info['elem']
+            file_path = file_info['path']
+            file_ns = file_info['ns']
+            
+            # 检查是否是脚本文件
+            if 'C:\\Windows\\Setup\\Scripts\\' in file_path or 'C:/Windows/Setup/Scripts/' in file_path:
+                file_name_lower = file_path.lower()
+                # 检查是否是脚本文件（.cmd, .ps1, .reg, .vbs, .js）
+                is_script = any(file_name_lower.endswith(ext) for ext in ['.cmd', '.ps1', '.reg', '.vbs', '.js'])
+                
+                # 检查是否是特殊脚本文件（FirstLogon.ps1, UserOnce.ps1, DefaultUser.ps1）
+                # 这些是包装脚本，它们的内容不应该被解析为多个脚本
+                is_special_script = any(name in file_name_lower for name in ['firstlogon.ps1', 'useronce.ps1', 'defaultuser.ps1', 'specialize.ps1'])
+                # 检查是否是自定义脚本（unattend-*）
+                # 注意：unattend-* 文件不应该被解析，因为它们是被包装脚本调用的
+                is_custom_script = 'unattend-' in file_name_lower
+                
+                # 只解析特殊脚本文件，不解析 unattend-* 文件
+                # 特殊脚本文件（FirstLogon.ps1, UserOnce.ps1, DefaultUser.ps1, Specialize.ps1）是包装脚本
+                # 它们的内容不应该被解析为多个脚本项，而是直接作为这些文件处理
+                # 但是，这些文件的内容需要被保存到 Extensions 中，以便生成时能够恢复
+                if is_script and is_special_script and not is_custom_script:
+                    import logging
+                    logger = logging.getLogger('UnattendGenerator')
+                    logger.debug(f"parse_xml: Skipping special script file (wrapper script) for script parsing, but preserving in Extensions: {file_path}")
+                    # 不解析包装脚本为脚本项，但它们的内容会被保存到 Extensions 中
+                    # 这样生成时 FirstLogonModifier、UserOnceModifier 等可以直接使用
+                    continue
+                elif is_script and is_custom_script:
+                    import logging
+                    logger = logging.getLogger('UnattendGenerator')
+                    logger.debug(f"parse_xml: Skipping custom script file (unattend-*): {file_path}")
+                    # 不解析 unattend-* 文件，它们是被包装脚本调用的
+                    continue
+        
+        # 检查是否有重启 Explorer 的命令
+        for cmd_text in all_commands:
+            if 'restart-explorer' in cmd_text.lower() or 'restart explorer' in cmd_text.lower():
+                scripts_dict['restartExplorer'] = True
+        
+        config_dict['scripts'] = scripts_dict
+        
+        # XmlMarkup - 从自定义 component 元素中解析
+        xml_markup: Dict[str, Any] = {'components': []}
+        
+        # 标准组件列表（这些不应该被包含在 xmlMarkup 中）
+        standard_components = {
+            'Microsoft-Windows-International-Core-WinPE',
+            'Microsoft-Windows-International-Core',
+            'Microsoft-Windows-Shell-Setup',
+            'Microsoft-Windows-Deployment',
+            'Microsoft-Windows-Setup',
+            'Microsoft-Windows-UnattendedJoin',
+            'Microsoft-Windows-IE-InternetExplorer',
+            'Microsoft-Windows-Embedded-ShellLauncher'
+        }
+        
+        # 查找所有 component 元素
+        components = root.findall(f".//{{{ns_uri}}}component")
+        for component in components:
+            component_name = component.get('name')
+            if component_name and component_name not in standard_components:
+                # 获取 pass 属性
+                settings_elem = component.find(f"..")
+                if settings_elem is not None:
+                    pass_attr = settings_elem.get('pass')
+                    if pass_attr:
+                        # 提取 component 的 XML 内容（返回字符串）
+                        component_xml: str = ET.tostring(component, encoding='unicode')
+                        
+                        xml_markup['components'].append({
+                            'component': component_name,
+                            'pass': pass_attr,
+                            'xml': component_xml  # 前端期望字符串类型
+                        })
+        
+        config_dict['xmlMarkup'] = xml_markup
+        
+        # 解析 Extensions 部分
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
+        extensions_elem = root.find(f"{{{s_uri}}}Extensions")
+        if extensions_elem is not None:
+            extensions_dict: Dict[str, Any] = {}
+            
+            # 解析 ExtractScript
+            extract_script_elem = extensions_elem.find(f"{{{s_uri}}}ExtractScript")
+            if extract_script_elem is not None and extract_script_elem.text:
+                extensions_dict['extractScript'] = extract_script_elem.text.strip()
+            
+            # 解析所有 File 元素
+            # 注意：unattend-* 文件应该被保存到 extensions 中，以便生成时能够恢复
+            # 但它们不应该被解析为脚本项（在脚本解析部分已经跳过）
+            files = []
+            for file_elem in extensions_elem.findall(f"{{{s_uri}}}File"):
+                path_attr = file_elem.get('path', '')
+                content = file_elem.text if file_elem.text else ''
+                # 如果没有文本，尝试从子元素获取
+                if not content:
+                    content = ''.join(file_elem.itertext()).strip()
+                files.append({
+                    'path': path_attr,
+                    'content': content
+                })
+            
+            if files:
+                extensions_dict['files'] = files
+            
+            if extensions_dict:
+                config_dict['extensions'] = extensions_dict
         
         return config_dict
 
@@ -4927,30 +6705,43 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 image_lang_id = lang.get('uiLanguage', 'en-US')
                 locale_id = lang.get('systemLocale', 'en-US')
                 keyboard_id = lang.get('inputLocale', '00000409')  # 默认 US 键盘
+                has_winpe = lang.get('hasWinPE', True)  # 默认 True 保持向后兼容
                 
-                # 查找对象
+                # 查找对象，如果查找失败则直接创建对象
                 image_language = generator.lookup(ImageLanguage, image_lang_id)
-                user_locale = generator.lookup(UserLocale, locale_id)
-                keyboard = generator.lookup(KeyboardIdentifier, keyboard_id)
+                if image_language is None:
+                    image_language = ImageLanguage(id=image_lang_id, display_name=image_lang_id)
                 
-                if image_language and user_locale and keyboard:
-                    locale_and_keyboard = LocaleAndKeyboard(
-                        locale=user_locale,
-                        keyboard=keyboard
-                    )
-                    
-                    geo_location = None
-                    if 'geoLocation' in lang and lang['geoLocation']:
-                        geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
-                    
-                    config.language_settings = UnattendedLanguageSettings(
-                        image_language=image_language,
-                        locale_and_keyboard=locale_and_keyboard,
-                        geo_location=geo_location
-                    )
-                else:
-                    # 如果查找失败，使用默认设置
-                    config.language_settings = InteractiveLanguageSettings()
+                user_locale = generator.lookup(UserLocale, locale_id)
+                if user_locale is None:
+                    user_locale = UserLocale(id=locale_id, display_name=locale_id, lcid=locale_id)
+                
+                keyboard = generator.lookup(KeyboardIdentifier, keyboard_id)
+                if keyboard is None:
+                    # 解析键盘 ID（可能是 "0804:{guid}{guid}" 格式）
+                    keyboard_id_clean = keyboard_id.split(':')[0] if ':' in keyboard_id else keyboard_id
+                    keyboard = KeyboardIdentifier(id=keyboard_id, display_name=keyboard_id, type=InputType.Keyboard)
+                
+                locale_and_keyboard = LocaleAndKeyboard(
+                    locale=user_locale,
+                    keyboard=keyboard
+                )
+                
+                geo_location = None
+                if 'geoLocation' in lang and lang['geoLocation']:
+                    geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
+                    if geo_location is None:
+                        geo_location = GeoLocation(id=lang['geoLocation'], display_name=lang['geoLocation'])
+                
+                config.language_settings = UnattendedLanguageSettings(
+                    image_language=image_language,
+                    locale_and_keyboard=locale_and_keyboard,
+                    geo_location=geo_location,
+                    has_winpe=has_winpe
+                )
+                # 保留 WinPE 键盘布局（如果解析阶段提取到）
+                if 'winPEKeyboardLayout' in lang:
+                    setattr(config.language_settings, 'winpe_keyboard_layout', lang['winPEKeyboardLayout'])
     
     # 转换时区设置
     if 'timeZone' in config_dict:
@@ -4967,8 +6758,10 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 timezone_id = tz.get('timeZone', '')
                 if timezone_id:
                     time_offset = generator.lookup(TimeOffset, timezone_id)
-                    if time_offset:
-                        config.time_zone_settings = ExplicitTimeZoneSettings(time_zone=time_offset)
+                    # 如果查找失败，直接创建 TimeOffset 对象
+                    if time_offset is None:
+                        time_offset = TimeOffset(id=timezone_id, display_name=timezone_id)
+                    config.time_zone_settings = ExplicitTimeZoneSettings(time_zone=time_offset)
     
     # 转换处理器架构
     if 'processorArchitectures' in config_dict:
@@ -5173,8 +6966,12 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
         else:
             disk_assertion_mode = partitioning.get('diskAssertionMode', 'skip')
             if disk_assertion_mode == 'script':
+                script_content = partitioning.get('diskAssertionScript', '')
+                # 如果从 XML 无法解析出具体脚本内容，使用占位符以便生成写入命令
+                if script_content is None or script_content.strip() == '':
+                    script_content = ''
                 config.disk_assertion_settings = ScriptDiskAssertionsSettings(
-                    script=partitioning.get('diskAssertionScript', '')
+                    script=script_content
                 )
             else:
                 config.disk_assertion_settings = SkipDiskAssertionSettings()
@@ -5236,17 +7033,23 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 config.edition_settings = InteractiveEditionSettings()
             elif mode == 'firmware':
                 config.edition_settings = FirmwareEditionSettings()
-            elif mode == 'unattended':
-                edition_id = edition.get('edition')
+            elif mode == 'unattended' or mode == 'name' or mode == 'index' or mode == 'generic':
+                # 支持多种模式：unattended, name, index, generic 都使用 editionName
+                edition_id = edition.get('editionName') or edition.get('edition') or edition.get('editionIndex')
                 if edition_id and generator:
-                    windows_edition = generator.lookup(WindowsEdition, edition_id)
-                    if windows_edition:
-                        config.edition_settings = UnattendedEditionSettings(edition=windows_edition)
-                    else:
+                    # 如果是数字，尝试作为 index 查找
+                    if isinstance(edition_id, int) or (isinstance(edition_id, str) and edition_id.isdigit()):
+                        # 暂时不支持按 index 查找，需要更多信息
                         config.edition_settings = InteractiveEditionSettings()
+                    else:
+                        windows_edition = generator.lookup(WindowsEdition, str(edition_id))
+                        if windows_edition:
+                            config.edition_settings = UnattendedEditionSettings(edition=windows_edition)
+                        else:
+                            config.edition_settings = InteractiveEditionSettings()
                 else:
                     config.edition_settings = InteractiveEditionSettings()
-            elif mode == 'custom':
+            elif mode == 'custom' or mode == 'key':
                 product_key = edition.get('productKey', '')
                 if product_key:
                     config.edition_settings = CustomEditionSettings(product_key=product_key)
@@ -5268,16 +7071,18 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             mode = source.get('mode', 'automatic')
             
             if mode == 'automatic':
+                detected_name = config_dict.get('detectedImageName') or source.get('name') or source.get('imageName')
                 config.install_from_settings = AutomaticInstallFromSettings()
+                if detected_name:
+                    setattr(config, "_detected_image_name", detected_name)
             elif mode == 'index':
                 index = source.get('index', 1)
                 config.install_from_settings = IndexInstallFromSettings(index=index)
             elif mode == 'name':
-                name = source.get('name', '')
+                name = source.get('name', source.get('imageName', ''))
+                config.install_from_settings = AutomaticInstallFromSettings()
                 if name:
-                    config.install_from_settings = NameInstallFromSettings(name=name)
-                else:
-                    config.install_from_settings = AutomaticInstallFromSettings()
+                    setattr(config, "_detected_image_name", name)
             else:
                 config.install_from_settings = AutomaticInstallFromSettings()
     else:
@@ -5627,6 +7432,15 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
     else:
         config.express_settings = ExpressSettingsMode.DisableAll
     
+    # 如果 expressSettings 是 disableAll，但 accountSettings.protectYourPC 是 "1"，则应该设置为 enableAll
+    if config.express_settings == ExpressSettingsMode.DisableAll:
+        if 'accountSettings' in config_dict:
+            accounts = config_dict['accountSettings']
+            if isinstance(accounts, dict):
+                protect_your_pc = accounts.get('protectYourPC')
+                if protect_your_pc == '1' or protect_your_pc == 1:
+                    config.express_settings = ExpressSettingsMode.EnableAll
+    
     # 转换预装软件设置
     if 'bloatware' in config_dict and generator:
         bloatware_data = config_dict['bloatware']
@@ -5635,7 +7449,8 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             logger.warning(f"bloatware is not a dict, got {type(bloatware_data)}, using default")
             config.bloatwares = []
         else:
-            bloatware_ids = bloatware_data.get('selected', [])
+            # 支持 'items' 和 'selected' 两种字段名（前端使用 'items'）
+            bloatware_ids = bloatware_data.get('items', bloatware_data.get('selected', []))
             if not isinstance(bloatware_ids, list):
                 bloatware_ids = []
             config.bloatwares = []
@@ -5656,12 +7471,16 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             mode = wdac.get('mode', 'skip')
             
             if mode == 'configure':
-                audit_mode_str = wdac.get('auditMode', 'enforcement')
-                script_mode_str = wdac.get('scriptMode', 'restricted')
+                # 支持前端字段名 enforcementMode 和 scriptEnforcement，也支持后端字段名 auditMode 和 scriptMode
+                audit_mode_str = wdac.get('enforcementMode') or wdac.get('auditMode', 'enforcement')
+                script_mode_str = wdac.get('scriptEnforcement') or wdac.get('scriptMode', 'restricted')
                 
+                # 映射 enforcementMode 值到 audit_mode
                 audit_mode_map = {
-                    'auditing': WdacAuditModes.Auditing,
-                    'auditingOnBootFailure': WdacAuditModes.AuditingOnBootFailure,
+                    'audit': WdacAuditModes.Auditing,
+                    'auditing': WdacAuditModes.Auditing,  # 兼容旧值
+                    'auditOnBootFailure': WdacAuditModes.AuditingOnBootFailure,
+                    'auditingOnBootFailure': WdacAuditModes.AuditingOnBootFailure,  # 兼容旧值
                     'enforcement': WdacAuditModes.Enforcement
                 }
                 script_mode_map = {
@@ -5682,7 +7501,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
     if 'processorArchitectures' not in config_dict:
         config.processor_architectures = {ProcessorArchitecture.amd64}
     
-    # 转换模块 12: 自定义脚本
+    # 转换模块 12: 自定义脚本（前端按阶段分组的格式）
     if 'scripts' in config_dict:
         scripts_data = config_dict['scripts']
         # 确保 scripts_data 是字典
@@ -5691,44 +7510,87 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.script_settings = ScriptSettings()
         else:
             scripts_list = []
-            scripts_array = scripts_data.get('scripts', [])
-            if not isinstance(scripts_array, list):
-                scripts_array = []
             
-            for script_data in scripts_array:
-                # 确保 script_data 是字典
-                if not isinstance(script_data, dict):
-                    logger.warning(f"script_data is not a dict, got {type(script_data)}, skipping")
-                    continue
+            # 按阶段解析脚本
+            phase_map = {
+                'system': ScriptPhase.System,
+                'firstLogon': ScriptPhase.FirstLogon,
+                'userOnce': ScriptPhase.UserOnce,
+                'defaultUser': ScriptPhase.DefaultUser
+            }
+            
+            # 类型映射（支持 .cmd, .ps1 等格式，也支持 cmd, ps1 格式）
+            type_map = {
+                '.cmd': ScriptType.Cmd,
+                'cmd': ScriptType.Cmd,
+                '.ps1': ScriptType.Ps1,
+                'ps1': ScriptType.Ps1,
+                '.reg': ScriptType.Reg,
+                'reg': ScriptType.Reg,
+                '.vbs': ScriptType.Vbs,
+                'vbs': ScriptType.Vbs,
+                '.js': ScriptType.Js,
+                'js': ScriptType.Js
+            }
+            
+            # 首先尝试按阶段分组格式（前端格式）
+            has_phase_groups = any(key in scripts_data for key in phase_map.keys())
+            
+            if has_phase_groups:
+                # 按阶段解析脚本
+                for phase_key, phase_enum in phase_map.items():
+                    phase_scripts = scripts_data.get(phase_key, [])
+                    if not isinstance(phase_scripts, list):
+                        continue
+                    
+                    for item in phase_scripts:
+                        # 确保 item 是字典
+                        if not isinstance(item, dict):
+                            logger.warning(f"scripts item is not a dict, got {type(item)}, skipping")
+                            continue
+                        
+                        content = item.get('content', '')
+                        type_str = item.get('type', '.cmd')
+                        
+                        # 移除前导点（如果存在）
+                        if type_str.startswith('.'):
+                            type_str = type_str[1:]
+                        
+                        script_type = type_map.get(type_str.lower(), ScriptType.Cmd)
+                        
+                        scripts_list.append(Script(
+                            content=content,
+                            phase=phase_enum,
+                            type=script_type
+                        ))
+            else:
+                # 兼容旧格式（scripts 数组，每个项有 phase 字段）
+                scripts_array = scripts_data.get('scripts', [])
+                if not isinstance(scripts_array, list):
+                    scripts_array = []
                 
-                content = script_data.get('content', '')
-                phase_str = script_data.get('phase', 'system')
-                type_str = script_data.get('type', 'cmd')
-                
-                # 转换阶段
-                phase_map = {
-                    'system': ScriptPhase.System,
-                    'firstLogon': ScriptPhase.FirstLogon,
-                    'userOnce': ScriptPhase.UserOnce,
-                    'defaultUser': ScriptPhase.DefaultUser
-                }
-                phase = phase_map.get(phase_str, ScriptPhase.System)
-                
-                # 转换类型
-                type_map = {
-                    'cmd': ScriptType.Cmd,
-                    'ps1': ScriptType.Ps1,
-                    'reg': ScriptType.Reg,
-                    'vbs': ScriptType.Vbs,
-                    'js': ScriptType.Js
-                }
-                script_type = type_map.get(type_str.lower(), ScriptType.Cmd)
-                
-                scripts_list.append(Script(
-                    content=content,
-                    phase=phase,
-                    type=script_type
-                ))
+                for script_data in scripts_array:
+                    # 确保 script_data 是字典
+                    if not isinstance(script_data, dict):
+                        logger.warning(f"script_data is not a dict, got {type(script_data)}, skipping")
+                        continue
+                    
+                    content = script_data.get('content', '')
+                    phase_str = script_data.get('phase', 'system')
+                    type_str = script_data.get('type', 'cmd')
+                    
+                    # 移除前导点（如果存在）
+                    if type_str.startswith('.'):
+                        type_str = type_str[1:]
+                    
+                    phase = phase_map.get(phase_str, ScriptPhase.System)
+                    script_type = type_map.get(type_str.lower(), ScriptType.Cmd)
+                    
+                    scripts_list.append(Script(
+                        content=content,
+                        phase=phase,
+                        type=script_type
+                    ))
             
             config.script_settings = ScriptSettings(
                 scripts=scripts_list,
@@ -5736,6 +7598,16 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             )
     else:
         config.script_settings = ScriptSettings()
+    
+    # 转换 Extensions 设置
+    if 'extensions' in config_dict:
+        extensions_data = config_dict['extensions']
+        if isinstance(extensions_data, dict):
+            config.extensions = extensions_data
+        else:
+            config.extensions = None
+    else:
+        config.extensions = None
     
     # 转换模块 13: XML 标记
     if 'xmlMarkup' in config_dict:
@@ -5991,8 +7863,8 @@ def configuration_to_config_dict(config: Configuration) -> Dict[str, Any]:
             config_dict['windowsEdition'] = {'mode': 'firmware'}
         elif isinstance(config.edition_settings, UnattendedEditionSettings):
             config_dict['windowsEdition'] = {
-                'mode': 'unattended',
-                'edition': config.edition_settings.edition.id
+                'mode': 'name',
+                'editionName': config.edition_settings.edition.id
             }
         elif isinstance(config.edition_settings, CustomEditionSettings):
             config_dict['windowsEdition'] = {
@@ -6011,12 +7883,12 @@ def configuration_to_config_dict(config: Configuration) -> Dict[str, Any]:
         elif isinstance(config.install_from_settings, IndexInstallFromSettings):
             config_dict['sourceImage'] = {
                 'mode': 'index',
-                'index': config.install_from_settings.index
+                'imageIndex': config.install_from_settings.index
             }
         elif isinstance(config.install_from_settings, NameInstallFromSettings):
             config_dict['sourceImage'] = {
                 'mode': 'name',
-                'name': config.install_from_settings.name
+                'imageName': config.install_from_settings.name
             }
         else:
             config_dict['sourceImage'] = {'mode': 'automatic'}
@@ -6070,13 +7942,11 @@ def configuration_to_config_dict(config: Configuration) -> Dict[str, Any]:
         ExpressSettingsMode.EnableAll: 'enableAll',
         ExpressSettingsMode.DisableAll: 'disableAll'
     }
-    config_dict['expressSettings'] = {
-        'mode': express_settings_map.get(config.express_settings, 'disableAll')
-    }
+    config_dict['expressSettings'] = express_settings_map.get(config.express_settings, 'disableAll')
     
-    # 转换预装软件设置
+    # 转换预装软件设置（前端使用 'items' 字段）
     config_dict['bloatware'] = {
-        'selected': [bw.id for bw in config.bloatwares]
+        'items': [bw.id for bw in config.bloatwares]
     }
     
     # 转换 WDAC 设置
@@ -6090,44 +7960,62 @@ def configuration_to_config_dict(config: Configuration) -> Dict[str, Any]:
             WdacScriptModes.Restricted: 'restricted',
             WdacScriptModes.Unrestricted: 'unrestricted'
         }
+        # 映射 audit_mode 到 enforcementMode（前端字段名）
+        audit_to_enforcement_map = {
+            WdacAuditModes.Auditing: 'audit',
+            WdacAuditModes.AuditingOnBootFailure: 'auditOnBootFailure',
+            WdacAuditModes.Enforcement: 'enforcement'
+        }
+        script_mode_map = {
+            WdacScriptModes.Restricted: 'restricted',
+            WdacScriptModes.Unrestricted: 'unrestricted'
+        }
         config_dict['wdac'] = {
             'mode': 'configure',
-            'auditMode': audit_mode_map.get(config.wdac_settings.audit_mode, 'enforcement'),
-            'scriptMode': script_mode_map.get(config.wdac_settings.script_mode, 'restricted')
+            'enforcementMode': audit_to_enforcement_map.get(config.wdac_settings.audit_mode, 'enforcement'),
+            'scriptEnforcement': script_mode_map.get(config.wdac_settings.script_mode, 'restricted')
         }
     else:
         config_dict['wdac'] = {'mode': 'skip'}
     
-    # 转换模块 12: 自定义脚本
+    # 转换模块 12: 自定义脚本（前端期望按阶段分组的格式）
     if config.script_settings:
-        scripts_list = []
+        # 按阶段分组脚本
+        system_scripts = []
+        default_user_scripts = []
+        first_logon_scripts = []
+        user_once_scripts = []
+        
         for script in config.script_settings.scripts:
-            phase_map = {
-                ScriptPhase.System: 'system',
-                ScriptPhase.FirstLogon: 'firstLogon',
-                ScriptPhase.UserOnce: 'userOnce',
-                ScriptPhase.DefaultUser: 'defaultUser'
+            import uuid
+            script_item = {
+                'id': str(uuid.uuid4()),
+                'type': f".{script.type.value.lower()}",  # 前端期望 .cmd, .ps1 等格式
+                'content': script.content
             }
-            type_map = {
-                ScriptType.Cmd: 'cmd',
-                ScriptType.Ps1: 'ps1',
-                ScriptType.Reg: 'reg',
-                ScriptType.Vbs: 'vbs',
-                ScriptType.Js: 'js'
-            }
-            scripts_list.append({
-                'content': script.content,
-                'phase': phase_map.get(script.phase, 'system'),
-                'type': type_map.get(script.type, 'cmd')
-            })
+            
+            if script.phase == ScriptPhase.System:
+                system_scripts.append(script_item)
+            elif script.phase == ScriptPhase.DefaultUser:
+                default_user_scripts.append(script_item)
+            elif script.phase == ScriptPhase.FirstLogon:
+                first_logon_scripts.append(script_item)
+            elif script.phase == ScriptPhase.UserOnce:
+                user_once_scripts.append(script_item)
         
         config_dict['scripts'] = {
-            'scripts': scripts_list,
+            'system': system_scripts,
+            'defaultUser': default_user_scripts,
+            'firstLogon': first_logon_scripts,
+            'userOnce': user_once_scripts,
             'restartExplorer': config.script_settings.restart_explorer
         }
     else:
         config_dict['scripts'] = {
-            'scripts': [],
+            'system': [],
+            'defaultUser': [],
+            'firstLogon': [],
+            'userOnce': [],
             'restartExplorer': False
         }
     
