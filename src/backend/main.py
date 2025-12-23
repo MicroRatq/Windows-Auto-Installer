@@ -286,7 +286,9 @@ class BackendServer:
         # 注册 Unattend 配置相关处理器
         try:
             from unattend_generator import UnattendGenerator, Configuration
-            self.unattend_generator = UnattendGenerator()
+            # 数据目录位于项目根 data/unattend，相对于 src/backend/main.py 需要上溯两级到项目根
+            data_dir = Path(__file__).parent.parent.parent / "data" / "unattend"
+            self.unattend_generator = UnattendGenerator(data_dir=data_dir)
             
             self.register_handler("unattend_export_xml", self._handle_unattend_export_xml)
             self.register_handler("unattend_import_xml", self._handle_unattend_import_xml)
@@ -997,6 +999,8 @@ class BackendServer:
         if not self.unattend_generator:
             raise Exception("Unattend generator not initialized")
         
+        import logging
+        logger = logging.getLogger('UnattendGetData')
         try:
             # 获取语言代码（用于 i18n 适配）
             lang = params.get('lang', 'en')
@@ -1076,6 +1080,14 @@ class BackendServer:
                     "id": bloatware_obj.id,
                     "name": bloatware_obj.display_name
                 })
+            
+            try:
+                logger.info("[Unattend] get_data sizes - languages=%s locales=%s keyboards=%s timeZones=%s geoLocations=%s editions=%s bloatwares=%s",
+                            len(result["languages"]), len(result["locales"]), len(result["keyboards"]),
+                            len(result["timeZones"]), len(result["geoLocations"]), len(result["windowsEditions"]),
+                            len(result["bloatwareItems"]))
+            except Exception:
+                pass
             
             return result
         except Exception as e:
