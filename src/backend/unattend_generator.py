@@ -2121,9 +2121,18 @@ class Modifier:
         logger.debug(f"Modifier._add_file: Adding file to Extensions: path={path}, content_length={len(content)}")
         
         # 查找或创建 Extensions 元素
-        extensions = self.root.find(f".//{{{s_uri}}}Extensions")
+        # 只查找 root 的直接子元素，避免创建多个 Extensions
+        extensions = None
+        for child in self.root:
+            # 检查 tag 是否匹配（支持命名空间格式 {uri}Extensions 或直接 Extensions）
+            if child.tag == f"{{{s_uri}}}Extensions" or child.tag.endswith('Extensions'):
+                extensions = child
+                break
+        
         if extensions is None:
             extensions = ET.Element(f"{{{s_uri}}}Extensions")
+            # 设置命名空间属性，确保序列化时使用正确的命名空间
+            extensions.set("xmlns", s_uri)
             self.root.append(extensions)
             
             # 创建 ExtractScript 元素（首次创建 Extensions 时需要）
@@ -2146,6 +2155,10 @@ foreach( $file in $Document.unattend.Extensions.File ) {
 }"""
             extract_script.text = extract_script_text
             extensions.append(extract_script)
+        else:
+            # 确保已存在的 Extensions 元素有 xmlns 属性
+            if not extensions.get("xmlns"):
+                extensions.set("xmlns", s_uri)
         
         # 创建 File 元素
         file_elem = ET.Element(f"{{{s_uri}}}File")
@@ -5111,6 +5124,15 @@ class SpecializeModifier(Modifier):
         extensions = self.root.find(f".//{{{s_uri}}}Extensions")
         has_extensions = extensions is not None and len(list(extensions.findall(f"{{{s_uri}}}File"))) > 0
         
+        # 检查 extensions 中是否已经有 Specialize.ps1
+        specialize_file = None
+        if extensions is not None:
+            for file_elem in extensions.findall(f"{{{s_uri}}}File"):
+                path_attr = file_elem.get('path', '')
+                if path_attr and 'Specialize.ps1' in path_attr:
+                    specialize_file = file_elem
+                    break
+        
         # 如果有 Extensions 或 specialize_script 不为空，需要创建 Microsoft-Windows-Deployment component
         if has_extensions or not self.specialize_script.is_empty:
             appender = self.get_appender(CommandConfig.specialize())
@@ -5120,8 +5142,12 @@ class SpecializeModifier(Modifier):
                 extract_script_cmd = 'powershell.exe -WindowStyle "Normal" -NoProfile -Command "$xml = [xml]::new(); $xml.Load(\'C:\\Windows\\Panther\\unattend.xml\'); $sb = [scriptblock]::Create( $xml.unattend.Extensions.ExtractScript ); Invoke-Command -ScriptBlock $sb -ArgumentList $xml;"'
                 appender.append(extract_script_cmd)
             
-            # 如果有 specialize_script，添加执行命令
-            if not self.specialize_script.is_empty:
+            # 如果 extensions 中已经有 Specialize.ps1，使用原始内容，不覆盖
+            if specialize_file is not None:
+                ps1_file = r"C:\Windows\Setup\Scripts\Specialize.ps1"
+                appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
+            elif not self.specialize_script.is_empty:
+                # 如果 extensions 中没有 Specialize.ps1，且脚本序列不为空，生成新文件
                 ps1_file = self.add_text_file("Specialize.ps1", self.specialize_script.get_script())
                 appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
             else:
@@ -5178,10 +5204,26 @@ class UserOnceModifier(Modifier):
     
     def process(self):
         """处理 UserOnce 脚本"""
-        if self.user_once_script.is_empty:
-            return
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
         
-        ps1_file = self.add_text_file("UserOnce.ps1", self.user_once_script.get_script())
+        # 检查 extensions 中是否已经有 UserOnce.ps1
+        extensions = self.root.find(f".//{{{s_uri}}}Extensions")
+        useronce_file = None
+        if extensions is not None:
+            for file_elem in extensions.findall(f"{{{s_uri}}}File"):
+                path_attr = file_elem.get('path', '')
+                if path_attr and 'UserOnce.ps1' in path_attr:
+                    useronce_file = file_elem
+                    break
+        
+        if useronce_file is not None:
+            # 如果 extensions 中已经有 UserOnce.ps1，使用原始内容，不覆盖
+            ps1_file = r"C:\Windows\Setup\Scripts\UserOnce.ps1"
+        elif self.user_once_script.is_empty:
+            return
+        else:
+            # 如果 extensions 中没有 UserOnce.ps1，且脚本序列不为空，生成新文件
+            ps1_file = self.add_text_file("UserOnce.ps1", self.user_once_script.get_script())
         
         def escape(s: str) -> str:
             """转义字符串"""
@@ -5199,9 +5241,23 @@ class DefaultUserModifier(Modifier):
     def process(self):
         """处理 DefaultUser 脚本"""
         appender = self.get_appender(CommandConfig.specialize())
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
         
-        # 如果脚本序列为空，尝试使用 Extensions 中的 DefaultUser.ps1
-        if self.default_user_script.is_empty:
+        # 检查 extensions 中是否已经有 DefaultUser.ps1
+        extensions = self.root.find(f".//{{{s_uri}}}Extensions")
+        defaultuser_file = None
+        if extensions is not None:
+            for file_elem in extensions.findall(f"{{{s_uri}}}File"):
+                path_attr = file_elem.get('path', '')
+                if path_attr and 'DefaultUser.ps1' in path_attr:
+                    defaultuser_file = file_elem
+                    break
+        
+        if defaultuser_file is not None:
+            # 如果 extensions 中已经有 DefaultUser.ps1，使用原始内容，不覆盖
+            ps1_file = r"C:\Windows\Setup\Scripts\DefaultUser.ps1"
+        elif self.default_user_script.is_empty:
+            # 如果脚本序列为空，尝试使用 Extensions 中的 DefaultUser.ps1
             ps1_path = None
             if isinstance(self.configuration.extensions, dict):
                 for f in self.configuration.extensions.get('files', []):
@@ -5215,8 +5271,10 @@ class DefaultUserModifier(Modifier):
             appender.append(self.command_builder.invoke_power_shell_script(ps1_path))
             appender.append(self.command_builder.registry_command('unload "HKU\\DefaultUser"'))
             return
+        else:
+            # 如果 extensions 中没有 DefaultUser.ps1，且脚本序列不为空，生成新文件
+            ps1_file = self.add_text_file("DefaultUser.ps1", self.default_user_script.get_script())
         
-        ps1_file = self.add_text_file("DefaultUser.ps1", self.default_user_script.get_script())
         appender.append(self.command_builder.registry_command('load "HKU\\DefaultUser" "C:\\Users\\Default\\NTUSER.DAT"'))
         appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
         appender.append(self.command_builder.registry_command('unload "HKU\\DefaultUser"'))
@@ -7091,8 +7149,93 @@ class ExtensionsModifier(Modifier):
                 self.configuration.extensions = extensions_dict
     
     def process(self):
-        """生成 Extensions 元素（已在 generate_xml 中通过动态创建的 ExtensionsModifier 处理）"""
-        pass
+        """生成 Extensions 元素"""
+        if not self.configuration.extensions:
+            return
+        
+        extensions_data = self.configuration.extensions
+        if not isinstance(extensions_data, dict):
+            return
+        
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
+        
+        # 查找或创建 Extensions 元素
+        # 只查找 root 的直接子元素，避免创建多个 Extensions
+        extensions = None
+        for child in self.root:
+            # 检查 tag 是否匹配（支持命名空间格式 {uri}Extensions 或直接 Extensions）
+            if child.tag == f"{{{s_uri}}}Extensions" or child.tag.endswith('Extensions'):
+                extensions = child
+                break
+        
+        if extensions is None:
+            extensions = ET.Element(f"{{{s_uri}}}Extensions")
+            # 设置命名空间属性，确保序列化时使用正确的命名空间
+            extensions.set("xmlns", s_uri)
+            self.root.append(extensions)
+        else:
+            # 确保已存在的 Extensions 元素有 xmlns 属性
+            if not extensions.get("xmlns"):
+                extensions.set("xmlns", s_uri)
+        
+        # 处理 ExtractScript 元素
+        extract_script = extensions.find(f"{{{s_uri}}}ExtractScript")
+        if extract_script is None:
+            # 如果 ExtractScript 不存在，创建它
+            extract_script = ET.Element(f"{{{s_uri}}}ExtractScript")
+            extract_script_text = extensions_data.get('extractScript', """param(
+    [xml] $Document
+);
+
+foreach( $file in $Document.unattend.Extensions.File ) {
+    $path = [System.Environment]::ExpandEnvironmentVariables( $file.GetAttribute( 'path' ) );
+    mkdir -Path( $path | Split-Path -Parent ) -ErrorAction 'SilentlyContinue';
+    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
+        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
+        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
+        default { [System.Text.Encoding]::Default; }
+    };
+    $bytes = $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() );
+    [System.IO.File]::WriteAllBytes( $path, $bytes );
+}""")
+            extract_script.text = extract_script_text
+            extensions.insert(0, extract_script)
+        elif 'extractScript' in extensions_data:
+            # 如果 ExtractScript 已存在且 extensions_data 中有新的 extractScript，更新它
+            extract_script.text = extensions_data['extractScript']
+        
+        # 添加所有文件
+        files = extensions_data.get('files', [])
+        for file_data in files:
+            if isinstance(file_data, dict):
+                file_path = file_data.get('path', '')
+                file_content = file_data.get('content', '')
+                if file_path:
+                    # 检查文件是否已存在
+                    existing_file = None
+                    for f in extensions.findall(f"{{{s_uri}}}File"):
+                        if f.get('path') == file_path:
+                            existing_file = f
+                            break
+                    
+                    if existing_file is None:
+                        file_elem = ET.Element(f"{{{s_uri}}}File")
+                        file_elem.set("path", file_path)
+                        # 移除前导空白，确保脚本内容无缩进
+                        content_trimmed = file_content.lstrip() if file_content else ""
+                        if content_trimmed:
+                            file_elem.text = f"\n{content_trimmed}\n\t\t"
+                        else:
+                            file_elem.text = None
+                        extensions.append(file_elem)
+                    else:
+                        # 更新现有文件的内容
+                        # 移除前导空白，确保脚本内容无缩进
+                        content_trimmed = file_content.lstrip() if file_content else ""
+                        if content_trimmed:
+                            existing_file.text = f"\n{content_trimmed}\n\t\t"
+                        else:
+                            existing_file.text = None
 
 
 class PrettyModifier(Modifier):
@@ -7405,98 +7548,7 @@ class UnattendGenerator:
         modifiers.append(PersonalizationModifier(context))  # 处理个性化设置（模块 7）
         modifiers.append(WdacModifier(context))  # 处理 WDAC 设置（模块 11）
         modifiers.append(ScriptModifier(context))  # 处理自定义脚本（模块 12）
-        
-        # 处理 Extensions（从 config_dict 中读取的文件）
-        # 如果 config 有 extensions 字段，需要添加文件到 Extensions 部分
-        if config.extensions:
-            extensions_data = config.extensions
-            if isinstance(extensions_data, dict):
-                # 创建一个临时的 Modifier 来添加 Extensions 文件
-                # 使用闭包捕获 extensions_data
-                def create_extensions_modifier(ext_data):
-                    class ExtensionsModifier(Modifier):
-                        def process(self):
-                            s_uri = "https://schneegans.de/windows/unattend-generator/"
-                            # 查找或创建 Extensions 元素
-                            # 使用 iter 查找，因为 find 可能有命名空间问题
-                            extensions = None
-                            for elem in self.root.iter():
-                                if elem.tag == f"{s_uri}Extensions":
-                                    extensions = elem
-                                    break
-                            
-                            if extensions is None:
-                                extensions = ET.Element(f"{{{s_uri}}}Extensions")
-                                # 设置命名空间属性，确保序列化时使用正确的命名空间
-                                extensions.set("xmlns", s_uri)
-                                self.root.append(extensions)
-                            else:
-                                # 确保已存在的 Extensions 元素有 xmlns 属性
-                                if not extensions.get("xmlns"):
-                                    extensions.set("xmlns", s_uri)
-                            
-                            # 处理 ExtractScript 元素
-                            extract_script = extensions.find(f"{{{s_uri}}}ExtractScript")
-                            if extract_script is None:
-                                # 如果 ExtractScript 不存在，创建它
-                                extract_script = ET.Element(f"{{{s_uri}}}ExtractScript")
-                                extract_script_text = ext_data.get('extractScript', """param(
-    [xml] $Document
-);
-
-foreach( $file in $Document.unattend.Extensions.File ) {
-    $path = [System.Environment]::ExpandEnvironmentVariables( $file.GetAttribute( 'path' ) );
-    mkdir -Path( $path | Split-Path -Parent ) -ErrorAction 'SilentlyContinue';
-    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
-        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
-        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
-        default { [System.Text.Encoding]::Default; }
-    };
-    $bytes = $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() );
-    [System.IO.File]::WriteAllBytes( $path, $bytes );
-}""")
-                                extract_script.text = extract_script_text
-                                extensions.insert(0, extract_script)
-                            elif 'extractScript' in ext_data:
-                                # 如果 ExtractScript 已存在且 ext_data 中有新的 extractScript，更新它
-                                extract_script.text = ext_data['extractScript']
-                            
-                            # 添加所有文件
-                            files = ext_data.get('files', [])
-                            for file_data in files:
-                                if isinstance(file_data, dict):
-                                    file_path = file_data.get('path', '')
-                                    file_content = file_data.get('content', '')
-                                    if file_path:
-                                        # 检查文件是否已存在
-                                        existing_file = None
-                                        for f in extensions.findall(f"{{{s_uri}}}File"):
-                                            if f.get('path') == file_path:
-                                                existing_file = f
-                                                break
-                                        
-                                        if existing_file is None:
-                                            file_elem = ET.Element(f"{{{s_uri}}}File")
-                                            file_elem.set("path", file_path)
-                                            # 移除前导空白，确保脚本内容无缩进
-                                            content_trimmed = file_content.lstrip() if file_content else ""
-                                            if content_trimmed:
-                                                file_elem.text = f"\n{content_trimmed}\n\t\t"
-                                            else:
-                                                file_elem.text = None
-                                            extensions.append(file_elem)
-                                        else:
-                                            # 更新现有文件的内容
-                                            # 移除前导空白，确保脚本内容无缩进
-                                            content_trimmed = file_content.lstrip() if file_content else ""
-                                            if content_trimmed:
-                                                existing_file.text = f"\n{content_trimmed}\n\t\t"
-                                            else:
-                                                existing_file.text = None
-                    return ExtensionsModifier
-                
-                ExtensionsModifierClass = create_extensions_modifier(extensions_data)
-                modifiers.append(ExtensionsModifierClass(context))
+        modifiers.append(ExtensionsModifier(context))  # 处理 Extensions（从 config.extensions 中读取的文件）
         
         # 处理脚本序列（将脚本添加到 XML）
         # 按照 C# 项目的顺序执行这些 Modifier

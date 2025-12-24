@@ -999,8 +999,8 @@ class BackendServer:
         if not self.unattend_generator:
             raise Exception("Unattend generator not initialized")
         
-        import logging
-        logger = logging.getLogger('UnattendGetData')
+            import logging
+            logger = logging.getLogger('UnattendGetData')
         try:
             # 获取语言代码（用于 i18n 适配）
             lang = params.get('lang', 'en')
