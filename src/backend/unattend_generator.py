@@ -2019,7 +2019,8 @@ class Modifier:
         if not os.path.exists(resource_path):
             raise FileNotFoundError(f"Resource file not found: {resource_path}")
         
-        with open(resource_path, 'r', encoding='utf-8') as f:
+        # 使用 utf-8-sig 编码自动移除 BOM 字符
+        with open(resource_path, 'r', encoding='utf-8-sig') as f:
             return f.read()
     
     def add_text_file(self, name: str, content: Optional[str] = None, before: Optional[Callable[[Any], None]] = None, after: Optional[Callable[[Any], None]] = None) -> str:
@@ -2075,6 +2076,9 @@ class Modifier:
             if not isinstance(resource_name, str):
                 raise ValueError("When name is None, content must be a string (resource name)")
             xml_content = self._load_resource_file(resource_name)
+            # 移除 BOM 字符（如果存在）
+            if xml_content and xml_content[0] == '\ufeff':
+                xml_content = xml_content[1:]
             destination = f"C:\\Windows\\Setup\\Scripts\\{resource_name}"
             self._add_file(xml_content, destination)
             return destination
@@ -2085,6 +2089,9 @@ class Modifier:
             if resource_name is None or not isinstance(resource_name, str):
                 raise ValueError("When content is empty string, name or content must be a non-empty string (resource name)")
             xml_content = self._load_resource_file(resource_name)
+            # 移除 BOM 字符（如果存在）
+            if xml_content and xml_content[0] == '\ufeff':
+                xml_content = xml_content[1:]
             destination = f"C:\\Windows\\Setup\\Scripts\\{resource_name}"
             self._add_file(xml_content, destination)
             return destination
@@ -2098,10 +2105,44 @@ class Modifier:
                 try:
                     dom = minidom.parseString(xml_str)
                     xml_str = dom.toprettyxml(indent='\t')
+                    # 移除 minidom 自动添加的 XML 声明
+                    if xml_str.startswith('<?xml'):
+                        lines = xml_str.split('\n')
+                        xml_str = '\n'.join(lines[1:])
+                    # 移除命名空间前缀（如 ns0:、ns1: 等）
+                    import re
+                    xml_str = re.sub(r'<ns\d+:', '<', xml_str)
+                    xml_str = re.sub(r'</ns\d+:', '</', xml_str)
+                    # 移除命名空间声明（如 xmlns:ns0="..."）
+                    xml_str = re.sub(r'\s+xmlns:ns\d+="[^"]*"', '', xml_str)
                 except Exception:
                     pass
             elif isinstance(content, str):
                 xml_str = content
+                # 格式化 XML 字符串，确保使用制表符缩进
+                from xml.dom import minidom
+                try:
+                    dom = minidom.parseString(xml_str)
+                    xml_str = dom.toprettyxml(indent='\t')
+                    # 移除 minidom 自动添加的 XML 声明
+                    if xml_str.startswith('<?xml'):
+                        lines = xml_str.split('\n')
+                        xml_str = '\n'.join(lines[1:])
+                    # 移除多余的空行（minidom 会在每个元素前后添加空行）
+                    lines = xml_str.split('\n')
+                    cleaned_lines = []
+                    for i, line in enumerate(lines):
+                        is_empty = not line.strip()
+                        # 跳过所有空行
+                        if is_empty:
+                            continue
+                        cleaned_lines.append(line)
+                    xml_str = '\n'.join(cleaned_lines)
+                    # 修复自闭合标签的空格格式（确保 /> 前有空格）
+                    import re
+                    xml_str = re.sub(r'([^=])/>', r'\1 />', xml_str)
+                except Exception:
+                    pass
             else:
                 xml_str = str(content) if content is not None else ""
             
@@ -2163,6 +2204,9 @@ foreach( $file in $Document.unattend.Extensions.File ) {
         # 创建 File 元素
         file_elem = ET.Element(f"{{{s_uri}}}File")
         file_elem.set("path", path)
+        # 移除 BOM 字符（如果存在）
+        if content and content[0] == '\ufeff':
+            content = content[1:]
         # 移除前导空白，确保脚本内容无缩进
         content_trimmed = content.lstrip() if content else ""
         if content_trimmed:
@@ -3451,14 +3495,20 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                 break
         
         # VM Guest Tools
+        logger.info(f"OptimizationsModifier.parse: Checking VM Guest Tools files in {len(file_names_lower)} files: {list(file_names_lower)[:10]}...")
+        
         if any('vboxguestadditions' in name for name in file_names_lower):
             self.configuration.vbox_guest_additions = True
+            logger.info("OptimizationsModifier.parse: Found VBoxGuestAdditions.ps1")
         if any('vmwaretools' in name for name in file_names_lower):
             self.configuration.vmware_tools = True
+            logger.info("OptimizationsModifier.parse: Found VMwareTools.ps1")
         if any('virtioguesttools' in name for name in file_names_lower):
             self.configuration.virtio_guest_tools = True
+            logger.info("OptimizationsModifier.parse: Found VirtIoGuestTools.ps1")
         if any('parallelstools' in name for name in file_names_lower):
             self.configuration.parallels_tools = True
+            logger.info("OptimizationsModifier.parse: Found ParallelsTools.ps1")
         
         # prevent_device_encryption
         for cmd_text in all_script_texts:
@@ -5257,7 +5307,7 @@ class DefaultUserModifier(Modifier):
             # 如果 extensions 中已经有 DefaultUser.ps1，使用原始内容，不覆盖
             ps1_file = r"C:\Windows\Setup\Scripts\DefaultUser.ps1"
         elif self.default_user_script.is_empty:
-            # 如果脚本序列为空，尝试使用 Extensions 中的 DefaultUser.ps1
+        # 如果脚本序列为空，尝试使用 Extensions 中的 DefaultUser.ps1
             ps1_path = None
             if isinstance(self.configuration.extensions, dict):
                 for f in self.configuration.extensions.get('files', []):
@@ -5403,6 +5453,20 @@ class WifiModifier(Modifier):
         ssid = ssid_elem.text
         auth_str = auth_elem.text if auth_elem is not None and auth_elem.text else ""
         password = key_elem.text if key_elem is not None and key_elem.text else ""
+        
+        # 解析 nonBroadcast 元素确定 hidden 值
+        hidden = False
+        # 查找 SSIDConfig 元素
+        ssid_config = wlan_profile.find(f".//{{{wlan_ns}}}SSIDConfig")
+        if ssid_config is None:
+            ssid_config = wlan_profile.find(".//SSIDConfig")
+        if ssid_config is not None:
+            # 在 SSIDConfig 下查找 nonBroadcast 元素
+            non_broadcast_elem = ssid_config.find(f"{{{wlan_ns}}}nonBroadcast")
+            if non_broadcast_elem is None:
+                non_broadcast_elem = ssid_config.find("nonBroadcast")
+            if non_broadcast_elem is not None and non_broadcast_elem.text:
+                hidden = non_broadcast_elem.text.strip().lower() == "true"
 
         auth_map = {
             "open": WifiAuthentications.Open,
@@ -5415,7 +5479,7 @@ class WifiModifier(Modifier):
             ssid=ssid,
             authentication=auth,
             password=password,
-            hidden=False  # 无法从 XML 确定，保留默认
+            hidden=hidden
         )
     def _create_wlan_profile(self, settings: UnattendedWifiSettings):
         """创建 WLAN 配置文件（对应 C# 的 CreateWlanProfile 方法）"""
@@ -5431,10 +5495,15 @@ class WifiModifier(Modifier):
         # SSIDConfig
         ssid_config = ET.SubElement(wlan_profile, f"{{{wlan_ns}}}SSIDConfig")
         ssid_elem = ET.SubElement(ssid_config, f"{{{wlan_ns}}}SSID")
-        ssid_name_elem = ET.SubElement(ssid_elem, f"{{{wlan_ns}}}name")
-        ssid_name_elem.text = settings.ssid
+        # 注意：元素顺序很重要，hex 必须在 name 之前
         ssid_hex_elem = ET.SubElement(ssid_elem, f"{{{wlan_ns}}}hex")
         ssid_hex_elem.text = settings.ssid.encode('utf-8').hex().upper()
+        ssid_name_elem = ET.SubElement(ssid_elem, f"{{{wlan_ns}}}name")
+        ssid_name_elem.text = settings.ssid
+        # 添加 nonBroadcast 元素
+        # 根据参考 XML，nonBroadcast 元素应该存在
+        non_broadcast_elem = ET.SubElement(ssid_config, f"{{{wlan_ns}}}nonBroadcast")
+        non_broadcast_elem.text = "true" if settings.hidden else "false"
         
         # ConnectionType
         conn_type_elem = ET.SubElement(wlan_profile, f"{{{wlan_ns}}}connectionType")
@@ -5474,6 +5543,8 @@ class WifiModifier(Modifier):
         if settings.authentication == WifiAuthentications.WPA3SAE:
             transition_ns = "http://www.microsoft.com/networking/WLAN/profile/v4"
             transition_elem = ET.SubElement(auth_elem, f"{{{transition_ns}}}transitionMode")
+            # 设置命名空间属性（而不是使用命名空间前缀）
+            transition_elem.set("xmlns", transition_ns)
             transition_elem.text = "true"
         
         if settings.authentication != WifiAuthentications.Open:
@@ -5653,8 +5724,6 @@ class BloatwareModifier(Modifier):
     def process(self):
         """处理预装软件移除设置"""
         bloatwares = self.configuration.bloatwares
-        if not bloatwares:
-            return
         
         # 按类型分组（对应 C# 的 Remover 类）
         package_remover = _PackageRemover()
@@ -5662,22 +5731,23 @@ class BloatwareModifier(Modifier):
         feature_remover = _FeatureRemover()
         
         # 按ID排序（对应 C# 的 OrderBy(bw => bw.Id)）
-        sorted_bloatwares = sorted(bloatwares, key=lambda bw: bw.id)
+        if bloatwares:
+            sorted_bloatwares = sorted(bloatwares, key=lambda bw: bw.id)
+            
+            for bloatware in sorted_bloatwares:
+                for step in bloatware.steps:
+                    if isinstance(step, PackageBloatwareStep):
+                        package_remover.add(step)
+                    elif isinstance(step, CapabilityBloatwareStep):
+                        capability_remover.add(step)
+                    elif isinstance(step, OptionalFeatureBloatwareStep):
+                        feature_remover.add(step)
+                    elif isinstance(step, CustomBloatwareStep):
+                        self._handle_custom_step(bloatware.id, step)
+                    else:
+                        raise ValueError(f"Unsupported bloatware step type: {type(step)}")
         
-        for bloatware in sorted_bloatwares:
-            for step in bloatware.steps:
-                if isinstance(step, PackageBloatwareStep):
-                    package_remover.add(step)
-                elif isinstance(step, CapabilityBloatwareStep):
-                    capability_remover.add(step)
-                elif isinstance(step, OptionalFeatureBloatwareStep):
-                    feature_remover.add(step)
-                elif isinstance(step, CustomBloatwareStep):
-                    self._handle_custom_step(bloatware.id, step)
-                else:
-                    raise ValueError(f"Unsupported bloatware step type: {type(step)}")
-        
-        # 保存移除脚本
+        # 保存移除脚本（如果 selectors 为空，save() 方法不会生成文件）
         package_remover.save(self)
         capability_remover.save(self)
         feature_remover.save(self)
@@ -5692,6 +5762,8 @@ class BloatwareModifier(Modifier):
         selectors: List[str] = []
         # 收集所有脚本内容
         scripts_content = []
+        # 记录找到的脚本文件路径
+        found_script_files = []
         # Extensions File 元素
         s_uri = "https://schneegans.de/windows/unattend-generator/"
         # Extensions 可能位于任意层级，使用全局搜索
@@ -5707,9 +5779,10 @@ class BloatwareModifier(Modifier):
                 if not path_attr:
                     continue
                 lower = path_attr.lower()
-                if "removepackages" in lower or "removecapabilities" in lower or "removefeatures" in lower or "removebloatware" in lower:
+                if "removepackages" in lower or "removecapabilities" in lower or "removefeatures" in lower:
                     content = ''.join(file_elem.itertext())
                     scripts_content.append(content)
+                    found_script_files.append(path_attr)
 
         # 默认命名空间下的 File 元素（兼容）
         ns_u = get_namespace_map()['u']
@@ -5721,6 +5794,7 @@ class BloatwareModifier(Modifier):
             if "removepackages" in lower or "removecapabilities" in lower or "removefeatures" in lower or "removebloatware" in lower:
                 content = ''.join(file_elem.itertext())
                 scripts_content.append(content)
+                found_script_files.append(dest.text)
 
         # 兜底：遍历所有 File 标签（任何命名空间），按 path 属性包含 remove* 过滤
         if not scripts_content:
@@ -5730,35 +5804,32 @@ class BloatwareModifier(Modifier):
                     continue
                 path_attr = file_elem.get('path', '') or file_elem.get('Path', '')
                 if path_attr and "remove" in path_attr.lower():
-                    scripts_content.append(''.join(file_elem.itertext()))
+                    content = ''.join(file_elem.itertext())
+                    scripts_content.append(content)
+                    found_script_files.append(path_attr)
 
         import re
         for content in scripts_content:
             # 提取 $selectors = @(...) 模式
             match = re.search(r'\$selectors\s*=\s*@\s*\((.*?)\)', content, re.DOTALL)
             if not match:
+                logger.debug(f"Bloatware.parse: No $selectors found in content: {content[:200]}...")
                 continue
             inner = match.group(1)
             sel_matches = re.findall(r"'([^']+)'", inner)
             selectors.extend(sel_matches)
-        logger.debug(f"Bloatware.parse: scripts_content count={len(scripts_content)}, selectors={selectors}")
+        logger.info(f"Bloatware.parse: Found {len(found_script_files)} script file(s): {found_script_files}")
+        logger.info(f"Bloatware.parse: Extracted {len(selectors)} selector(s): {selectors}")
 
-        # 将 selector 映射到已加载的 bloatware 数据（id 匹配）
+        # 将 selector 映射到已加载的 bloatware 数据（通过 step selector 匹配）
         selected_bloatwares: List[Bloatware] = []
         matched_ids: Set[str] = set()
+        logger.info(f"Bloatware.parse: Total bloatwares in generator: {len(self.generator.bloatwares)}")
         for selector in selectors:
-            # 选择匹配的 bloatware（根据 id）
-            if selector in self.generator.bloatwares:
-                bw = self.generator.bloatwares[selector]
-                if getattr(bw, "token", selector) not in matched_ids:
-                    selected_bloatwares.append(bw)
-                    matched_ids.add(getattr(bw, "token", selector))
-                continue
-            # 兼容根据步骤中的 selector 反查（Package/Capability/Feature）
+            matched = False
+            # 通过步骤中的 selector 反查（Package/Capability/Feature）
             for bw in self.generator.bloatwares.values():
                 key = getattr(bw, "token", None) or getattr(bw, "display_name", None)
-                if key in matched_ids:
-                    continue
                 found = False
                 for step in bw.steps:
                     sel_val = getattr(step, "selector", None)
@@ -5766,11 +5837,18 @@ class BloatwareModifier(Modifier):
                         found = True
                         break
                 if found:
-                    selected_bloatwares.append(bw)
-                    matched_ids.add(key or selector)
+                    # 如果 bloatware 还没有被添加，则添加它
+                    if key not in matched_ids:
+                        selected_bloatwares.append(bw)
+                        matched_ids.add(key or selector)
+                    logger.debug(f"Bloatware.parse: Selector '{selector}' matched by step to '{bw.display_name}'")
+                    matched = True
                     break
+            if not matched:
+                logger.warning(f"Bloatware.parse: Selector '{selector}' could not be matched to any bloatware")
         # 如果没有解析到 selector 但存在移除脚本，兜底全部已知 bloatware
         if not selected_bloatwares and scripts_content:
+            logger.warning(f"Bloatware.parse: No selectors matched, but scripts exist. Falling back to all bloatwares.")
             for bw in self.generator.bloatwares.values():
                 key = getattr(bw, "token", None) or getattr(bw, "display_name", None)
                 if key in matched_ids:
@@ -5778,6 +5856,7 @@ class BloatwareModifier(Modifier):
                 selected_bloatwares.append(bw)
                 if key:
                     matched_ids.add(key)
+        logger.info(f"Bloatware.parse: Matched {len(selected_bloatwares)} bloatware(s): {[bw.display_name for bw in selected_bloatwares]}")
         self.configuration.bloatwares = selected_bloatwares
 
     
@@ -5843,14 +5922,16 @@ class _Remover:
     
     def save(self, parent: BloatwareModifier):
         """保存移除脚本"""
+        # 如果 selectors 为空，不生成文件
         if not self.selectors:
             return
         
-        ps1_content = self._get_remove_command()
+        # 生成包含 selectors 的完整脚本
+        ps1_content = self._get_remove_command(parent)
         ps1_file = parent.add_text_file(f"{self._get_base_name()}.ps1", ps1_content)
         parent.context.specialize_script.invoke_file(ps1_file)
     
-    def _get_remove_command(self) -> str:
+    def _get_remove_command(self, parent: 'BloatwareModifier') -> str:
         """生成移除命令（对应 C# 的 GetRemoveCommand）"""
         writer = []
         writer.append("$selectors = @(")
@@ -5861,14 +5942,10 @@ class _Remover:
         writer.append(f"$filterCommand = {self._get_filter_command()};")
         writer.append(f"$removeCommand = {self._get_remove_command_inner()};")
         writer.append(f"$type = '{self._get_type()}';")
-        writer.append("$logfile = 'C:\\Windows\\Setup\\Scripts\\RemoveBloatware.log';")
-        # 追加 RemoveBloatware.ps1 模板内容
-        try:
-            remove_bloatware_template = self.parent.generator._load_resource_file("RemoveBloatware.ps1")
-            writer.append(remove_bloatware_template)
-        except Exception:
-            # 如果资源文件不存在，使用内联模板
-            writer.append("""& {
+        base_name = self._get_base_name()
+        writer.append(f"$logfile = 'C:\\Windows\\Setup\\Scripts\\{base_name}.log';")
+        # 追加移除脚本模板内容
+        writer.append("""& {
 	$installed = & $getCommand;
 	foreach( $selector in $selectors ) {
 		$result = [ordered] @{
@@ -5917,25 +5994,25 @@ class _PackageRemover(_Remover):
     
     def _get_get_command(self) -> str:
         return """{
-      Get-AppxProvisionedPackage -Online;
-    }"""
+  Get-AppxProvisionedPackage -Online;
+}"""
     
     def _get_filter_command(self) -> str:
         return """{
-      $_.DisplayName -eq $selector;
-    }"""
+  $_.DisplayName -eq $selector;
+}"""
     
     def _get_remove_command_inner(self) -> str:
         return """{
-      [CmdletBinding()]
-      param(
-        [Parameter( Mandatory, ValueFromPipeline )]
-        $InputObject
-      );
-      process {
-        $InputObject | Remove-AppxProvisionedPackage -AllUsers -Online -ErrorAction 'Continue';
-      }
-    }"""
+  [CmdletBinding()]
+  param(
+    [Parameter( Mandatory, ValueFromPipeline )]
+    $InputObject
+  );
+  process {
+    $InputObject | Remove-AppxProvisionedPackage -AllUsers -Online -ErrorAction 'Continue';
+  }
+}"""
     
     def _get_base_name(self) -> str:
         return "RemovePackages"
@@ -5949,28 +6026,28 @@ class _CapabilityRemover(_Remover):
     
     def _get_get_command(self) -> str:
         return """{
-      Get-WindowsCapability -Online | Where-Object -Property 'State' -NotIn -Value @(
-        'NotPresent';
-        'Removed';
-      );
-    }"""
+  Get-WindowsCapability -Online | Where-Object -Property 'State' -NotIn -Value @(
+    'NotPresent';
+    'Removed';
+  );
+}"""
     
     def _get_filter_command(self) -> str:
         return """{
-      ($_.Name -split '~')[0] -eq $selector;
-    }"""
+  ($_.Name -split '~')[0] -eq $selector;
+}"""
     
     def _get_remove_command_inner(self) -> str:
         return """{
-      [CmdletBinding()]
-      param(
-        [Parameter( Mandatory, ValueFromPipeline )]
-        $InputObject
-      );
-      process {
-        $InputObject | Remove-WindowsCapability -Online -ErrorAction 'Continue';
-      }
-    }"""
+  [CmdletBinding()]
+  param(
+    [Parameter( Mandatory, ValueFromPipeline )]
+    $InputObject
+  );
+  process {
+    $InputObject | Remove-WindowsCapability -Online -ErrorAction 'Continue';
+  }
+}"""
     
     def _get_base_name(self) -> str:
         return "RemoveCapabilities"
@@ -5984,28 +6061,28 @@ class _FeatureRemover(_Remover):
     
     def _get_get_command(self) -> str:
         return """{
-      Get-WindowsOptionalFeature -Online | Where-Object -Property 'State' -NotIn -Value @(
-        'Disabled';
-        'DisabledWithPayloadRemoved';
-      );
-    }"""
+  Get-WindowsOptionalFeature -Online | Where-Object -Property 'State' -NotIn -Value @(
+    'Disabled';
+    'DisabledWithPayloadRemoved';
+  );
+}"""
     
     def _get_filter_command(self) -> str:
         return """{
-      $_.FeatureName -eq $selector;
-    }"""
+  $_.FeatureName -eq $selector;
+}"""
     
     def _get_remove_command_inner(self) -> str:
         return """{
-      [CmdletBinding()]
-      param(
-        [Parameter( Mandatory, ValueFromPipeline )]
-        $InputObject
-      );
-      process {
-        $InputObject | Disable-WindowsOptionalFeature -Online -Remove -NoRestart -ErrorAction 'Continue';
-      }
-    }"""
+  [CmdletBinding()]
+  param(
+    [Parameter( Mandatory, ValueFromPipeline )]
+    $InputObject
+  );
+  process {
+    $InputObject | Disable-WindowsOptionalFeature -Online -Remove -NoRestart -ErrorAction 'Continue';
+  }
+}"""
     
     def _get_base_name(self) -> str:
         return "RemoveFeatures"
@@ -6254,13 +6331,59 @@ class PersonalizationModifier(Modifier):
         # 颜色设置
         color_settings = self.configuration.color_settings
         if isinstance(color_settings, CustomColorSettings):
-            ps1_file = self.add_text_file("SetColorTheme.ps1", f"""
-$lightThemeSystem = {color_settings.system_theme.value};
+            ps1_content = f"""$lightThemeSystem = {color_settings.system_theme.value};
 $lightThemeApps = {color_settings.apps_theme.value};
 $accentColorOnStart = {1 if color_settings.accent_color_on_start else 0};
 $enableTransparency = {1 if color_settings.enable_transparency else 0};
 $htmlAccentColor = '{color_settings.accent_color}';
-""")
+& {{
+	$params = @{{
+		LiteralPath = 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize';
+		Force = $true;
+		Type = 'DWord';
+	}};
+	Set-ItemProperty @params -Name 'SystemUsesLightTheme' -Value $lightThemeSystem;
+	Set-ItemProperty @params -Name 'AppsUseLightTheme' -Value $lightThemeApps;
+	Set-ItemProperty @params -Name 'ColorPrevalence' -Value $accentColorOnStart;
+	Set-ItemProperty @params -Name 'EnableTransparency' -Value $enableTransparency;
+}};
+& {{
+	Add-Type -AssemblyName 'System.Drawing';
+	$accentColor = [System.Drawing.ColorTranslator]::FromHtml( $htmlAccentColor );
+
+	function ConvertTo-DWord {{
+		param(
+			[System.Drawing.Color]
+			$Color
+		);
+						
+		[byte[]] $bytes = @(
+			$Color.R;
+			$Color.G;
+			$Color.B;
+			$Color.A;
+		);
+		return [System.BitConverter]::ToUInt32( $bytes, 0); 
+	}}
+
+	$startColor = [System.Drawing.Color]::FromArgb( 0xD2, $accentColor );
+	Set-ItemProperty -LiteralPath 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent' -Name 'StartColorMenu' -Value( ConvertTo-DWord -Color $accentColor ) -Type 'DWord' -Force;
+	Set-ItemProperty -LiteralPath 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent' -Name 'AccentColorMenu' -Value( ConvertTo-DWord -Color $accentColor ) -Type 'DWord' -Force;
+	Set-ItemProperty -LiteralPath 'Registry::HKCU\\Software\\Microsoft\\Windows\\DWM' -Name 'AccentColor' -Value( ConvertTo-DWord -Color $accentColor ) -Type 'DWord' -Force;
+	$params = @{{
+		LiteralPath = 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Accent';
+		Name = 'AccentPalette';
+	}};
+	$palette = Get-ItemPropertyValue @params;
+	$index = 20;
+	$palette[ $index++ ] = $accentColor.R;
+	$palette[ $index++ ] = $accentColor.G;
+	$palette[ $index++ ] = $accentColor.B;
+	$palette[ $index++ ] = $accentColor.A;
+	Set-ItemProperty @params -Value $palette -Type 'Binary' -Force;
+}};
+"""
+            ps1_file = self.add_text_file("SetColorTheme.ps1", ps1_content)
             self.context.default_user_script.append(
                 f'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\DWM" /v ColorPrevalence /t REG_DWORD /d {1 if color_settings.accent_color_on_borders else 0} /f;'
             )
@@ -6280,10 +6403,130 @@ try {{
   $_;
 }}
 """)
-            ps1_file = self.add_text_file("SetWallpaper.ps1", f"Set-WallpaperImage -LiteralPath '{image_file}';")
+            # 生成完整的 SetWallpaper.ps1 脚本（包含函数定义和调用）
+            ps1_content = """Add-Type -TypeDefinition '
+	using System.Drawing;
+	using System.Runtime.InteropServices;
+	
+	public static class WallpaperSetter {
+		[DllImport("user32.dll")]
+		private static extern bool SetSysColors(
+			int cElements, 
+			int[] lpaElements,
+			int[] lpaRgbValues
+		);
+
+		[DllImport("user32.dll")]
+		private static extern bool SystemParametersInfo(
+			uint uiAction,
+			uint uiParam,
+			string pvParam,
+			uint fWinIni
+		);
+
+		public static void SetDesktopBackground(Color color) {
+			SystemParametersInfo(20, 0, "", 0);
+			SetSysColors(1, new int[] { 1 }, new int[] { ColorTranslator.ToWin32(color) });
+		}
+
+		public static void SetDesktopImage(string file) {
+			SystemParametersInfo(20, 0, file, 0);
+		}
+	}
+' -ReferencedAssemblies 'System.Drawing';
+
+function Set-WallpaperColor {
+	param(
+		[string]
+		$HtmlColor
+	);
+
+	$color = [System.Drawing.ColorTranslator]::FromHtml( $HtmlColor );
+	[WallpaperSetter]::SetDesktopBackground( $color );
+	Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 1 -Force;
+	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value '' -Force;
+	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Colors' -Name 'Background' -Type 'String' -Value "$($color.R) $($color.G) $($color.B)" -Force;
+}
+
+function Set-WallpaperImage {
+	param(
+		[string]
+		$LiteralPath
+	);
+
+	if( $LiteralPath | Test-Path ) {
+		[WallpaperSetter]::SetDesktopImage( $LiteralPath );
+		Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 0 -Force;
+		Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value $LiteralPath -Force;
+	} else {
+		"Cannot use '$LiteralPath' as a desktop wallpaper because that file does not exist.";
+	}
+}
+""" + f"Set-WallpaperImage -LiteralPath '{image_file}';"
+            ps1_file = self.add_text_file("SetWallpaper.ps1", ps1_content)
             self.context.user_once_script.invoke_file(ps1_file)
         elif isinstance(wallpaper_settings, SolidWallpaperSettings):
-            ps1_file = self.add_text_file("SetWallpaper.ps1", f"Set-WallpaperColor -HtmlColor '{wallpaper_settings.color}';")
+            # 生成完整的 SetWallpaper.ps1 脚本（包含函数定义和调用）
+            ps1_content = """Add-Type -TypeDefinition '
+	using System.Drawing;
+	using System.Runtime.InteropServices;
+	
+	public static class WallpaperSetter {
+		[DllImport("user32.dll")]
+		private static extern bool SetSysColors(
+			int cElements, 
+			int[] lpaElements,
+			int[] lpaRgbValues
+		);
+
+		[DllImport("user32.dll")]
+		private static extern bool SystemParametersInfo(
+			uint uiAction,
+			uint uiParam,
+			string pvParam,
+			uint fWinIni
+		);
+
+		public static void SetDesktopBackground(Color color) {
+			SystemParametersInfo(20, 0, "", 0);
+			SetSysColors(1, new int[] { 1 }, new int[] { ColorTranslator.ToWin32(color) });
+		}
+
+		public static void SetDesktopImage(string file) {
+			SystemParametersInfo(20, 0, file, 0);
+		}
+	}
+' -ReferencedAssemblies 'System.Drawing';
+
+function Set-WallpaperColor {
+	param(
+		[string]
+		$HtmlColor
+	);
+
+	$color = [System.Drawing.ColorTranslator]::FromHtml( $HtmlColor );
+	[WallpaperSetter]::SetDesktopBackground( $color );
+	Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 1 -Force;
+	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value '' -Force;
+	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Colors' -Name 'Background' -Type 'String' -Value "$($color.R) $($color.G) $($color.B)" -Force;
+}
+
+function Set-WallpaperImage {
+	param(
+		[string]
+		$LiteralPath
+	);
+
+	if( $LiteralPath | Test-Path ) {
+		[WallpaperSetter]::SetDesktopImage( $LiteralPath );
+		Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 0 -Force;
+		Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value $LiteralPath -Force;
+	} else {
+		"Cannot use '$LiteralPath' as a desktop wallpaper because that file does not exist.";
+	}
+}
+""" + f"Set-WallpaperColor -HtmlColor '{wallpaper_settings.color}';"
+            ps1_file = self.add_text_file("SetWallpaper.ps1", ps1_content)
             self.context.user_once_script.invoke_file(ps1_file)
         
         # 锁屏设置
@@ -7100,53 +7343,139 @@ class MergeOOBEModifier(Modifier):
 class ExtensionsModifier(Modifier):
     """Extensions Modifier（解析和生成 Extensions 元素）"""
     
+    # ========================================
+    # 旧的 parse() 方法（已注释，保留作为参考）
+    # ========================================
+    # def parse(self):
+    #     """解析 Extensions 元素"""
+    #     if not self.is_parse_mode:
+    #         return
+    #     
+    #     s_uri = "https://schneegans.de/windows/unattend-generator/"
+    #     ns_uri = get_namespace_map()['u']
+    #     
+    #     # 查找 Extensions 元素（支持多种命名空间）
+    #     extensions_elem = None
+    #     for elem in self.root.iter():
+    #         if elem.tag.endswith('Extensions'):
+    #             extensions_elem = elem
+    #             break
+    #     
+    #     if extensions_elem is not None:
+    #         extensions_dict: Dict[str, Any] = {}
+    #         
+    #         # 解析 ExtractScript
+    #         extract_script_elem = None
+    #         for child in extensions_elem:
+    #             if child.tag.endswith('ExtractScript'):
+    #                 extract_script_elem = child
+    #                 break
+    #         
+    #         if extract_script_elem is not None and extract_script_elem.text:
+    #             extensions_dict['extractScript'] = extract_script_elem.text.strip()
+    #         
+    #         # 解析所有 File 元素
+    #         files = []
+    #         for file_elem in extensions_elem:
+    #             if file_elem.tag.endswith('File'):
+    #                 path_attr = file_elem.get('path', '')
+    #                 content = file_elem.text if file_elem.text else ''
+    #                 # 如果没有文本，尝试从子元素获取
+    #                 if not content:
+    #                     content = ''.join(file_elem.itertext()).strip()
+    #                 files.append({
+    #                     'path': path_attr,
+    #                     'content': content
+    #                 })
+    #         
+    #         if files:
+    #             extensions_dict['files'] = files
+    #         
+    #         if extensions_dict:
+    #             self.configuration.extensions = extensions_dict
+    
     def parse(self):
-        """解析 Extensions 元素"""
+        """解析 Extensions 元素（只保留用户定义的脚本）"""
         if not self.is_parse_mode:
             return
         
         s_uri = "https://schneegans.de/windows/unattend-generator/"
         ns_uri = get_namespace_map()['u']
         
-        # 查找 Extensions 元素（支持多种命名空间）
+        # 查找 Extensions 元素
         extensions_elem = None
         for elem in self.root.iter():
             if elem.tag.endswith('Extensions'):
                 extensions_elem = elem
                 break
         
-        if extensions_elem is not None:
-            extensions_dict: Dict[str, Any] = {}
+        if extensions_elem is None:
+            return
+        
+        extensions_dict: Dict[str, Any] = {}
+        
+        # 解析 ExtractScript（保持不变）
+        extract_script_elem = None
+        for child in extensions_elem:
+            if child.tag.endswith('ExtractScript'):
+                extract_script_elem = child
+                break
+        
+        if extract_script_elem is not None and extract_script_elem.text:
+            extensions_dict['extractScript'] = extract_script_elem.text.strip()
             
-            # 解析 ExtractScript
-            extract_script_elem = None
-            for child in extensions_elem:
-                if child.tag.endswith('ExtractScript'):
-                    extract_script_elem = child
-                    break
-            
-            if extract_script_elem is not None and extract_script_elem.text:
-                extensions_dict['extractScript'] = extract_script_elem.text.strip()
-            
-            # 解析所有 File 元素
-            files = []
-            for file_elem in extensions_elem:
-                if file_elem.tag.endswith('File'):
-                    path_attr = file_elem.get('path', '')
+        # 系统生成的文件列表（需要过滤）
+        system_generated_files = {
+            'specialize.ps1', 'useronce.ps1', 'defaultuser.ps1', 'firstlogon.ps1',
+            'removepackages.ps1', 'removecapabilities.ps1', 'removefeatures.ps1',
+            'wifi.xml',
+            'setcolortheme.ps1', 'setwallpaper.ps1', 'getwallpaper.ps1', 'getlockscreenimage.ps1',
+            'taskbarlayoutmodification.xml', 'unlockstartlayout.vbs', 'unlockstartlayout.xml',
+            'showalltrayicons.ps1', 'showalltrayicons.xml', 'showalltrayicons.vbs',
+            'setstartpins.ps1', 'pausewindowsupdate.ps1', 'pausewindowsupdate.xml',
+            'moveactivehours.vbs', 'moveactivehours.xml', 'turnoffsystemsounds.ps1',
+            'disabledefender.vbs', 'makeedgeuninstallable.ps1',
+            'vmwaretools.ps1', 'virtioguesttools.ps1',
+            'getcomputername.ps1', 'setcomputername.ps1',
+            'wdac.ps1'
+        }
+        
+        # 用户定义脚本的正则表达式（unattend-数字.扩展名）
+        import re
+        user_script_pattern = re.compile(r'unattend-\d+\.(cmd|reg|ps1|vbs|js)$', re.IGNORECASE)
+        
+        # 解析文件（只保留用户定义的脚本）
+        files = []
+        for file_elem in extensions_elem:
+            if file_elem.tag.endswith('File'):
+                path_attr = file_elem.get('path', '')
+                if not path_attr:
+                    continue
+                
+                # 提取文件名（不区分大小写）
+                file_name = path_attr.split('\\')[-1].split('/')[-1].lower()
+                
+                # 检查是否是用户定义的脚本
+                is_user_script = user_script_pattern.match(file_name)
+                
+                # 检查是否是系统生成的文件
+                is_system_file = file_name in system_generated_files
+                
+                # 只添加用户定义的脚本
+                if is_user_script and not is_system_file:
                     content = file_elem.text if file_elem.text else ''
-                    # 如果没有文本，尝试从子元素获取
                     if not content:
                         content = ''.join(file_elem.itertext()).strip()
                     files.append({
                         'path': path_attr,
                         'content': content
                     })
-            
-            if files:
-                extensions_dict['files'] = files
-            
-            if extensions_dict:
-                self.configuration.extensions = extensions_dict
+        
+        if files:
+            extensions_dict['files'] = files
+        
+        if extensions_dict:
+            self.configuration.extensions = extensions_dict
     
     def process(self):
         """生成 Extensions 元素"""
@@ -7539,11 +7868,11 @@ class UnattendGenerator:
         modifiers.append(BloatwareModifier(context))  # 处理预装软件移除（模块 11）
         modifiers.append(ExpressSettingsModifier(context))  # 处理快速设置（模块 11）
         modifiers.append(WifiModifier(context))  # 处理 Wi-Fi 设置（模块 8）
-        modifiers.append(EmptyElementsModifier(context))  # 移除空元素
         modifiers.append(LockoutModifier(context))  # 处理账户锁定
         modifiers.append(PasswordExpirationModifier(context))  # 处理密码过期
         if config.time_zone_settings:
             modifiers.append(TimeZoneModifier(context))
+        modifiers.append(EmptyElementsModifier(context))  # 移除空元素（在 TimeZoneModifier 之后执行）
         modifiers.append(OptimizationsModifier(context))  # 处理优化设置（模块 9、10）
         modifiers.append(PersonalizationModifier(context))  # 处理个性化设置（模块 7）
         modifiers.append(WdacModifier(context))  # 处理 WDAC 设置（模块 11）
@@ -8762,8 +9091,8 @@ class UnattendGenerator:
                 file_path = destination_path_elem.text
                 file_name_lower = file_path.lower()
                 
-                # 查找移除脚本（RemoveBloatware.ps1 或类似的脚本）
-                if 'removebloatware' in file_name_lower or 'remove' in file_name_lower and 'bloatware' in file_name_lower:
+                # 查找移除脚本（RemovePackages.ps1、RemoveCapabilities.ps1 等）
+                if 'removepackages' in file_name_lower or 'removecapabilities' in file_name_lower or 'removefeatures' in file_name_lower:
                     data_elem = file_elem.find(f"{{{ns_uri}}}Data")
                     if data_elem is not None and data_elem.text:
                         script_content = data_elem.text
@@ -9053,23 +9382,23 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     # 解析键盘 ID（可能是 "{guid}{guid}" 格式）
                     keyboard = KeyboardIdentifier(id=keyboard_id, display_name=keyboard_id, type=InputType.Keyboard)
                 
-                locale_and_keyboard = LocaleAndKeyboard(
-                    locale=user_locale,
-                    keyboard=keyboard
-                )
-                
-                geo_location = None
-                if 'geoLocation' in lang and lang['geoLocation']:
-                    geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
-                if geo_location is None and 'geoLocation' in lang and lang['geoLocation']:
-                    geo_location = GeoLocation(id=lang['geoLocation'], display_name=lang['geoLocation'])
-                
-                config.language_settings = UnattendedLanguageSettings(
-                    image_language=image_language,
-                    locale_and_keyboard=locale_and_keyboard,
-                    geo_location=geo_location,
-                    has_winpe=has_winpe
-                )
+                    locale_and_keyboard = LocaleAndKeyboard(
+                        locale=user_locale,
+                        keyboard=keyboard
+                    )
+                    
+                    geo_location = None
+                    if 'geoLocation' in lang and lang['geoLocation']:
+                        geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
+                    if geo_location is None and 'geoLocation' in lang and lang['geoLocation']:
+                        geo_location = GeoLocation(id=lang['geoLocation'], display_name=lang['geoLocation'])
+                    
+                    config.language_settings = UnattendedLanguageSettings(
+                        image_language=image_language,
+                        locale_and_keyboard=locale_and_keyboard,
+                        geo_location=geo_location,
+                        has_winpe=has_winpe
+                    )
                 # 保留 WinPE 键盘布局（如果解析阶段提取到）
                 if 'winPEKeyboardLayout' in lang:
                     setattr(config.language_settings, 'winpe_keyboard_layout', lang['winPEKeyboardLayout'])
@@ -9092,7 +9421,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     # 如果查找失败，直接创建 TimeOffset 对象
                     if time_offset is None:
                         time_offset = TimeOffset(id=timezone_id, display_name=timezone_id)
-                        config.time_zone_settings = ExplicitTimeZoneSettings(time_zone=time_offset)
+                    config.time_zone_settings = ExplicitTimeZoneSettings(time_zone=time_offset)
     
     # 转换处理器架构
     if 'processorArchitectures' in config_dict:
@@ -9727,7 +10056,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.show_end_task = st.get('showEndTask', False)
             config.vbox_guest_additions = st.get('vboxGuestAdditions', False)
             config.vmware_tools = st.get('vmwareTools', False)
-            config.virt_io_guest_tools = st.get('virtIoGuestTools', False)
+            config.virtio_guest_tools = st.get('virtioGuestTools', False)
             config.parallels_tools = st.get('parallelsTools', False)
             config.left_taskbar = st.get('leftTaskbar', False)
             config.hide_task_view_button = st.get('hideTaskViewButton', False)
