@@ -147,13 +147,13 @@ class Component(IKeyed):
 # Bloatware 已在模块 11 中定义，这里删除重复定义
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class DesktopIcon(IKeyed):
     """桌面图标"""
     guid: str = ""
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class StartFolder(IKeyed):
     """开始菜单文件夹"""
     data: bytes = field(default_factory=lambda: b"")
@@ -1522,6 +1522,12 @@ def to_keyed_dictionary(data_list: List[Dict[str, Any]], keyed_class: type) -> D
                     display_name=item.get('DisplayName', ''),
                     passes=item.get('Passes', [])
                 )
+            elif keyed_class == DesktopIcon:
+                result[key] = DesktopIcon(
+                    id=key,
+                    display_name=item.get('DisplayName', ''),
+                    guid=item.get('Guid', '')
+                )
             elif keyed_class == Bloatware:
                 result[key] = Bloatware(display_name=item.get('DisplayName', ''))
             else:
@@ -2456,42 +2462,104 @@ class LocalesModifier(Modifier):
                 locale=user_locale,
                 keyboard=KeyboardIdentifier(id="00000409", display_name="00000409", type=InputType.Keyboard)
             )
-        # GeoLocation 从脚本检测
+        # GeoLocation 从脚本检测（包括 Extensions 中的 UserOnce.ps1）
         geo_loc = None
         # 提取 WinPE 键盘布局（SetKeyboardLayout 参数）
         winpe_keyboard_layout = None
-        for cmd_text in self.generator._collect_all_commands(self.root):
+        
+        # 收集所有命令和 Extensions 文件内容
+        all_script_texts = list(self.generator._collect_all_commands(self.root))
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
+        # 获取 Extensions 文件（与 OptimizationsModifier 使用相同的方法）
+        ext_files: Dict[str, str] = {}
+        # 查找 Extensions 元素（支持多种命名空间）
+        extensions_elem = None
+        for elem in self.root.iter():
+            if elem.tag.endswith('Extensions'):
+                extensions_elem = elem
+                break
+        
+        if extensions_elem is not None:
+            # 遍历所有 File 元素（不区分命名空间）
+            for file_elem in extensions_elem.iter():
+                if file_elem.tag.endswith('File'):
+                    path_attr = file_elem.get('path', '')
+                    if path_attr:
+                        # 直接使用 text 属性（与生成逻辑 file_elem.text = content 匹配）
+                        content = file_elem.text
+                        if content:
+                            # 移除前导和尾随的空白字符（格式化可能添加了换行和制表符）
+                            content = content.strip()
+                            ext_files[path_attr.lower()] = content
+        
+        # 将 Extensions 文件内容添加到 all_script_texts
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
+        for path, content in ext_files.items():
+            if content:  # 只添加非空内容
+                all_script_texts.append(content)
+                if 'useronce.ps1' in path.lower():
+                    logger.debug(f"LocalesModifier.parse: Added UserOnce.ps1 content, length={len(content)}, preview: {content[:200]}...")
+        
+        logger.debug(f"LocalesModifier.parse: Total script texts: {len(all_script_texts)}")
+        
+        # 首先查找 Set-WinHomeLocation（优先级更高）
+        for cmd_text in all_script_texts:
+            if not cmd_text:
+                continue
             lower = cmd_text.lower()
+            # 检查是否包含 Set-WinHomeLocation 和 -GeoId
             if 'set-winhomelocation' in lower and '-geoid' in lower:
                 import re
-                m = re.search(r'-geoid\s+(\d+)', lower)
+                # 匹配 Set-WinHomeLocation -GeoId 244; 格式（不区分大小写）
+                # 注意：可能有多行，需要匹配 -GeoId 后面的数字
+                m = re.search(r'-geoid\s+(\d+)', lower, re.IGNORECASE)
                 if m:
                     geo_id = m.group(1)
                     geo_loc = self.generator.lookup(GeoLocation, geo_id) or GeoLocation(id=geo_id, display_name=geo_id)
-            # 提取 SetKeyboardLayout 命令中的完整键盘布局字符串
-            if 'setkeyboardlayout' in lower:
+                    logger.info(f"LocalesModifier.parse: Found GeoId {geo_id}")
+                    break
+            # 也尝试在整个文本中搜索（可能命令跨多行）
+            elif 'set-winhomelocation' in lower:
                 import re
-                # 匹配 SetKeyboardLayout 后面的内容
-                # 格式可能是: SetKeyboardLayout 1000:0804:{guid}{guid}
-                # 需要匹配到 &echo: 或 & 或 " 或换行之前
-                # 使用更精确的模式：匹配 SetKeyboardLayout 后面的所有内容，直到遇到 &echo: 或单独的 & 或 "
-                # 注意：需要匹配完整的布局字符串，包括 1000: 前缀
-                # 首先尝试匹配到 &echo: 之前的所有内容（这是最常见的格式）
-                m = re.search(r'SetKeyboardLayout\s+([^&]+?)(?=&echo:)', cmd_text, re.IGNORECASE)
-                if not m:
-                    # 如果上面的模式不匹配，尝试匹配到 & 或 " 之前
-                    m = re.search(r'SetKeyboardLayout\s+([^&"]+?)(?=&[^a-zA-Z]|"|$)', cmd_text, re.IGNORECASE)
-                if not m:
-                    # 如果上面的模式不匹配，尝试更简单的模式（匹配到空格或 & 或 " 之前）
-                    m = re.search(r'SetKeyboardLayout\s+([^\s&"]+)', cmd_text, re.IGNORECASE)
+                # 尝试匹配 Set-WinHomeLocation ... -GeoId 数字
+                m = re.search(r'set-winhomelocation.*?-geoid\s+(\d+)', lower, re.IGNORECASE | re.DOTALL)
                 if m:
-                    winpe_keyboard_layout = m.group(1).strip()
-                    # 处理可能的转义字符
-                    winpe_keyboard_layout = winpe_keyboard_layout.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-                    # 确保提取的值包含完整的布局字符串（包括 1000: 前缀，如果存在）
-                    # 如果提取的值不包含 1000: 前缀，但原始命令中有，说明正则表达式有问题
-                    # 这里我们直接使用提取的值，因为正则表达式应该已经匹配了完整字符串
-                    break  # 找到后立即退出循环
+                    geo_id = m.group(1)
+                    geo_loc = self.generator.lookup(GeoLocation, geo_id) or GeoLocation(id=geo_id, display_name=geo_id)
+                    logger.info(f"LocalesModifier.parse: Found GeoId {geo_id} (multi-line match)")
+                    break
+        
+        # 然后查找 SetKeyboardLayout（如果还没有找到）
+        if winpe_keyboard_layout is None:
+            for cmd_text in all_script_texts:
+                if not cmd_text:
+                    continue
+                lower = cmd_text.lower()
+                # 提取 SetKeyboardLayout 命令中的完整键盘布局字符串
+                if 'setkeyboardlayout' in lower:
+                    import re
+                    # 匹配 SetKeyboardLayout 后面的内容
+                    # 格式可能是: SetKeyboardLayout 1000:0804:{guid}{guid}
+                    # 需要匹配到 &echo: 或 & 或 " 或换行之前
+                    # 使用更精确的模式：匹配 SetKeyboardLayout 后面的所有内容，直到遇到 &echo: 或单独的 & 或 "
+                    # 注意：需要匹配完整的布局字符串，包括 1000: 前缀
+                    # 首先尝试匹配到 &echo: 之前的所有内容（这是最常见的格式）
+                    m = re.search(r'SetKeyboardLayout\s+([^&]+?)(?=&echo:)', cmd_text, re.IGNORECASE)
+                    if not m:
+                        # 如果上面的模式不匹配，尝试匹配到 & 或 " 之前
+                        m = re.search(r'SetKeyboardLayout\s+([^&"]+?)(?=&[^a-zA-Z]|"|$)', cmd_text, re.IGNORECASE)
+                    if not m:
+                        # 如果上面的模式不匹配，尝试更简单的模式（匹配到空格或 & 或 " 之前）
+                        m = re.search(r'SetKeyboardLayout\s+([^\s&"]+)', cmd_text, re.IGNORECASE)
+                    if m:
+                        winpe_keyboard_layout = m.group(1).strip()
+                        # 处理可能的转义字符
+                        winpe_keyboard_layout = winpe_keyboard_layout.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+                        # 确保提取的值包含完整的布局字符串（包括 1000: 前缀，如果存在）
+                        # 如果提取的值不包含 1000: 前缀，但原始命令中有，说明正则表达式有问题
+                        # 这里我们直接使用提取的值，因为正则表达式应该已经匹配了完整字符串
+                        break  # 找到后立即退出循环
         lang_settings = UnattendedLanguageSettings(
             image_language=image_lang or ImageLanguage(id="en-US", display_name="en-US"),
             locale_and_keyboard=locale_and_keyboard,
@@ -2777,12 +2845,16 @@ class OptimizationsModifier(Modifier):
     def _set_desktop_icons(self, icons_dict: Dict[DesktopIcon, bool]):
         """设置桌面图标"""
         sb = []
+        # 按照 C# 代码，使用排序后的图标列表以保持顺序一致
+        # C# 使用 ImmutableSortedDictionary，按 Id 排序（不是 Guid）
+        # C# DesktopIcon.CompareTo 使用 Id.CompareTo
+        sorted_icons = sorted(icons_dict.items(), key=lambda x: x[0].id)
         for key in ["ClassicStartMenu", "NewStartPanel"]:
             path = f'Registry::HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\{key}'
             sb.append(f'New-Item -Path \'{path}\' -Force;')
-            for icon, visible in icons_dict.items():
+            for icon, visible in sorted_icons:
                 sb.append(
-                    f'Set-ItemProperty -Path \'{path}\' -Name \'{icon.guid}\' -Value {0 if visible else 1} -Type "DWord";'
+                    f'Set-ItemProperty -Path \'{path}\' -Name \'{icon.guid}\' -Value {0 if visible else 1} -Type \'DWord\';'
                 )
         self.context.user_once_script.append('\n'.join(sb))
         self.context.user_once_script.restart_explorer()
@@ -2803,16 +2875,18 @@ class OptimizationsModifier(Modifier):
     def _set_start_folders(self, folders_dict: Dict[StartFolder, bool]):
         """设置开始菜单文件夹"""
         # 收集所有启用的文件夹的 bytes
+        # 按照 C# 的 ImmutableSortedDictionary 行为，需要按 id 排序
+        sorted_folders = sorted(folders_dict.items(), key=lambda x: x[0].id)
         bytes_list = []
-        for folder, enabled in folders_dict.items():
+        for folder, enabled in sorted_folders:
             if enabled:
-                bytes_list.extend(folder.bytes)
+                bytes_list.extend(folder.data)
         
         if bytes_list:
             import base64
             base64_str = base64.b64encode(bytes(bytes_list)).decode('ascii')
             self.context.user_once_script.append(
-                f'Set-ItemProperty -Path "Registry::HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Start" -Name "VisiblePlaces" -Value $( [convert]::FromBase64String(\'{base64_str}\') ) -Type "Binary";'
+                f"Set-ItemProperty -Path 'Registry::HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Start' -Name 'VisiblePlaces' -Value $( [convert]::FromBase64String('{base64_str}') ) -Type 'Binary';"
             )
     
     def process(self):
@@ -3181,6 +3255,13 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             # 这个设置已经在 TaskbarSearch 处理中实现
             pass
         
+        # TaskbarSearch (按照 C# 顺序：在 LaunchToThisPC 之后，StartPins 之前)
+        if self.configuration.taskbar_search != TaskbarSearchMode.Box:
+            self.context.user_once_script.append(
+                f"Set-ItemProperty -LiteralPath 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search' -Name 'SearchboxTaskbarMode' -Type 'DWord' -Value {self.configuration.taskbar_search.value};"
+            )
+            self.context.user_once_script.restart_explorer()
+        
         # 处理开始菜单固定项（模块 10，按照 C# 顺序：在 Lock Keys 之后，DeleteWindowsOld 之前）
         if isinstance(self.configuration.start_pins_settings, EmptyStartPinsSettings):
             self._set_start_pins('{"pinnedList":[]}')
@@ -3211,7 +3292,15 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         elif isinstance(self.configuration.effects, CustomEffects):
             self._set_effects(self.configuration.effects.settings, 3)
         
-        # Show End Task（按照 C# 顺序：在 VisualEffects 之后，StickyKeys 之前）
+        # 处理桌面图标（按照 C# 顺序：在 VisualEffects 之后，StartFolderSettings 之前）
+        if isinstance(self.configuration.desktop_icons, CustomDesktopIconSettings):
+            self._set_desktop_icons(self.configuration.desktop_icons.settings)
+        
+        # 处理开始菜单文件夹（按照 C# 顺序：在 DesktopIcons 之后，ShowEndTask 之前）
+        if isinstance(self.configuration.start_folder_settings, CustomStartFolderSettings):
+            self._set_start_folders(self.configuration.start_folder_settings.settings)
+        
+        # Show End Task（按照 C# 顺序：在 StartFolderSettings 之后，StickyKeys 之前）
         if self.configuration.show_end_task:
             self.context.default_user_script.append(
                 'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings" /v TaskbarEndTask /t REG_DWORD /d 1 /f;'
@@ -3658,6 +3747,25 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                 self.configuration.launch_to_this_pc = True
                 break
         
+        # taskbar_search (从 UserOnce.ps1 中解析 SearchboxTaskbarMode)
+        for cmd_text in all_script_texts:
+            cmd_lower = cmd_text.lower()
+            if 'searchboxtaskbarmode' in cmd_lower and 'set-itemproperty' in cmd_lower:
+                # 匹配 Set-ItemProperty ... SearchboxTaskbarMode ... -Value (\d+)
+                match = re.search(r'SearchboxTaskbarMode.*?-Value\s+(\d+)', cmd_text, re.IGNORECASE)
+                if match:
+                    value = int(match.group(1))
+                    if value == 0:
+                        self.configuration.taskbar_search = TaskbarSearchMode.Hide
+                    elif value == 1:
+                        self.configuration.taskbar_search = TaskbarSearchMode.Icon
+                    elif value == 2:
+                        self.configuration.taskbar_search = TaskbarSearchMode.Box
+                    elif value == 3:
+                        self.configuration.taskbar_search = TaskbarSearchMode.Label
+                    logger.debug(f"OptimizationsModifier.parse: Found TaskbarSearch = {self.configuration.taskbar_search}")
+                    break
+        
         # show_end_task
         for cmd_text in all_script_texts:
             if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings', 'TaskbarEndTask', '1'):
@@ -3843,59 +3951,67 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             except json.JSONDecodeError as e:
                 logger.warning(f"OptimizationsModifier.parse: Invalid JSON in SetStartPins.ps1: {start_pins_json[:100]}..., error: {e}")
         
-        # 8. 桌面图标解析
+        # 8. 桌面图标解析（从 UserOnce.ps1 中解析）
         desktop_icons_dict = {}
-        for cmd_text in all_script_texts:
-            cmd_lower = cmd_text.lower()
-            if 'hidedesktopicons' in cmd_lower and 'set-itemproperty' in cmd_lower:
-                # 查找图标GUID和值
-                icon_guids = {
-                    '20D04FE0-3AEA-1069-A2D8-08002B30309D': 'iconThisPC',
-                    '59031a47-3f72-44a7-89c5-5595fe6b30ee': 'iconUserFiles',
-                    'F02C1A0D-BE21-4350-88B0-7367FC96EF3C': 'iconNetwork',
-                    '5399E694-6CE5-4D6C-8FCE-1F8870FDC54F': 'iconControlPanel',
-                    '645FF040-5081-101B-9F08-00AA002F954E': 'iconRecycleBin',
-                    '374DE290-123F-4565-9164-39C4925E467B': 'iconDownloads',
-                    '3ADD1653-EB32-4CB0-BBD7-DFA0BB5C5CDD': 'iconMusic',
-                    'A0953C92-50DC-43BF-BE83-3742EED94C19': 'iconVideos',
-                    'A8CDFF1C-4878-43BE-B5FD-F8091C1C60D0': 'iconDocuments',
-                    'B4BFCC3A-DB2C-424C-B029-7FE99A87C641': 'iconDesktop',
-                    '24ad3ad4-a569-4530-98e1-ab02f9417aa8': 'iconPictures',
-                    'f86fa3ab-70d2-4fc7-9cd5-c559ae2e4d33': 'iconGallery',
-                    'd3162b92-9365-467a-956b-927d1adc84c3': 'iconHome'
-                }
-                for guid, field_name in icon_guids.items():
-                    if guid.lower() in cmd_lower:
-                        value_match = re.search(r'-Value\s+(\d+)', cmd_text, re.IGNORECASE)
-                        if value_match:
-                            icon_value = int(value_match.group(1))
-                            # 查找对应的DesktopIcon对象
-                            desktop_icon = self.generator.desktop_icons.get(field_name)
-                            if desktop_icon:
-                                desktop_icons_dict[desktop_icon] = icon_value == 0  # 0表示显示，1表示隐藏
+        # 查找 UserOnce.ps1 内容
+        useronce_content = None
+        for name, content in ext_files.items():
+            if 'useronce.ps1' in name.lower():
+                useronce_content = content
+                break
+        
+        if useronce_content:
+            logger.debug(f"OptimizationsModifier.parse: Found UserOnce.ps1, content length={len(useronce_content)}")
+            cmd_lower = useronce_content.lower()
+            if 'hidedesktopicons' in cmd_lower:
+                logger.debug("OptimizationsModifier.parse: Found HideDesktopIcons in UserOnce.ps1")
+                # 从 generator.desktop_icons 中获取所有 DesktopIcon 对象及其 GUID
+                # 遍历所有 DesktopIcon 对象，使用实际的 GUID 值进行匹配
+                for desktop_icon in self.generator.desktop_icons.values():
+                    if not desktop_icon.guid:
+                        continue
+                    # DesktopIcon.guid 可能包含大括号，需要处理
+                    guid_value = desktop_icon.guid
+                    # 如果 GUID 包含大括号，去掉它们用于匹配
+                    if guid_value.startswith('{') and guid_value.endswith('}'):
+                        guid_value = guid_value[1:-1]
+                    # 使用 DesktopIcon 的实际 GUID 值进行匹配（不区分大小写）
+                    # 匹配格式：-Name '{guid}' 或 -Name "{guid}"
+                    guid_pattern = rf"\{{\s*{re.escape(guid_value)}\s*\}}"
+                    pattern = rf"-Name\s+['\"]\s*{guid_pattern}\s*['\"].*?-Value\s+(\d+)"
+                    match = re.search(pattern, useronce_content, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        value_str = match.group(1)
+                        if value_str:
+                            icon_value = int(value_str)
+                            # 0表示显示，1表示隐藏
+                            desktop_icons_dict[desktop_icon] = icon_value == 0
+                            logger.debug(f"OptimizationsModifier.parse: Found {desktop_icon.id} = {icon_value == 0} (GUID: {desktop_icon.guid})")
         
         if desktop_icons_dict:
             self.configuration.desktop_icons = CustomDesktopIconSettings(settings=desktop_icons_dict)
         
-        # 8. 开始菜单文件夹解析
+        # 9. 开始菜单文件夹解析（从 UserOnce.ps1 中解析）
         start_folders_dict = {}
-        for cmd_text in all_script_texts:
-            cmd_lower = cmd_text.lower()
+        # 使用之前找到的 useronce_content
+        if useronce_content:
+            cmd_lower = useronce_content.lower()
             if 'visibleplaces' in cmd_lower and 'frombase64string' in cmd_lower:
                 # 提取Base64字符串
-                match = re.search(r"FromBase64String\(['\"]?([A-Za-z0-9+/=]+)['\"]?\)", cmd_text, re.IGNORECASE)
+                match = re.search(r"FromBase64String\(['\"]?([A-Za-z0-9+/=]+)['\"]?\)", useronce_content, re.IGNORECASE)
                 if match:
                     import base64
                     try:
                         base64_str = match.group(1)
                         decoded_bytes = base64.b64decode(base64_str)
                         # 解析bytes，查找匹配的StartFolder
-                        # 这里简化处理，需要根据StartFolder的bytes属性进行匹配
+                        # 这里简化处理，需要根据StartFolder的data属性进行匹配
                         for folder in self.generator.start_folders.values():
-                            if folder.bytes and bytes(folder.bytes) in decoded_bytes:
+                            if folder.data and bytes(folder.data) in decoded_bytes:
                                 start_folders_dict[folder] = True
-                    except Exception:
-                        pass
+                                logger.debug(f"OptimizationsModifier.parse: Found StartFolder {folder.id}")
+                    except Exception as e:
+                        logger.warning(f"OptimizationsModifier.parse: Failed to decode VisiblePlaces base64: {e}")
         
         if start_folders_dict:
             self.configuration.start_folder_settings = CustomStartFolderSettings(settings=start_folders_dict)
@@ -8032,6 +8148,10 @@ class UnattendGenerator:
             return self.geo_locations.get(key)
         elif data_type == Component:
             return self.components.get(key)
+        elif data_type == StartFolder:
+            return self.start_folders.get(key)
+        elif data_type == DesktopIcon:
+            return self.desktop_icons.get(key)
         else:
             raise ValueError(f"Unsupported data type: {data_type}")
     
@@ -10082,11 +10202,31 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             logger.warning(f"desktopIcons is not a dict, got {type(di)}, using default")
             config.desktop_icons = DefaultDesktopIconSettings()
         else:
+            # 提取 deleteEdgeDesktopIcon（如果存在）
+            if 'deleteEdgeDesktopIcon' in di:
+                config.delete_edge_desktop_icon = di.get('deleteEdgeDesktopIcon', False)
+            
             if di.get('mode') == 'custom':
                 icons_dict = {}
-                icons_data = di.get('icons', {})
-                if isinstance(icons_data, dict):
-                    for icon_id, visible in icons_data.items():
+                # 前端使用 iconControlPanel, iconDesktop 等字段名
+                icon_field_map = {
+                    'iconControlPanel': 'ControlPanel',
+                    'iconDesktop': 'Desktop',
+                    'iconDocuments': 'Documents',
+                    'iconDownloads': 'Downloads',
+                    'iconGallery': 'Gallery',
+                    'iconHome': 'Home',
+                    'iconMusic': 'Music',
+                    'iconNetwork': 'Network',
+                    'iconPictures': 'Pictures',
+                    'iconRecycleBin': 'RecycleBin',
+                    'iconThisPC': 'ThisPC',
+                    'iconUserFiles': 'UserFiles',
+                    'iconVideos': 'Videos'
+                }
+                for field_name, icon_id in icon_field_map.items():
+                    if field_name in di:
+                        visible = di.get(field_name, False)
                         if generator:
                             desktop_icon = generator.lookup(DesktopIcon, icon_id)
                             if desktop_icon:
@@ -11163,6 +11303,49 @@ def configuration_to_config_dict(config: Configuration) -> Dict[str, Any]:
         }
     else:
         config_dict['visualEffects'] = {'mode': 'default'}
+    
+    # 转换 Desktop Icons 设置
+    desktop_icons_dict: Dict[str, Any] = {
+        'mode': 'default',
+        'deleteEdgeDesktopIcon': config.delete_edge_desktop_icon
+    }
+    if isinstance(config.desktop_icons, CustomDesktopIconSettings):
+        desktop_icons_dict['mode'] = 'custom'
+        # 将 DesktopIcon 对象映射到前端期望的字段名
+        icon_field_map = {
+            'ControlPanel': 'iconControlPanel',
+            'Desktop': 'iconDesktop',
+            'Documents': 'iconDocuments',
+            'Downloads': 'iconDownloads',
+            'Gallery': 'iconGallery',
+            'Home': 'iconHome',
+            'Music': 'iconMusic',
+            'Network': 'iconNetwork',
+            'Pictures': 'iconPictures',
+            'RecycleBin': 'iconRecycleBin',
+            'ThisPC': 'iconThisPC',
+            'UserFiles': 'iconUserFiles',
+            'Videos': 'iconVideos'
+        }
+        for icon, visible in config.desktop_icons.settings.items():
+            field_name = icon_field_map.get(icon.id)
+            if field_name:
+                desktop_icons_dict[field_name] = visible
+    config_dict['desktopIcons'] = desktop_icons_dict
+    
+    # 转换 Start Folders 设置
+    if isinstance(config.start_folder_settings, DefaultStartFolderSettings):
+        config_dict['startFolders'] = {'mode': 'default'}
+    elif isinstance(config.start_folder_settings, CustomStartFolderSettings):
+        folders_dict = {}
+        for folder, enabled in config.start_folder_settings.settings.items():
+            folders_dict[folder.id] = enabled
+        config_dict['startFolders'] = {
+            'mode': 'custom',
+            'folders': folders_dict
+        }
+    else:
+        config_dict['startFolders'] = {'mode': 'default'}
     
     # 转换 Extensions
     if config.extensions:
