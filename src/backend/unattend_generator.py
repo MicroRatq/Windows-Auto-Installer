@@ -2584,16 +2584,41 @@ class BypassModifier(Modifier):
         if not self.is_parse_mode:
             return
         ns_uri = get_namespace_map()['u']
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
         bypass_requirements = False
         bypass_network = False
+        
+        # 1. 检查 RunSynchronousCommand
         for cmd in self.root.findall(f".//{{{ns_uri}}}RunSynchronousCommand"):
             path_elem = cmd.find(f"{{{ns_uri}}}Path")
             if path_elem is not None and path_elem.text:
                 cmd_text = path_elem.text
                 if 'allowsupgradeswithunsupportedtpmorcpu' in cmd_text.lower() or 'mosetup' in cmd_text.lower():
                     bypass_requirements = True
-                if 'BypassNetworkCheck' in cmd_text:
+                if 'bypassnro' in cmd_text.lower() or 'BypassNetworkCheck' in cmd_text:
                     bypass_network = True
+        
+        # 2. 检查 Specialize.ps1 内容（从 Extensions 中提取）
+        extensions_elem = None
+        for elem in self.root.iter():
+            if elem.tag.endswith('Extensions'):
+                extensions_elem = elem
+                break
+        
+        if extensions_elem is not None:
+            for file_elem in extensions_elem.iter():
+                if file_elem.tag.endswith('File'):
+                    path_attr = file_elem.get('path', '')
+                    if path_attr and 'specialize.ps1' in path_attr.lower():
+                        content = file_elem.text
+                        if content:
+                            content_lower = content.lower()
+                            if 'allowsupgradeswithunsupportedtpmorcpu' in content_lower or 'mosetup' in content_lower:
+                                bypass_requirements = True
+                            if 'bypassnro' in content_lower:
+                                bypass_network = True
+                        break
+        
         self.configuration.bypass_requirements_check = bypass_requirements
         self.configuration.bypass_network_check = bypass_network
 
@@ -2692,11 +2717,9 @@ class OptimizationsModifier(Modifier):
         # 添加 XML 文件
         path = self.add_xml_file(xml, "TaskbarLayoutModification.xml")
         
-        # Specialize 脚本
+        # Specialize 脚本（将两个命令合并到同一个脚本块中，匹配 C# 格式）
         self.context.specialize_script.append(
-            f'reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Windows\\CloudContent" /v "DisableCloudOptimizedContent" /t REG_DWORD /d 1 /f;'
-        )
-        self.context.specialize_script.append(
+            f'reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Windows\\CloudContent" /v "DisableCloudOptimizedContent" /t REG_DWORD /d 1 /f;\n'
             f'[System.Diagnostics.EventLog]::CreateEventSource( \'{event_source}\', \'{log_name}\' );'
         )
         
@@ -2744,11 +2767,11 @@ class OptimizationsModifier(Modifier):
         sb = []
         for effect, value in effects_dict.items():
             sb.append(
-                f'Set-ItemProperty -LiteralPath "Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects\\{effect.value}" -Name "DefaultValue" -Value {1 if value else 0} -Type "DWord" -Force;'
+                f'Set-ItemProperty -LiteralPath "Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects\\{effect.value}" -Name \'DefaultValue\' -Value {1 if value else 0} -Type \'DWord\' -Force;'
             )
         self.context.specialize_script.append('\n'.join(sb))
         self.context.user_once_script.append(
-            f'Set-ItemProperty -LiteralPath "Registry::HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type "DWord" -Value {setting} -Force;'
+            f'Set-ItemProperty -LiteralPath \'Registry::HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects\' -Name \'VisualFXSetting\' -Type \'DWord\' -Value {setting} -Force;'
         )
     
     def _set_desktop_icons(self, icons_dict: Dict[DesktopIcon, bool]):
@@ -2923,10 +2946,8 @@ reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\App
         
         # Enable Remote Desktop
         if self.configuration.enable_remote_desktop:
-            self.context.specialize_script.append("""
-netsh.exe advfirewall firewall set rule group="@FirewallAPI.dll,-28752" new enable=Yes;
-reg.exe add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f;
-""")
+            self.context.specialize_script.append("""netsh.exe advfirewall firewall set rule group="@FirewallAPI.dll,-28752" new enable=Yes;
+reg.exe add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f;""")
         
         # Harden System Drive ACL
         if self.configuration.harden_system_drive_acl:
@@ -3160,18 +3181,43 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             # 这个设置已经在 TaskbarSearch 处理中实现
             pass
         
-        # Disable Pointer Precision (在 InitialKeyboardIndicators 之后，按照 C# 顺序)
+        # 处理开始菜单固定项（模块 10，按照 C# 顺序：在 Lock Keys 之后，DeleteWindowsOld 之前）
+        if isinstance(self.configuration.start_pins_settings, EmptyStartPinsSettings):
+            self._set_start_pins('{"pinnedList":[]}')
+        elif isinstance(self.configuration.start_pins_settings, CustomStartPinsSettings):
+            self._set_start_pins(self.configuration.start_pins_settings.json)
+        
+        # Delete Windows Old（按照 C# 顺序：在 StartPins 之后，DisablePointerPrecision 之前）
+        if self.configuration.delete_windows_old:
+            self.context.first_logon_script.append('cmd.exe /c "rmdir C:\\Windows.old";')
+        
+        # Disable Pointer Precision (在 DeleteWindowsOld 之后，按照 C# 顺序)
         if self.configuration.disable_pointer_precision:
             script_content = self._load_resource_file("DisablePointerPrecision.ps1")
             self.context.default_user_script.append(script_content.rstrip('\n'))
         
-        # Show End Task
+        # 处理视觉效果（按照 C# 顺序：在 DisablePointerPrecision 之后，DesktopIcons 之前）
+        def make_effects_dict(value: bool) -> Dict[Effect, bool]:
+            """创建所有效果的字典（对应 C# 的 MakeEffectsDictionary）"""
+            return {effect: value for effect in Effect}
+        
+        if isinstance(self.configuration.effects, DefaultEffects):
+            # 默认效果，不需要操作
+            pass
+        elif isinstance(self.configuration.effects, BestAppearanceEffects):
+            self._set_effects(make_effects_dict(True), 1)
+        elif isinstance(self.configuration.effects, BestPerformanceEffects):
+            self._set_effects(make_effects_dict(False), 2)
+        elif isinstance(self.configuration.effects, CustomEffects):
+            self._set_effects(self.configuration.effects.settings, 3)
+        
+        # Show End Task（按照 C# 顺序：在 VisualEffects 之后，StickyKeys 之前）
         if self.configuration.show_end_task:
             self.context.default_user_script.append(
                 'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings" /v TaskbarEndTask /t REG_DWORD /d 1 /f;'
             )
         
-        # 处理 Sticky Keys（模块 9，在 ShowEndTask 之后，按照 C# 顺序）
+        # 处理 Sticky Keys（按照 C# 顺序：在 ShowEndTask 之后，DisableCoreIsolation 之前）
         if isinstance(self.configuration.sticky_keys_settings, DefaultStickyKeysSettings):
             # 默认设置，不需要操作
             pass
@@ -3180,20 +3226,12 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         elif isinstance(self.configuration.sticky_keys_settings, CustomStickyKeysSettings):
             self._set_sticky_keys(self.configuration.sticky_keys_settings.flags)
         
-        # Disable Core Isolation
+        # Disable Core Isolation（按照 C# 顺序：在 StickyKeys 之后，是 OptimizationsModifier 的最后一个命令）
         if self.configuration.disable_core_isolation:
-            # 这个设置需要特定的注册表项
-            pass
-        
-        # Delete Windows Old
-        if self.configuration.delete_windows_old:
-            self.context.first_logon_script.append('cmd.exe /c "rmdir C:\\Windows.old";')
-        
-        # 处理开始菜单固定项（模块 10）
-        if isinstance(self.configuration.start_pins_settings, EmptyStartPinsSettings):
-            self._set_start_pins('{"pinnedList":[]}')
-        elif isinstance(self.configuration.start_pins_settings, CustomStartPinsSettings):
-            self._set_start_pins(self.configuration.start_pins_settings.json)
+            self.context.specialize_script.append(r"""  reg.exe add "HKLM\System\CurrentControlSet\Control\DeviceGuard" /v "EnableVirtualizationBasedSecurity" /t REG_DWORD /d 0 /f;
+  reg.exe add "HKLM\System\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "Enabled" /t REG_DWORD /d 0 /f;
+  reg.exe add "HKLM\System\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "EnabledBootId" /t REG_DWORD /d 0 /f;
+  reg.exe add "HKLM\System\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v "WasEnabledBy" /t REG_DWORD /d 0 /f;""")
         
         # 其他优化设置将在后续模块中实现
     
@@ -3298,13 +3336,39 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                     lock_keys_initial = int(match.group(1) or match.group(2))
             # 解析 Scancode Map（忽略行为）
             if 'scancode map' in cmd_lower:
-                # 检查是否包含 Caps Lock (0x3A), Num Lock (0x45), Scroll Lock (0x46)
-                if '0x3a' in cmd_lower or '0x3A' in cmd_text:
-                    lock_keys_caps_ignore = True
-                if '0x45' in cmd_text:
-                    lock_keys_num_ignore = True
-                if '0x46' in cmd_text:
-                    lock_keys_scroll_ignore = True
+                # 提取 base64 字符串并解码
+                import base64
+                base64_match = re.search(r"FromBase64String\(['\"]([A-Za-z0-9+/=]+)['\"]\)", cmd_text, re.IGNORECASE)
+                if base64_match:
+                    try:
+                        base64_str = base64_match.group(1)
+                        decoded_data = base64.b64decode(base64_str)
+                        # 检查解码后的二进制数据中是否包含对应的 scancode 值
+                        # Caps Lock: 0x3A (58), Num Lock: 0x45 (69), Scroll Lock: 0x46 (70)
+                        # Scancode Map 格式：每个映射是 4 字节 (0, 0, scancode, 0)
+                        decoded_bytes = bytes(decoded_data)
+                        if b'\x3A' in decoded_bytes or 58 in decoded_bytes:
+                            lock_keys_caps_ignore = True
+                        if b'\x45' in decoded_bytes or 69 in decoded_bytes:
+                            lock_keys_num_ignore = True
+                        if b'\x46' in decoded_bytes or 70 in decoded_bytes:
+                            lock_keys_scroll_ignore = True
+                    except Exception:
+                        # 如果解码失败，回退到字符串匹配
+                        if '0x3a' in cmd_lower or '0x3A' in cmd_text:
+                            lock_keys_caps_ignore = True
+                        if '0x45' in cmd_text:
+                            lock_keys_num_ignore = True
+                        if '0x46' in cmd_text:
+                            lock_keys_scroll_ignore = True
+                else:
+                    # 如果没有 base64，尝试字符串匹配
+                    if '0x3a' in cmd_lower or '0x3A' in cmd_text:
+                        lock_keys_caps_ignore = True
+                    if '0x45' in cmd_text:
+                        lock_keys_num_ignore = True
+                    if '0x46' in cmd_text:
+                        lock_keys_scroll_ignore = True
         
         if lock_keys_initial is not None or lock_keys_caps_ignore or lock_keys_num_ignore or lock_keys_scroll_ignore:
             caps_initial = LockKeyInitial.On if (lock_keys_initial and (lock_keys_initial & 1)) else LockKeyInitial.Off
@@ -3451,6 +3515,19 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             if self.generator._check_registry_command(cmd_text, r'HKLM\SYSTEM\CurrentControlSet\Control\FileSystem', 'LongPathsEnabled', '1'):
                 self.configuration.enable_long_paths = True
                 break
+        
+        # disable_core_isolation (DeviceGuard)
+        for cmd_text in all_script_texts:
+            if not cmd_text:
+                continue
+            cmd_lower = cmd_text.lower()
+            # 检查 DeviceGuard 相关注册表命令
+            if 'deviceguard' in cmd_lower and 'enablevirtualizationbasedsecurity' in cmd_lower:
+                # 检查是否设置为 0（禁用）
+                if re.search(r'/d\s+0\s+/f', cmd_text, re.IGNORECASE) or '/d 0' in cmd_text or re.search(r'/d\s+0', cmd_text):
+                    self.configuration.disable_core_isolation = True
+                    logger.debug("OptimizationsModifier.parse: Found disable_core_isolation via DeviceGuard")
+                    break
         
         # enable_remote_desktop
         for cmd_text in all_script_texts:
@@ -3651,21 +3728,39 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         # 5. 视觉效果解析
         visual_fx_setting = None
         visual_effects_dict = {}
+        
+        # 首先查找 VisualFXSetting（可能在 UserOnce.ps1 或其他脚本中）
         for cmd_text in all_script_texts:
             cmd_lower = cmd_text.lower()
-            # 查找 VisualFXSetting
             if 'visualfxsetting' in cmd_lower:
                 match = re.search(r'VisualFXSetting[\'"]?\s*[-=]\s*[\'"]?(\d+)', cmd_text, re.IGNORECASE)
                 if match:
                     visual_fx_setting = int(match.group(1))
-            # 如果为custom模式，解析各个效果的DefaultValue
-            if visual_fx_setting == 3 and 'visualeffects' in cmd_lower:
+                    logger.debug(f"OptimizationsModifier.parse: Found VisualFXSetting = {visual_fx_setting}")
+                    break
+        
+        # 然后查找 VisualEffects 命令（在 Specialize.ps1 中）
+        # 如果找到 VisualEffects\EffectName\DefaultValue 命令，说明是 custom 模式
+        for cmd_text in all_script_texts:
+            cmd_lower = cmd_text.lower()
+            if 'visualeffects' in cmd_lower and 'defaultvalue' in cmd_lower:
+                # 如果还没有找到 VisualFXSetting，但找到了 VisualEffects 命令，推断为 custom 模式 (3)
+                if visual_fx_setting is None:
+                    visual_fx_setting = 3
+                    logger.debug("OptimizationsModifier.parse: Found VisualEffects commands, inferred VisualFXSetting = 3")
+                
+                # 解析各个效果的 DefaultValue
                 for effect in Effect:
                     effect_name = effect.value
-                    if effect_name.lower() in cmd_lower and 'defaultvalue' in cmd_lower:
-                        match = re.search(rf'{re.escape(effect_name)}[^/]*DefaultValue[^/]*Value\s+(\d+)', cmd_text, re.IGNORECASE)
+                    if effect_name.lower() in cmd_lower:
+                        # 匹配 Set-ItemProperty ... VisualEffects\{EffectName} ... DefaultValue ... Value (\d+)
+                        # 使用更宽松的匹配，允许路径中包含反斜杠、斜杠或其他字符
+                        # 匹配模式：EffectName ... DefaultValue ... -Value (\d+)
+                        match = re.search(rf'{re.escape(effect_name)}.*?DefaultValue.*?-Value\s+(\d+)', cmd_text, re.IGNORECASE | re.DOTALL)
                         if match:
-                            visual_effects_dict[effect] = int(match.group(1)) == 1
+                            value = int(match.group(1))
+                            visual_effects_dict[effect] = value == 1
+                            logger.debug(f"OptimizationsModifier.parse: Found {effect_name} = {value == 1}")
         
         if visual_fx_setting is not None:
             if visual_fx_setting == 0:
@@ -3674,8 +3769,14 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                 self.configuration.effects = BestAppearanceEffects()
             elif visual_fx_setting == 2:
                 self.configuration.effects = BestPerformanceEffects()
-            elif visual_fx_setting == 3 and visual_effects_dict:
-                self.configuration.effects = CustomEffects(settings=visual_effects_dict)
+            elif visual_fx_setting == 3:
+                if visual_effects_dict:
+                    self.configuration.effects = CustomEffects(settings=visual_effects_dict)
+                else:
+                    # 如果找到了 VisualFXSetting=3 但没有找到具体效果，使用默认的 CustomEffects
+                    # 这种情况不应该发生，但为了安全起见，设置为 DefaultEffects
+                    logger.warning("OptimizationsModifier.parse: Found VisualFXSetting=3 but no effects, using DefaultEffects")
+                    self.configuration.effects = DefaultEffects()
         
         # 6. 任务栏图标解析
         taskbar_xml_path = None
@@ -6650,15 +6751,13 @@ $htmlAccentColor = '{color_settings.accent_color}';
         if isinstance(lock_screen_settings, ScriptLockScreenSettings):
             image_file = r"C:\Windows\Setup\Scripts\LockScreenImage"
             getter_file = self.add_text_file("GetLockScreenImage.ps1", lock_screen_settings.script)
-            self.context.specialize_script.append(f"""
-try {{
-  $bytes = Get-Content -LiteralPath '{getter_file}' -Raw | Invoke-Expression;
+            self.context.specialize_script.append(f"""try {{
+  $bytes = & '{getter_file}';
   [System.IO.File]::WriteAllBytes( '{image_file}', $bytes );
   reg.exe add "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\PersonalizationCSP" /v LockScreenImagePath /t REG_SZ /d "{image_file}" /f;
 }} catch {{
   $_;
-}}
-""")
+}}""")
 
     def parse(self):
         """解析个性化设置（壁纸、锁屏、颜色）"""
@@ -7984,13 +8083,13 @@ class UnattendGenerator:
         modifiers.append(BloatwareModifier(context))  # 处理预装软件移除（模块 11）
         modifiers.append(ExpressSettingsModifier(context))  # 处理快速设置（模块 11）
         modifiers.append(WifiModifier(context))  # 处理 Wi-Fi 设置（模块 8）
+        modifiers.append(EmptyElementsModifier(context))  # 移除空元素（按照 C# 顺序，在 LockoutModifier 之前）
         modifiers.append(LockoutModifier(context))  # 处理账户锁定
         modifiers.append(PasswordExpirationModifier(context))  # 处理密码过期
-        if config.time_zone_settings:
-            modifiers.append(TimeZoneModifier(context))
-        modifiers.append(EmptyElementsModifier(context))  # 移除空元素（在 TimeZoneModifier 之后执行）
         modifiers.append(OptimizationsModifier(context))  # 处理优化设置（模块 9、10）
         modifiers.append(PersonalizationModifier(context))  # 处理个性化设置（模块 7）
+        if config.time_zone_settings:
+            modifiers.append(TimeZoneModifier(context))  # 按照 C# 顺序，在 PersonalizationModifier 之后
         modifiers.append(WdacModifier(context))  # 处理 WDAC 设置（模块 11）
         modifiers.append(ScriptModifier(context))  # 处理自定义脚本（模块 12）
         modifiers.append(ExtensionsModifier(context))  # 处理 Extensions（从 config.extensions 中读取的文件）
@@ -11046,6 +11145,24 @@ def configuration_to_config_dict(config: Configuration) -> Dict[str, Any]:
         config_dict['xmlMarkup'] = {
             'components': []
         }
+    
+    # 转换 Visual Effects 设置
+    if isinstance(config.effects, DefaultEffects):
+        config_dict['visualEffects'] = {'mode': 'default'}
+    elif isinstance(config.effects, BestAppearanceEffects):
+        config_dict['visualEffects'] = {'mode': 'bestAppearance'}
+    elif isinstance(config.effects, BestPerformanceEffects):
+        config_dict['visualEffects'] = {'mode': 'bestPerformance'}
+    elif isinstance(config.effects, CustomEffects):
+        settings_dict = {}
+        for effect, enabled in config.effects.settings.items():
+            settings_dict[effect.value] = enabled
+        config_dict['visualEffects'] = {
+            'mode': 'custom',
+            'settings': settings_dict
+        }
+    else:
+        config_dict['visualEffects'] = {'mode': 'default'}
     
     # 转换 Extensions
     if config.extensions:
