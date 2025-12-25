@@ -1406,7 +1406,7 @@ def serialize_xml(tree: ET.ElementTree) -> bytes:
     xml_str = ET.tostring(root, encoding='unicode', method='xml')
     dom = minidom.parseString(xml_str)
     
-    # 格式化（使用制表符缩进，Windows 换行）
+    # # 格式化（使用制表符缩进，Windows 换行）
     pretty_xml = dom.toprettyxml(indent='\t', encoding=None)
     
     # 移除 minidom 自动添加的 XML 声明（我们手动添加）
@@ -1581,6 +1581,19 @@ class PowerShellSequence:
         """日志文件路径（子类需要实现）"""
         raise NotImplementedError("Subclass must implement _log_file()")
     
+    def _load_resource_file(self, name: str) -> str:
+        """从资源文件目录加载文件内容"""
+        import os
+        resource_dir = os.path.join(os.path.dirname(__file__), 'resource')
+        resource_path = os.path.join(resource_dir, name)
+        
+        if not os.path.exists(resource_path):
+            raise FileNotFoundError(f"Resource file not found: {resource_path}")
+        
+        # 使用 utf-8-sig 编码自动移除 BOM 字符
+        with open(resource_path, 'r', encoding='utf-8-sig') as f:
+            return f.read()
+    
     def get_script(self) -> str:
         """获取完整脚本"""
         writer = []
@@ -1599,15 +1612,7 @@ class PowerShellSequence:
         
         if self._needs_explorer_restart:
             # RestartExplorer.ps1 脚本内容
-            restart_script = """
-$ErrorActionPreference = 'Stop';
-$process = Get-Process -Name 'explorer' -ErrorAction 'SilentlyContinue';
-if ($process) {
-    Stop-Process -Name 'explorer' -Force;
-    Start-Sleep -Seconds 2;
-}
-Start-Process -FilePath 'explorer.exe';
-"""
+            restart_script = self._load_resource_file("RestartExplorer.ps1")
             write_script_block(restart_script.strip())
         
         writer.append(");")
@@ -1616,28 +1621,13 @@ Start-Process -FilePath 'explorer.exe';
         activity = self._activity()
         log_file = self._log_file()
         
-        writer.append(f'''      & {{
-        [float] $complete = 0;
-        [float] $increment = 100 / $scripts.Count;
-        foreach( $script in $scripts ) {{
-          Write-Progress -Activity '{activity} Do not close this window.' -PercentComplete $complete;
-          '*** Will now execute command «{{0}}».' -f $(
-            $str = $script.ToString().Trim() -replace '\\s+', ' ';
-            $max = 100;
-            if( $str.Length -le $max ) {{
-              $str;
-            }} else {{
-              $str.Substring( 0, $max - 1 ) + '…';
-            }}
-          );
-          $start = [datetime]::Now;
-          & $script;
-          '*** Finished executing command after {{0:0}} ms.' -f [datetime]::Now.Subtract( $start ).TotalMilliseconds;
-          "`r`n" * 3;
-          $complete += $increment;
-        }}
-      }} *>&1 | Out-String -Width 1KB -Stream >> "{log_file}";
-      ''')
+        # Load script execution framework from resource file
+        framework_template = self._load_resource_file("ScriptExecutionFramework.ps1")
+        framework_script = framework_template.format(
+            activity=activity,
+            log_file=log_file
+        )
+        writer.append(framework_script)
         
         return '\n'.join(writer)
 
@@ -2988,10 +2978,8 @@ reg.exe add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDeny
         
         # Prevent Automatic Reboot
         if self.configuration.prevent_automatic_reboot:
-            self.context.specialize_script.append("""
-reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU" /v AUOptions /t REG_DWORD /d 4 /f;
-reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU" /v NoAutoRebootWithLoggedOnUsers /t REG_DWORD /d 1 /f;
-""")
+            script_content = self._load_resource_file("PreventAutomaticReboot.ps1")
+            self.context.specialize_script.append(script_content)
             self.add_text_file("MoveActiveHours.vbs", "")
             xml_file = self.add_xml_file("MoveActiveHours.xml", "")
             self.context.specialize_script.append(
@@ -3127,9 +3115,9 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             if settings.scroll_lock.initial == LockKeyInitial.On:
                 indicators |= 4
             
-            self.context.default_user_script.append(f"""foreach( $root in 'Registry::HKU\\.DEFAULT', 'Registry::HKU\\DefaultUser' ) {{
-  Set-ItemProperty -LiteralPath "$root\\Control Panel\\Keyboard" -Name 'InitialKeyboardIndicators' -Type 'String' -Value {indicators} -Force;
-}}""".rstrip('\n'))
+            template = self._load_resource_file("SetInitialKeyboardIndicators.ps1")
+            script_content = template.format(indicators=indicators)
+            self.context.default_user_script.append(script_content.rstrip('\n'))
             
             # 处理忽略行为
             ignore_caps_lock = settings.caps_lock.behavior == LockKeyBehavior.Ignore
@@ -3174,16 +3162,8 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         
         # Disable Pointer Precision (在 InitialKeyboardIndicators 之后，按照 C# 顺序)
         if self.configuration.disable_pointer_precision:
-            self.context.default_user_script.append("""$params = @{
-  LiteralPath = 'Registry::HKU\\DefaultUser\\Control Panel\\Mouse';
-  Type = 'String';
-  Value = 0;
-  Force = $true;
-};
-Set-ItemProperty @params -Name 'MouseSpeed';
-Set-ItemProperty @params -Name 'MouseThreshold1';
-Set-ItemProperty @params -Name 'MouseThreshold2';
-""".rstrip('\n'))
+            script_content = self._load_resource_file("DisablePointerPrecision.ps1")
+            self.context.default_user_script.append(script_content.rstrip('\n'))
         
         # Show End Task
         if self.configuration.show_end_task:
@@ -6372,42 +6352,30 @@ class WdacModifier(Modifier):
             template_file = r"C:\Windows\schemas\CodeIntegrity\ExamplePolicies\DefaultWindows_Enforced.xml"
             active_folder = r"C:\Windows\System32\CodeIntegrity\CiPolicies\Active"
             
-            ps1_content = f"""Set-StrictMode -Version 'Latest';
-$ErrorActionPreference = 'Stop';
-$(
-  try {{
-    $guid = '{guid}';
-    $xml = "{active_folder}\\${{guid}}.xml";
-    $binary = "{active_folder}\\${{guid}}.cip";
-    Copy-Item -LiteralPath '{template_file}' -Destination $xml;
-"""
+            # Load template from resource file
+            template = self._load_resource_file("ConfigureWdac.ps1")
             
-            # SetRuleOption 调用
-            ps1_content += "    Set-RuleOption -FilePath $xml -Option 0;\n"
-            ps1_content += "    Set-RuleOption -FilePath $xml -Option 6;\n"
-            ps1_content += "    Set-RuleOption -FilePath $xml -Option 9;\n"
-            ps1_content += "    Set-RuleOption -FilePath $xml -Option 16;\n"
-            ps1_content += "    Set-RuleOption -FilePath $xml -Option 18;\n"
-            ps1_content += "    Set-RuleOption -FilePath $xml -Option 5 -Delete;\n"
+            # Build Set-RuleOption calls
+            set_rule_options = []
+            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 0;")
+            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 6;")
+            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 9;")
+            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 16;")
+            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 18;")
+            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 5 -Delete;")
             
             if wdac_settings.script_mode == WdacScriptModes.Unrestricted:
-                ps1_content += "    Set-RuleOption -FilePath $xml -Option 11;\n"
+                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 11;")
             
             if wdac_settings.audit_mode == WdacAuditModes.Auditing:
-                ps1_content += "    Set-RuleOption -FilePath $xml -Option 3;\n"
-                ps1_content += "    Set-RuleOption -FilePath $xml -Option 10;\n"
+                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 3;")
+                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 10;")
             elif wdac_settings.audit_mode == WdacAuditModes.AuditingOnBootFailure:
-                ps1_content += "    Set-RuleOption -FilePath $xml -Option 10;\n"
-            # Enforcement 不需要额外选项
+                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 10;")
             
-            ps1_content += r"""    Merge-CIPolicy -PolicyPaths $xml -OutputFilePath $xml -Rules $(
-      @(
-        New-CIPolicyRule -FilePathRule 'C:\Windows\*';
-        New-CIPolicyRule -FilePathRule 'C:\Program Files\*';
-        New-CIPolicyRule -FilePathRule 'C:\Program Files (x86)\*';
-"""
-            # 添加已知可写文件夹的Deny规则（对应C#的known-writeable-folders.txt）
-            # 这些是常见的可写文件夹，需要被WDAC策略拒绝
+            set_rule_options_str = '\n'.join(set_rule_options)
+            
+            # Build Deny rules
             known_writeable_folders = [
                 r"C:\Users\*",
                 r"C:\ProgramData\*",
@@ -6416,28 +6384,19 @@ $(
                 r"C:\Windows\Temp\*",
                 r"C:\Windows\Tmp\*",
             ]
+            deny_rules = []
             for folder in known_writeable_folders:
-                ps1_content += f"        New-CIPolicyRule -FilePathRule '{folder}' -Deny;\n"
+                deny_rules.append(f"        New-CIPolicyRule -FilePathRule '{folder}' -Deny;")
+            deny_rules_str = '\n'.join(deny_rules)
             
-            ps1_content += """      ) | ForEach-Object -Process {
-        $_;
-      };
-    );
-    $doc = [xml]::new();
-    $doc.Load( $xml );
-    $nsmgr = [System.Xml.XmlNamespaceManager]::new( $doc.NameTable );
-    $nsmgr.AddNamespace( 'pol', 'urn:schemas-microsoft-com:sipolicy' );
-    $doc.SelectSingleNode( '/pol:SiPolicy/pol:PolicyID', $nsmgr ).InnerText = $guid;
-    $doc.SelectSingleNode( '/pol:SiPolicy/pol:BasePolicyID', $nsmgr ).InnerText = $guid;
-    $node = $doc.SelectSingleNode( '//pol:SigningScenario[@Value="12"]/pol:ProductSigners/pol:AllowedSigners', $nsmgr );
-    $node.ParentNode.RemoveChild( $node );
-    $doc.Save( $xml );
-    ConvertFrom-CIPolicy -XmlFilePath $xml -BinaryFilePath $binary;
-  }} catch {{
-    $_;
-  }}
-) *>&1 | Out-String -Width 1KB -Stream >> 'C:\\Windows\\Setup\\Scripts\\Wdac.log';
-"""
+            # Format template with placeholders
+            ps1_content = template.format(
+                guid=guid,
+                template_file=template_file,
+                active_folder=active_folder,
+                set_rule_options=set_rule_options_str,
+                deny_rules=deny_rules_str
+            )
             ps1_file = self.add_text_file("Wdac.ps1", ps1_content)
             self.context.specialize_script.invoke_file(ps1_file)
         else:
@@ -6662,137 +6621,27 @@ $htmlAccentColor = '{color_settings.accent_color}';
         if isinstance(wallpaper_settings, ScriptWallpaperSettings):
             image_file = r"C:\Windows\Setup\Scripts\Wallpaper"
             getter_file = self.add_text_file("GetWallpaper.ps1", wallpaper_settings.script)
-            self.context.specialize_script.append(f"""
-try {{
-  $bytes = Get-Content -LiteralPath '{getter_file}' -Raw | Invoke-Expression;
-  [System.IO.File]::WriteAllBytes( '{image_file}', $bytes );
-}} catch {{
-  $_;
-}}
-""")
-            # 生成完整的 SetWallpaper.ps1 脚本（包含函数定义和调用）
-            ps1_content = """Add-Type -TypeDefinition '
-	using System.Drawing;
-	using System.Runtime.InteropServices;
-	
-	public static class WallpaperSetter {
-		[DllImport("user32.dll")]
-		private static extern bool SetSysColors(
-			int cElements, 
-			int[] lpaElements,
-			int[] lpaRgbValues
-		);
-
-		[DllImport("user32.dll")]
-		private static extern bool SystemParametersInfo(
-			uint uiAction,
-			uint uiParam,
-			string pvParam,
-			uint fWinIni
-		);
-
-		public static void SetDesktopBackground(Color color) {
-			SystemParametersInfo(20, 0, "", 0);
-			SetSysColors(1, new int[] { 1 }, new int[] { ColorTranslator.ToWin32(color) });
-		}
-
-		public static void SetDesktopImage(string file) {
-			SystemParametersInfo(20, 0, file, 0);
-		}
-	}
-' -ReferencedAssemblies 'System.Drawing';
-
-function Set-WallpaperColor {
-	param(
-		[string]
-		$HtmlColor
-	);
-
-	$color = [System.Drawing.ColorTranslator]::FromHtml( $HtmlColor );
-	[WallpaperSetter]::SetDesktopBackground( $color );
-	Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 1 -Force;
-	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value '' -Force;
-	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Colors' -Name 'Background' -Type 'String' -Value "$($color.R) $($color.G) $($color.B)" -Force;
-}
-
-function Set-WallpaperImage {
-	param(
-		[string]
-		$LiteralPath
-	);
-
-	if( $LiteralPath | Test-Path ) {
-		[WallpaperSetter]::SetDesktopImage( $LiteralPath );
-		Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 0 -Force;
-		Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value $LiteralPath -Force;
-	} else {
-		"Cannot use '$LiteralPath' as a desktop wallpaper because that file does not exist.";
-	}
-}
-""" + f"Set-WallpaperImage -LiteralPath '{image_file}';"
+            # Load error handler template
+            error_handler_template = self._load_resource_file("GetWallpaperErrorHandler.ps1")
+            error_handler_script = error_handler_template.format(
+                getter_file=getter_file,
+                image_file=image_file
+            )
+            self.context.specialize_script.append(error_handler_script)
+            
+            # Load base wallpaper script and image call
+            base_script = self._load_resource_file("SetWallpaperBase.ps1")
+            image_call_template = self._load_resource_file("SetWallpaperImage.ps1")
+            image_call = image_call_template.format(image_file=image_file)
+            ps1_content = base_script + image_call
             ps1_file = self.add_text_file("SetWallpaper.ps1", ps1_content)
             self.context.user_once_script.invoke_file(ps1_file)
         elif isinstance(wallpaper_settings, SolidWallpaperSettings):
-            # 生成完整的 SetWallpaper.ps1 脚本（包含函数定义和调用）
-            ps1_content = """Add-Type -TypeDefinition '
-	using System.Drawing;
-	using System.Runtime.InteropServices;
-	
-	public static class WallpaperSetter {
-		[DllImport("user32.dll")]
-		private static extern bool SetSysColors(
-			int cElements, 
-			int[] lpaElements,
-			int[] lpaRgbValues
-		);
-
-		[DllImport("user32.dll")]
-		private static extern bool SystemParametersInfo(
-			uint uiAction,
-			uint uiParam,
-			string pvParam,
-			uint fWinIni
-		);
-
-		public static void SetDesktopBackground(Color color) {
-			SystemParametersInfo(20, 0, "", 0);
-			SetSysColors(1, new int[] { 1 }, new int[] { ColorTranslator.ToWin32(color) });
-		}
-
-		public static void SetDesktopImage(string file) {
-			SystemParametersInfo(20, 0, file, 0);
-		}
-	}
-' -ReferencedAssemblies 'System.Drawing';
-
-function Set-WallpaperColor {
-	param(
-		[string]
-		$HtmlColor
-	);
-
-	$color = [System.Drawing.ColorTranslator]::FromHtml( $HtmlColor );
-	[WallpaperSetter]::SetDesktopBackground( $color );
-	Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 1 -Force;
-	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value '' -Force;
-	Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Colors' -Name 'Background' -Type 'String' -Value "$($color.R) $($color.G) $($color.B)" -Force;
-}
-
-function Set-WallpaperImage {
-	param(
-		[string]
-		$LiteralPath
-	);
-
-	if( $LiteralPath | Test-Path ) {
-		[WallpaperSetter]::SetDesktopImage( $LiteralPath );
-		Set-ItemProperty -Path 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers' -Name 'BackgroundType' -Type 'DWord' -Value 0 -Force;
-		Set-ItemProperty -Path 'Registry::HKCU\\Control Panel\\Desktop' -Name 'WallPaper' -Type 'String' -Value $LiteralPath -Force;
-	} else {
-		"Cannot use '$LiteralPath' as a desktop wallpaper because that file does not exist.";
-	}
-}
-""" + f"Set-WallpaperColor -HtmlColor '{wallpaper_settings.color}';"
+            # Load base wallpaper script and color call
+            base_script = self._load_resource_file("SetWallpaperBase.ps1")
+            color_call_template = self._load_resource_file("SetWallpaperColor.ps1")
+            color_call = color_call_template.format(html_color=wallpaper_settings.color)
+            ps1_content = base_script + color_call
             ps1_file = self.add_text_file("SetWallpaper.ps1", ps1_content)
             self.context.user_once_script.invoke_file(ps1_file)
         
