@@ -3287,8 +3287,9 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         
         # Disable Bing Results
         if self.configuration.disable_bing_results:
-            # 这个设置已经在 TaskbarSearch 处理中实现
-            pass
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Policies\\Microsoft\\Windows\\Explorer" /v DisableSearchBoxSuggestions /t REG_DWORD /d 1 /f;'
+            )
         
         # TaskbarSearch (按照 C# 顺序：在 LaunchToThisPC 之后，StartPins 之前)
         if self.configuration.taskbar_search != TaskbarSearchMode.Box:
@@ -3839,6 +3840,13 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                     logger.debug(f"OptimizationsModifier.parse: Found TaskbarSearch = {self.configuration.taskbar_search}")
                     break
         
+        # disable_bing_results 解析
+        for cmd_text in all_script_texts:
+            if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Policies\Microsoft\Windows\Explorer', 'DisableSearchBoxSuggestions', '1'):
+                self.configuration.disable_bing_results = True
+                logger.debug("OptimizationsModifier.parse: Found DisableSearchBoxSuggestions = 1, set disable_bing_results = True")
+                break
+        
         # show_end_task
         for cmd_text in all_script_texts:
             if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings', 'TaskbarEndTask', '1'):
@@ -3905,6 +3913,18 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             self.configuration.hide_files = HideModes.HiddenSystem
             logger.debug("OptimizationsModifier.parse: Found Hidden only, set hide_files = HiddenSystem")
         # 如果没有找到 Hidden 注册表项，保持默认值（Hidden）
+        
+        # show_file_extensions 解析
+        for cmd_text in all_script_texts:
+            if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'HideFileExt', '0'):
+                self.configuration.show_file_extensions = True
+                logger.debug("OptimizationsModifier.parse: Found HideFileExt = 0, set show_file_extensions = True")
+                break
+            elif self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'HideFileExt', '1'):
+                self.configuration.show_file_extensions = False
+                logger.debug("OptimizationsModifier.parse: Found HideFileExt = 1, set show_file_extensions = False")
+                break
+        # 如果没有找到 HideFileExt 注册表项，保持默认值（False）
         
         # 5. 视觉效果解析
         visual_fx_setting = None
@@ -8799,7 +8819,9 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             fe = {}
         # 从 fileExplorer 读取所有相关字段
         config.show_file_extensions = fe.get('showFileExtensions', False)
-        config.show_all_tray_icons = fe.get('showAllTrayIcons', False)
+        # show_all_tray_icons 已移到 startMenuTaskbar，如果 startMenuTaskbar 不存在则从 fileExplorer 读取（向后兼容）
+        if 'startMenuTaskbar' not in config_dict:
+            config.show_all_tray_icons = fe.get('showAllTrayIcons', False)
         hide_files_mode = fe.get('hideFiles', 'hidden')
         if hide_files_mode == 'none':
             config.hide_files = HideModes.None_
@@ -8809,6 +8831,8 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.hide_files = HideModes.Hidden
         config.launch_to_this_pc = fe.get('launchToThisPC', False)
         config.disable_bing_results = fe.get('disableBingResults', False)
+        config.classic_context_menu = fe.get('classicContextMenu', False)
+        config.show_end_task = fe.get('showEndTask', False)
     # 注意：如果 fileExplorer 不存在，这些字段会在 systemTweaks 部分读取（向后兼容）
     
     # 转换 Virtual machine support 设置
@@ -8882,11 +8906,20 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     config.taskbar_icons = DefaultTaskbarIcons()
             else:
                 config.taskbar_icons = DefaultTaskbarIcons()
+            # 从 startMenuTaskbar 读取 showAllTrayIcons 和 disableBingResults（如果存在）
+            config.show_all_tray_icons = smt.get('showAllTrayIcons', False)
+            config.disable_bing_results = smt.get('disableBingResults', False)
     else:
         config.taskbar_search = TaskbarSearchMode.Box
         config.start_pins_settings = DefaultStartPinsSettings()
         config.start_tiles_settings = DefaultStartTilesSettings()
         config.taskbar_icons = DefaultTaskbarIcons()
+        # show_all_tray_icons 和 disable_bing_results 已移到 startMenuTaskbar，如果 startMenuTaskbar 不存在则从 fileExplorer 读取（向后兼容）
+        if 'fileExplorer' in config_dict:
+            fe = config_dict['fileExplorer']
+            if isinstance(fe, dict):
+                config.show_all_tray_icons = fe.get('showAllTrayIcons', False)
+                config.disable_bing_results = fe.get('disableBingResults', False)
     
     # 转换 Visual Effects 设置
     if 'visualEffects' in config_dict:
@@ -9134,12 +9167,16 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.disable_app_suggestions = st.get('disableAppSuggestions', False)
             config.disable_widgets = st.get('disableWidgets', False)
             config.prevent_device_encryption = st.get('preventDeviceEncryption', False)
-            config.classic_context_menu = st.get('classicContextMenu', False)
+            # classic_context_menu 已移到 fileExplorer，如果 fileExplorer 不存在则从 systemTweaks 读取（向后兼容）
+            if 'fileExplorer' not in config_dict:
+                config.classic_context_menu = st.get('classicContextMenu', False)
             config.disable_windows_update = st.get('disableWindowsUpdate', False)
             config.disable_pointer_precision = st.get('disablePointerPrecision', False)
             config.delete_windows_old = st.get('deleteWindowsOld', False)
             config.disable_core_isolation = st.get('disableCoreIsolation', False)
-            config.show_end_task = st.get('showEndTask', False)
+            # show_end_task 已移到 fileExplorer，如果 fileExplorer 不存在则从 systemTweaks 读取（向后兼容）
+            if 'fileExplorer' not in config_dict:
+                config.show_end_task = st.get('showEndTask', False)
             # Virtual machine support 相关字段：如果 vmSupport 不存在，则从 systemTweaks 读取（向后兼容）
             if 'vmSupport' not in config_dict:
                 config.vbox_guest_additions = st.get('vboxGuestAdditions', False)
@@ -9836,12 +9873,12 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         'disableAppSuggestions': config.disable_app_suggestions,
         'disableWidgets': config.disable_widgets,
         'preventDeviceEncryption': config.prevent_device_encryption,
-        'classicContextMenu': config.classic_context_menu,
+        # classicContextMenu 已移到 fileExplorer
         'disableWindowsUpdate': config.disable_windows_update,
         'disablePointerPrecision': config.disable_pointer_precision,
         'deleteWindowsOld': config.delete_windows_old,
         'disableCoreIsolation': config.disable_core_isolation,
-        'showEndTask': config.show_end_task,
+        # showEndTask 已移到 fileExplorer
         'leftTaskbar': config.left_taskbar,
         'hideTaskViewButton': config.hide_task_view_button,
         'hideEdgeFre': config.hide_edge_fre,
@@ -9854,10 +9891,12 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
     # 转换 File Explorer 设置
     file_explorer: Dict[str, Any] = {
         'showFileExtensions': config.show_file_extensions,
-        'showAllTrayIcons': config.show_all_tray_icons,
+        # showAllTrayIcons 已移到 startMenuTaskbar
         'hideFiles': config.hide_files.value,
         'launchToThisPC': config.launch_to_this_pc,
-        'disableBingResults': config.disable_bing_results,
+        # disableBingResults 已移到 startMenuTaskbar
+        'classicContextMenu': config.classic_context_menu,
+        'showEndTask': config.show_end_task,
     }
     config_dict['fileExplorer'] = file_explorer
     
@@ -9876,6 +9915,8 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         'leftTaskbar': config.left_taskbar,
         'hideTaskViewButton': config.hide_task_view_button,
         'disableWidgets': config.disable_widgets,
+        'showAllTrayIcons': config.show_all_tray_icons,
+        'disableBingResults': config.disable_bing_results,
     }
     
     # 转换 taskbar_icons

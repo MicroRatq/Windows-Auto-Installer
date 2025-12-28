@@ -139,20 +139,14 @@ interface LockoutSettings {
   mode: 'default' | 'disabled' | 'custom'
   lockoutThreshold?: number
   lockoutDuration?: number
-  resetLockoutCounter?: number
+  lockoutWindow?: number
 }
 
 // 文件资源管理器调整
-interface FileExplorerTweaks {
+interface FileExplorer {
   showFileExtensions: boolean
-  showAllTrayIcons: boolean
   hideFiles: 'hidden' | 'hiddenSystem' | 'none'
-  hideEdgeFre: boolean
-  disableEdgeStartupBoost: boolean
-  makeEdgeUninstallable: boolean
-  deleteEdgeDesktopIcon: boolean
   launchToThisPC: boolean
-  disableBingResults: boolean
   classicContextMenu: boolean
   showEndTask: boolean
 }
@@ -163,6 +157,8 @@ interface StartMenuTaskbarSettings {
   hideTaskViewButton: boolean
   taskbarSearch: 'hide' | 'icon' | 'box' | 'label'
   disableWidgets: boolean
+  showAllTrayIcons: boolean
+  disableBingResults: boolean
   startTilesMode: 'default' | 'empty' | 'custom'
   startTilesXml?: string
   startPinsMode: 'default' | 'empty' | 'custom'
@@ -188,12 +184,10 @@ interface SystemTweaks {
   disableAppSuggestions: boolean
   disableWidgets: boolean
   preventDeviceEncryption: boolean
-  classicContextMenu: boolean
   disableWindowsUpdate: boolean
   disablePointerPrecision: boolean
   deleteWindowsOld: boolean
   disableCoreIsolation: boolean
-  showEndTask: boolean
 }
 
 // 视觉效果
@@ -240,15 +234,17 @@ interface DesktopIconSettings {
 // 开始菜单文件夹设置
 interface StartFolderSettings {
   mode: 'default' | 'custom'
-  startFolderDocuments?: boolean
-  startFolderDownloads?: boolean
-  startFolderFileExplorer?: boolean
-  startFolderMusic?: boolean
-  startFolderNetwork?: boolean
-  startFolderPersonalFolder?: boolean
-  startFolderPictures?: boolean
-  startFolderSettings?: boolean
-  startFolderVideos?: boolean
+  folders?: {
+    Settings?: boolean
+    FileExplorer?: boolean
+    Documents?: boolean
+    Downloads?: boolean
+    Music?: boolean
+    Pictures?: boolean
+    Videos?: boolean
+    Network?: boolean
+    PersonalFolder?: boolean
+  }
 }
 
 // 虚拟机支持
@@ -266,7 +262,7 @@ interface WifiSettings {
   ssid?: string
   password?: string
   authentication?: 'Open' | 'WPA2PSK' | 'WPA3SAE'
-  nonBroadcast?: boolean
+  hidden?: boolean
 }
 
 // 快速设置
@@ -364,7 +360,7 @@ interface UnattendConfig {
   accountSettings: AccountSettings
   passwordExpiration: PasswordExpirationSettings
   lockoutSettings: LockoutSettings
-  fileExplorerTweaks: FileExplorerTweaks
+  fileExplorer: FileExplorer
   startMenuTaskbar: StartMenuTaskbarSettings
   systemTweaks: SystemTweaks
   visualEffects: VisualEffects
@@ -383,89 +379,27 @@ interface UnattendConfig {
 }
 
 // ========================================
-// 精简硬编码预设数据
+// 预设数据由后端提供（动态加载）
 // ========================================
 
-// TODO: 后续从后端获取完整数据
-const PRESET_DATA = {
-  // 常用语言列表（精简版）
-  languages: [
-    { id: 'en-US', name: 'English (United States)' },
-    { id: 'zh-CN', name: 'Chinese Simplified' },
-    { id: 'zh-TW', name: 'Chinese Traditional' },
-    { id: 'ja-JP', name: 'Japanese' },
-    { id: 'ko-KR', name: 'Korean' },
-    { id: 'de-DE', name: 'German' },
-    { id: 'fr-FR', name: 'French' },
-    { id: 'es-ES', name: 'Spanish' },
-    { id: 'ru-RU', name: 'Russian' },
-    { id: 'pt-BR', name: 'Brazilian Portuguese' }
-  ],
+type PresetData = {
+  languages: Array<{ id: string; name: string }>
+  locales: Array<{ id: string; name: string }>
+  keyboards: Array<{ id: string; name: string; type?: string }>
+  timeZones: Array<{ id: string; name: string }>
+  geoLocations: Array<{ id: string; name: string }>
+  windowsEditions: Array<{ id: string; name: string; key?: string; index?: number | null }>
+  bloatwareItems: Array<{ id: string; name: string }>
+}
 
-  // 常用用户区域列表（精简版）
-  locales: [
-    { id: 'en-US', name: 'English (United States)' },
-    { id: 'zh-CN', name: 'Chinese (Simplified, China)' },
-    { id: 'zh-TW', name: 'Chinese (Traditional, Taiwan)' },
-    { id: 'ja-JP', name: 'Japanese (Japan)' },
-    { id: 'ko-KR', name: 'Korean (Korea)' },
-    { id: 'de-DE', name: 'German (Germany)' },
-    { id: 'fr-FR', name: 'French (France)' },
-    { id: 'es-ES', name: 'Spanish (Spain)' },
-    { id: 'ru-RU', name: 'Russian (Russia)' },
-    { id: 'pt-BR', name: 'Portuguese (Brazil)' }
-  ],
-
-  // 常用键盘布局（精简版）
-  keyboards: [
-    { id: '00000409', name: 'US' },
-    { id: '00000804', name: 'Chinese Simplified' },
-    { id: '00000404', name: 'Chinese Traditional' },
-    { id: '00000411', name: 'Japanese' },
-    { id: '00000412', name: 'Korean' },
-    { id: '00000407', name: 'German' },
-    { id: '0000040c', name: 'French' },
-    { id: '0000040a', name: 'Spanish' },
-    { id: '00000419', name: 'Russian' },
-    { id: '00000416', name: 'Portuguese (Brazil)' }
-  ],
-
-  // 常用时区（精简版）
-  timeZones: [
-    { id: 'UTC', name: '(UTC) Coordinated Universal Time' },
-    { id: 'Pacific Standard Time', name: '(UTC-08:00) Pacific Time (US & Canada)' },
-    { id: 'Central Standard Time', name: '(UTC-06:00) Central Time (US & Canada)' },
-    { id: 'Eastern Standard Time', name: '(UTC-05:00) Eastern Time (US & Canada)' },
-    { id: 'GMT Standard Time', name: '(UTC+00:00) Dublin, Edinburgh, Lisbon, London' },
-    { id: 'W. Europe Standard Time', name: '(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna' },
-    { id: 'China Standard Time', name: '(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi' },
-    { id: 'Tokyo Standard Time', name: '(UTC+09:00) Osaka, Sapporo, Tokyo' },
-    { id: 'Korea Standard Time', name: '(UTC+09:00) Seoul' },
-    { id: 'AUS Eastern Standard Time', name: '(UTC+10:00) Canberra, Melbourne, Sydney' }
-  ],
-
-  // 常用Windows版本（精简版）
-  windowsEditions: [
-    { id: 'Windows 10 Home', name: 'Windows 10 Home', key: 'TX9XD-98N7V-6WMQ6-BX7FG-H8Q99' },
-    { id: 'Windows 10 Pro', name: 'Windows 10 Pro', key: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' },
-    { id: 'Windows 11 Home', name: 'Windows 11 Home', key: 'TX9XD-98N7V-6WMQ6-BX7FG-H8Q99' },
-    { id: 'Windows 11 Pro', name: 'Windows 11 Pro', key: 'W269N-WFGWX-YVC9B-4J6C9-T83GX' },
-    { id: 'Windows 11 Enterprise', name: 'Windows 11 Enterprise', key: 'NPPR9-FWDCX-D2C8J-H872K-2YT43' }
-  ],
-
-  // 常用预装软件列表（精简版）
-  bloatwareItems: [
-    '3D Viewer',
-    'Calculator',
-    'Mail and Calendar',
-    'News',
-    'OneNote',
-    'Paint',
-    'Skype',
-    'Solitaire Collection',
-    'Teams',
-    'Xbox Apps'
-  ]
+const EMPTY_PRESET: PresetData = {
+  languages: [],
+  locales: [],
+  keyboards: [],
+  timeZones: [],
+  geoLocations: [],
+  windowsEditions: [],
+  bloatwareItems: []
 }
 
 // ========================================
@@ -515,16 +449,10 @@ function createDefaultConfig(): UnattendConfig {
     lockoutSettings: {
       mode: 'default'
     },
-    fileExplorerTweaks: {
+    fileExplorer: {
       showFileExtensions: false,
-      showAllTrayIcons: false,
       hideFiles: 'hidden',
-      hideEdgeFre: false,
-      disableEdgeStartupBoost: false,
-      makeEdgeUninstallable: false,
-      deleteEdgeDesktopIcon: false,
       launchToThisPC: false,
-      disableBingResults: false,
       classicContextMenu: false,
       showEndTask: false
     },
@@ -533,6 +461,8 @@ function createDefaultConfig(): UnattendConfig {
       hideTaskViewButton: false,
       taskbarSearch: 'box',
       disableWidgets: false,
+      showAllTrayIcons: false,
+      disableBingResults: false,
       startTilesMode: 'default',
       startPinsMode: 'default'
     },
@@ -554,12 +484,10 @@ function createDefaultConfig(): UnattendConfig {
       disableAppSuggestions: false,
       disableWidgets: false,
       preventDeviceEncryption: false,
-      classicContextMenu: false,
       disableWindowsUpdate: false,
       disablePointerPrecision: false,
       deleteWindowsOld: false,
-      disableCoreIsolation: false,
-      showEndTask: false
+      disableCoreIsolation: false
     },
     visualEffects: {
       mode: 'default'
@@ -618,6 +546,7 @@ function createDefaultConfig(): UnattendConfig {
 class UnattendConfigManager {
   private config: UnattendConfig
   private panel: HTMLElement | null = null
+  private presetData: PresetData = EMPTY_PRESET
 
   constructor() {
     this.config = createDefaultConfig()
@@ -648,7 +577,50 @@ class UnattendConfigManager {
 
   // 获取预设数据
   getPresetData() {
-    return PRESET_DATA
+    return this.presetData || EMPTY_PRESET
+  }
+
+  // 异步加载预设数据（从后端获取完整数据）
+  private async loadPresetData(triggerRender: boolean = false) {
+    if (!window.electronAPI?.sendToBackend) {
+      if (triggerRender) this.renderAllModules()
+      return
+    }
+    try {
+      const lang = (window as any)?.currentLanguage || navigator.language || 'en'
+      const request = {
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'unattend_get_data',
+        params: { lang }
+      }
+      const response = await window.electronAPI.sendToBackend(request)
+      const result = (response && (response.result ?? response)) || {}
+      const keyboards = (result.keyboards || []).map((k: any) => ({
+        id: (k.id || '').toUpperCase(),
+        name: k.name || k.id || '',
+        type: k.type
+      }))
+      const preset: PresetData = {
+        languages: result.languages || [],
+        locales: result.locales || [],
+        keyboards,
+        timeZones: result.timeZones || [],
+        geoLocations: result.geoLocations || [],
+        windowsEditions: result.windowsEditions || [],
+        bloatwareItems: result.bloatwareItems || []
+      }
+      this.presetData = preset
+      // 重新渲染以应用最新的下拉选项
+      if (triggerRender) {
+        this.renderAllModules()
+      }
+    } catch (error) {
+      console.error('Load preset data failed:', error)
+      if (triggerRender) {
+        this.renderAllModules()
+      }
+    }
   }
 
   // 导入配置（从XML解析）
@@ -730,9 +702,9 @@ class UnattendConfigManager {
     }
     // 更新 section 标题的 i18n 翻译
     this.updateSectionTitles()
-    // 不清空panel，因为HTML中已经有框架结构
-    this.renderAllModules()
     this.setupEventListeners()
+    // 异步加载后端预设数据，完成后再渲染，确保下拉选项来自后端
+    this.loadPresetData(true)
   }
 
   // 渲染UI（已废弃，直接调用renderAllModules）
@@ -994,6 +966,20 @@ class UnattendConfigManager {
     const lang = this.config.languageSettings
     const tz = this.config.timeZone
 
+    // 规范化键盘ID为大写，避免解析大小写不一致导致选项无法匹配
+    const normalizeKeyboardId = (id?: string) => (id || '').toUpperCase()
+    // 为未设置的值提供后端默认选项，避免空白下拉
+    const defaultUiLanguage = preset.languages[0]?.id || ''
+    const defaultSystemLocale = preset.locales[0]?.id || defaultUiLanguage
+    const defaultKeyboard = normalizeKeyboardId(preset.keyboards[0]?.id || '')
+    const defaultGeo = preset.geoLocations[0]?.id || defaultSystemLocale
+    const defaultTimeZone = preset.timeZones[0]?.id || ''
+
+    const uiLanguageValue = lang.uiLanguage || defaultUiLanguage
+    const firstLanguageValue = lang.systemLocale || uiLanguageValue || defaultSystemLocale
+    const firstKeyboardValue = normalizeKeyboardId(lang.inputLocale || defaultKeyboard)
+    const homeRegionValue = lang.geoLocation || defaultGeo
+
     // 语言模式 Switch ComboCard
     const languageModeCardHtml = createComboCard({
       id: 'config-language-mode-card',
@@ -1026,7 +1012,7 @@ class UnattendConfigManager {
         icon: 'languages',
         controlType: 'select',
         options: preset.locales.map(l => ({ value: l.id, label: l.name })),
-        value: lang.systemLocale || ''
+        value: firstLanguageValue
       })
       : ''
 
@@ -1039,7 +1025,23 @@ class UnattendConfigManager {
         icon: 'keyboard',
         controlType: 'select',
         options: preset.keyboards.map(k => ({ value: k.id, label: k.name })),
-        value: lang.inputLocale || ''
+        value: firstKeyboardValue
+      })
+      : ''
+
+    // Home location / device setup region ComboCard（使用后端 geoLocations）
+    const homeRegionCardHtml = lang.mode === 'unattended'
+      ? createComboCard({
+        id: 'config-home-region-card',
+        title: t('isoConfig.regionLanguage.homeRegionTitle'),
+        description: t('isoConfig.regionLanguage.homeRegionDesc'),
+        icon: 'map',
+        controlType: 'select',
+        options: (preset.geoLocations.length ? preset.geoLocations : preset.locales).map(l => ({
+          value: l.id,
+          label: l.name
+        })),
+        value: homeRegionValue
       })
       : ''
 
@@ -1062,7 +1064,7 @@ class UnattendConfigManager {
         icon: 'map-pin',
         controlType: 'select',
         options: preset.timeZones.map(t => ({ value: t.id, label: t.name })),
-        value: tz.timeZone || ''
+        value: tz.timeZone || defaultTimeZone
       })
       : ''
 
@@ -1071,6 +1073,7 @@ class UnattendConfigManager {
       ${uiLanguageCardHtml}
       ${firstLanguageCardHtml}
       ${firstKeyboardCardHtml}
+      ${homeRegionCardHtml}
       ${timezoneModeCardHtml}
       ${timezoneSelectCardHtml}
     `
@@ -1080,6 +1083,15 @@ class UnattendConfigManager {
       this.updateModule('languageSettings', {
         mode: value ? 'interactive' : 'unattended'
       })
+      // 当切换到 unattended 时，如果缺少值，自动填充后端默认选项
+      if (!value) {
+        this.updateModule('languageSettings', {
+          uiLanguage: uiLanguageValue || defaultUiLanguage,
+          systemLocale: firstLanguageValue || defaultSystemLocale,
+          inputLocale: normalizeKeyboardId(firstKeyboardValue || defaultKeyboard),
+          geoLocation: homeRegionValue || defaultGeo
+        })
+      }
       this.renderRegionLanguageTimeZone()
     })
 
@@ -1094,7 +1106,11 @@ class UnattendConfigManager {
       })
 
       setupComboCard('config-first-keyboard-card', (value) => {
-        this.updateModule('languageSettings', { inputLocale: value as string })
+        this.updateModule('languageSettings', { inputLocale: normalizeKeyboardId(value as string) })
+      })
+
+      setupComboCard('config-home-region-card', (value) => {
+        this.updateModule('languageSettings', { geoLocation: value as string })
       })
     }
 
@@ -1536,7 +1552,7 @@ class UnattendConfigManager {
               title: t('isoConfig.nameAccount.lockoutWindow'),
               description: t('isoConfig.nameAccount.minutes'),
               controlType: 'text',
-              value: (lockout.resetLockoutCounter || 10).toString(),
+              value: (lockout.lockoutWindow || 10).toString(),
               borderless: true,
               placeholder: '10'
             },
@@ -1780,7 +1796,7 @@ class UnattendConfigManager {
 
       setupComboCard('config-lockout-window-card', (value) => {
         const numValue = parseInt(value as string) || 10
-        this.updateModule('lockoutSettings', { resetLockoutCounter: numValue })
+        this.updateModule('lockoutSettings', { lockoutWindow: numValue })
       })
 
       setupComboCard('config-lockout-duration-card', (value) => {
@@ -2477,7 +2493,10 @@ End If`,
               title: t('isoConfig.windowsEdition.installThisEdition'),
               icon: 'package',
               controlType: 'select',
-              options: preset.windowsEditions.map(e => ({ value: e.id, label: e.name })),
+            options: preset.windowsEditions.map(e => ({
+              value: e.name || e.id,
+              label: e.name || e.id
+            })),
               value: edition.editionName || 'pro',
               borderless: true
             }
@@ -2881,7 +2900,7 @@ End If`,
                 </div>
                 <div>
                   <label style="display: block; margin-bottom: 6px; font-size: 12px;">Reset counter (minutes):</label>
-                  <fluent-text-field id="config-lockout-reset" type="number" value="${lockout.resetLockoutCounter || ''}" placeholder="Minutes" style="width: 100%;"></fluent-text-field>
+                  <fluent-text-field id="config-lockout-reset" type="number" value="${lockout.lockoutWindow || ''}" placeholder="Minutes" style="width: 100%;"></fluent-text-field>
                 </div>
               </div>
             ` : ''}
@@ -2914,7 +2933,7 @@ End If`,
     const resetInput = contentDiv.querySelector('#config-lockout-reset') as any
     if (resetInput) {
       resetInput.addEventListener('input', (e: any) => {
-        this.updateModule('lockoutSettings', { resetLockoutCounter: parseInt(e.target.value) || undefined })
+        this.updateModule('lockoutSettings', { lockoutWindow: parseInt(e.target.value) || undefined })
       })
     }
   }
@@ -2924,7 +2943,7 @@ End If`,
     const contentDiv = this.getSectionContent('config-file-explorer')
     if (!contentDiv) return
 
-    const fe = this.config.fileExplorerTweaks
+    const fe = this.config.fileExplorer
 
     // 1. Hide Files - RadioContainer (嵌套)
     const hideFilesRadioHtml = createRadioContainer({
@@ -2971,20 +2990,6 @@ End If`,
           borderless: true
         },
         {
-          id: 'file-explorer-show-tray-icons',
-          title: t('isoConfig.uiPersonalization.showAllTrayIcons'),
-          controlType: 'checkbox',
-          value: fe.showAllTrayIcons || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-classic-context',
-          title: t('isoConfig.uiPersonalization.classicContextMenu'),
-          controlType: 'checkbox',
-          value: fe.classicContextMenu || false,
-          borderless: true
-        },
-        {
           id: 'file-explorer-launch-this-pc',
           title: t('isoConfig.uiPersonalization.launchToThisPC'),
           controlType: 'checkbox',
@@ -2992,45 +2997,17 @@ End If`,
           borderless: true
         },
         {
+          id: 'file-explorer-classic-context-menu',
+          title: t('isoConfig.systemOptimization.classicContextMenu'),
+          controlType: 'checkbox',
+          value: fe.classicContextMenu || false,
+          borderless: true
+        },
+        {
           id: 'file-explorer-show-end-task',
-          title: t('isoConfig.uiPersonalization.showEndTask'),
+          title: t('isoConfig.systemOptimization.showEndTask'),
           controlType: 'checkbox',
           value: fe.showEndTask || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-hide-edge-fre',
-          title: t('isoConfig.uiPersonalization.hideEdgeFre'),
-          controlType: 'checkbox',
-          value: fe.hideEdgeFre || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-disable-edge-startup',
-          title: t('isoConfig.uiPersonalization.disableEdgeStartupBoost'),
-          controlType: 'checkbox',
-          value: fe.disableEdgeStartupBoost || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-make-edge-uninstallable',
-          title: t('isoConfig.uiPersonalization.makeEdgeUninstallable'),
-          controlType: 'checkbox',
-          value: fe.makeEdgeUninstallable || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-delete-edge-icon',
-          title: t('isoConfig.uiPersonalization.deleteEdgeDesktopIcon'),
-          controlType: 'checkbox',
-          value: fe.deleteEdgeDesktopIcon || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-disable-bing',
-          title: t('isoConfig.uiPersonalization.disableBingResults'),
-          controlType: 'checkbox',
-          value: fe.disableBingResults || false,
           borderless: true
         }
       ],
@@ -3047,25 +3024,19 @@ End If`,
 
     // 1. Hide Files mode
     setupRadioContainer('hide-files-container', 'hide-files-mode', (value) => {
-      this.updateModule('fileExplorerTweaks', { hideFiles: value as 'hidden' | 'hiddenSystem' | 'none' })
+      this.updateModule('fileExplorer', { hideFiles: value as 'hidden' | 'hiddenSystem' | 'none' })
     }, true)
 
     // 2. File Explorer options
     setupComboContainer('file-explorer-options-container', 'file-explorer-options', (values) => {
       // 从嵌套卡片的值中提取各个选项
       // key 格式为：show_extensions, show_tray_icons 等（最后两部分）
-      const updates: Partial<FileExplorerTweaks> = {}
-      const keyMap: Record<string, keyof FileExplorerTweaks> = {
+      const updates: Partial<FileExplorer> = {}
+      const keyMap: Record<string, keyof FileExplorer> = {
         'show_extensions': 'showFileExtensions',
-        'show_tray_icons': 'showAllTrayIcons',
-        'classic_context': 'classicContextMenu',
         'launch_this_pc': 'launchToThisPC',
-        'show_end_task': 'showEndTask',
-        'hide_edge_fre': 'hideEdgeFre',
-        'disable_edge_startup': 'disableEdgeStartupBoost',
-        'make_edge_uninstallable': 'makeEdgeUninstallable',
-        'delete_edge_icon': 'deleteEdgeDesktopIcon',
-        'disable_bing': 'disableBingResults'
+        'classic_context_menu': 'classicContextMenu',
+        'show_end_task': 'showEndTask'
       }
       Object.keys(values).forEach(key => {
         // 查找匹配的 key（key 可能是 show_extensions 或 show_extensions_xxx 格式）
@@ -3077,7 +3048,7 @@ End If`,
           }
         }
       })
-      this.updateModule('fileExplorerTweaks', updates)
+      this.updateModule('fileExplorer', updates)
     }, true, fileExplorerOptionsConfig)
 
     // 初始化图标
@@ -3120,6 +3091,20 @@ End If`,
           title: t('isoConfig.uiPersonalization.disableWidgets'),
           controlType: 'checkbox',
           value: st.disableWidgets || false,
+          borderless: true
+        },
+        {
+          id: 'taskbar-show-all-tray-icons',
+          title: t('isoConfig.uiPersonalization.showAllTrayIcons'),
+          controlType: 'checkbox',
+          value: st.showAllTrayIcons || false,
+          borderless: true
+        },
+        {
+          id: 'taskbar-disable-bing',
+          title: t('isoConfig.uiPersonalization.disableBingResults'),
+          controlType: 'checkbox',
+          value: st.disableBingResults || false,
           borderless: true
         }
       ],
@@ -3259,7 +3244,9 @@ End If`,
       const keyMap: Record<string, keyof StartMenuTaskbarSettings> = {
         'left': 'leftTaskbar',
         'hide_taskview': 'hideTaskViewButton',
-        'disable_widgets': 'disableWidgets'
+        'disable_widgets': 'disableWidgets',
+        'show_all_tray_icons': 'showAllTrayIcons',
+        'disable_bing': 'disableBingResults'
       }
       Object.keys(values).forEach(key => {
         const matchedKey = Object.keys(keyMap).find(k => key === k || key.startsWith(k + '_'))
@@ -3390,12 +3377,10 @@ End If`,
         { value: 'disableAppSuggestions', label: t('isoConfig.systemOptimization.disableAppSuggestions') },
         { value: 'disableWidgets', label: t('isoConfig.systemOptimization.disableWidgets') },
         { value: 'preventDeviceEncryption', label: t('isoConfig.systemOptimization.preventDeviceEncryption') },
-        { value: 'classicContextMenu', label: t('isoConfig.systemOptimization.classicContextMenu') },
         { value: 'disableWindowsUpdate', label: t('isoConfig.systemOptimization.disableWindowsUpdate') },
         { value: 'disablePointerPrecision', label: t('isoConfig.systemOptimization.disablePointerPrecision') },
         { value: 'deleteWindowsOld', label: t('isoConfig.systemOptimization.deleteWindowsOld') },
-        { value: 'disableCoreIsolation', label: t('isoConfig.systemOptimization.disableCoreIsolation') },
-        { value: 'showEndTask', label: t('isoConfig.systemOptimization.showEndTask') }
+        { value: 'disableCoreIsolation', label: t('isoConfig.systemOptimization.disableCoreIsolation') }
       ],
       values: {
         enableLongPaths: tweaks.enableLongPaths || false,
@@ -3415,12 +3400,10 @@ End If`,
         disableAppSuggestions: tweaks.disableAppSuggestions || false,
         disableWidgets: tweaks.disableWidgets || false,
         preventDeviceEncryption: tweaks.preventDeviceEncryption || false,
-        classicContextMenu: tweaks.classicContextMenu || false,
         disableWindowsUpdate: tweaks.disableWindowsUpdate || false,
         disablePointerPrecision: tweaks.disablePointerPrecision || false,
         deleteWindowsOld: tweaks.deleteWindowsOld || false,
-        disableCoreIsolation: tweaks.disableCoreIsolation || false,
-        showEndTask: tweaks.showEndTask || false
+        disableCoreIsolation: tweaks.disableCoreIsolation || false
       },
       expanded: false,
       showHeader: true, // 非嵌入式，显示头部
@@ -3431,12 +3414,15 @@ End If`,
     // 2. Remove Bloatware - MultiColumnCheckboxContainer (非嵌入式，显示头部)
     // 先构建选项和值
     const bloatwareOptions = preset.bloatwareItems.map(item => ({
-      value: item,
-      label: item
+      value: item.id || item.name,
+      label: item.name || item.id
     }))
     const bloatwareValues: Record<string, boolean> = {}
     preset.bloatwareItems.forEach(item => {
-      bloatwareValues[item] = bloatware.items.includes(item)
+      const value = item.id || item.name
+      if (value) {
+        bloatwareValues[value] = bloatware.items.includes(value)
+      }
     })
 
     const removeBloatwareHtml = createMultiColumnCheckboxContainer({
@@ -3768,15 +3754,15 @@ End If`,
                   { value: 'startFolderVideos', label: t('isoConfig.uiPersonalization.startFolderVideos') }
                 ],
                 values: {
-                  startFolderDocuments: folders.startFolderDocuments || false,
-                  startFolderDownloads: folders.startFolderDownloads || false,
-                  startFolderFileExplorer: folders.startFolderFileExplorer || false,
-                  startFolderMusic: folders.startFolderMusic || false,
-                  startFolderNetwork: folders.startFolderNetwork || false,
-                  startFolderPersonalFolder: folders.startFolderPersonalFolder || false,
-                  startFolderPictures: folders.startFolderPictures || false,
-                  startFolderSettings: folders.startFolderSettings || false,
-                  startFolderVideos: folders.startFolderVideos || false
+                  startFolderDocuments: folders.folders?.Documents || false,
+                  startFolderDownloads: folders.folders?.Downloads || false,
+                  startFolderFileExplorer: folders.folders?.FileExplorer || false,
+                  startFolderMusic: folders.folders?.Music || false,
+                  startFolderNetwork: folders.folders?.Network || false,
+                  startFolderPersonalFolder: folders.folders?.PersonalFolder || false,
+                  startFolderPictures: folders.folders?.Pictures || false,
+                  startFolderSettings: folders.folders?.Settings || false,
+                  startFolderVideos: folders.folders?.Videos || false
                 },
                 showHeader: false, // 嵌入模式，隐藏头部
                 minColumnWidth: 140,
@@ -3805,7 +3791,24 @@ End If`,
     // 2. Custom folders options (仅在custom模式下设置)
     if (folders.mode === 'custom') {
       setupMultiColumnCheckboxContainer('folders-start-options-container', 'folders-start-options', (values) => {
-        this.updateModule('startFolders', values as Partial<StartFolderSettings>)
+        const foldersObj: Record<string, boolean> = {}
+        const keyMap: Record<string, string> = {
+          startFolderSettings: 'Settings',
+          startFolderFileExplorer: 'FileExplorer',
+          startFolderDocuments: 'Documents',
+          startFolderDownloads: 'Downloads',
+          startFolderMusic: 'Music',
+          startFolderPictures: 'Pictures',
+          startFolderVideos: 'Videos',
+          startFolderNetwork: 'Network',
+          startFolderPersonalFolder: 'PersonalFolder'
+        }
+        Object.keys(values).forEach(key => {
+          if (keyMap[key]) {
+            foldersObj[keyMap[key]] = values[key] as boolean
+          }
+        })
+        this.updateModule('startFolders', { folders: foldersObj })
       }, false) // 不更新头部值（因为已隐藏头部）
     }
 
@@ -3881,7 +3884,7 @@ End If`,
               title: t('isoConfig.wifi.nonBroadcast'),
               description: '',
               controlType: 'checkbox',
-              value: wifi.nonBroadcast || false,
+              value: wifi.hidden || false,
               borderless: true
             }
           ]
@@ -3962,7 +3965,7 @@ End If`,
       })
 
       setupComboCard('config-wifi-non-broadcast-card', (value) => {
-        this.updateModule('wifi', { nonBroadcast: value as boolean })
+        this.updateModule('wifi', { hidden: value as boolean })
       })
     }
 
@@ -4602,8 +4605,8 @@ End If`,
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
             ${preset.bloatwareItems.map(item => `
               <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" class="bloatware-item" value="${item}" ${bloatware.items.includes(item) ? 'checked' : ''}>
-                <span>${item}</span>
+                <input type="checkbox" class="bloatware-item" value="${item.id || item.name}" ${bloatware.items.includes(item.id || item.name) ? 'checked' : ''}>
+                <span>${item.name || item.id}</span>
               </label>
             `).join('')}
           </div>
@@ -4617,7 +4620,7 @@ End If`,
 
     if (selectAllBtn) {
       selectAllBtn.addEventListener('click', () => {
-        const allItems = preset.bloatwareItems.map(i => i)
+        const allItems = preset.bloatwareItems.map(i => i.id || i.name).filter(Boolean)
         this.updateModule('bloatware', { items: allItems })
         this.renderBloatware()
       })
@@ -5392,5 +5395,5 @@ export function getConfigManager(): UnattendConfigManager | null {
 }
 
 export type { UnattendConfig }
-export { PRESET_DATA, createDefaultConfig }
+export { createDefaultConfig }
 

@@ -30,6 +30,8 @@
             "firstLanguageTitle": "First language",
             "firstLanguageDesc": "The first language will also determine the initial regional format, which defines how numbers, dates, times and currency are formatted.",
             "firstKeyboardTitle": "First keyboard layout",
+            "homeRegionTitle": "Home location / device setup region",
+            "homeRegionDesc": "Used by Windows setup to preselect region-specific defaults such as Store and device experience.",
             "selectLanguageInSetup": "Select language settings during Windows Setup",
             "selectLanguageInSetupDesc": "If enabled, language settings will be selected interactively during Windows Setup. If disabled, the language settings below will be used.",
             "timeZoneTitle": "Time zone",
