@@ -562,6 +562,41 @@ class UnattendConfigManager {
     this.config = { ...this.config, ...updates }
   }
 
+  // 将后端返回的嵌套 personalization 结构转换为前端扁平结构
+  private convertPersonalizationFromBackend(backendPersonalization: any): PersonalizationSettings {
+    if (!backendPersonalization || typeof backendPersonalization !== 'object') {
+      return {
+        wallpaperMode: 'default',
+        lockScreenMode: 'default',
+        colorMode: 'default'
+      }
+    }
+
+    const result: PersonalizationSettings = {
+      wallpaperMode: backendPersonalization.wallpaper?.mode || 'default',
+      wallpaperColor: backendPersonalization.wallpaper?.color,
+      wallpaperScript: backendPersonalization.wallpaper?.script,
+      lockScreenMode: backendPersonalization.lockScreen?.mode || 'default',
+      lockScreenScript: backendPersonalization.lockScreen?.script,
+      colorMode: backendPersonalization.color?.mode || 'default',
+      systemColorTheme: backendPersonalization.color?.systemTheme,
+      appsColorTheme: backendPersonalization.color?.appsTheme,
+      accentColor: backendPersonalization.color?.accentColor,
+      accentColorOnStart: backendPersonalization.color?.accentColorOnStart,
+      accentColorOnBorders: backendPersonalization.color?.accentColorOnBorders,
+      enableTransparency: backendPersonalization.color?.enableTransparency
+    }
+
+    // 清理 undefined 值
+    Object.keys(result).forEach(key => {
+      if (result[key as keyof PersonalizationSettings] === undefined) {
+        delete result[key as keyof PersonalizationSettings]
+      }
+    })
+
+    return result
+  }
+
   // 更新特定模块配置
   updateModule<K extends keyof UnattendConfig>(
     module: K,
@@ -649,6 +684,13 @@ class UnattendConfigManager {
 
       // 更新配置
       if (response.result?.config) {
+        // 转换 personalization 结构（从后端嵌套结构转换为前端扁平结构）
+        if (response.result.config.personalization) {
+          response.result.config.personalization = this.convertPersonalizationFromBackend(
+            response.result.config.personalization
+          )
+        }
+        
         this.updateConfig(response.result.config)
         // 重新渲染所有模块以反映新配置
         this.renderAllModules()
