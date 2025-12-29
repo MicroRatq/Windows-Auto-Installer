@@ -4,6 +4,7 @@ Communicates with Electron frontend via stdin/stdout
 """
 import json
 import os
+import io
 import sys
 import traceback
 import logging
@@ -15,10 +16,16 @@ from typing import Any, Callable
 from iso_handler import ISOHandler
 from downloader import Downloader
 
-# 设置 stdout 编码为 UTF-8，避免 Windows 上的 GBK 编码问题
+# 设置 stdout 和 stdin 编码为 UTF-8，避免 Windows 上的 GBK 编码问题
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    # 确保 stdin 也使用 UTF-8 编码
+    if hasattr(sys.stdin, 'reconfigure'):
+        sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+    # 如果 reconfigure 不可用，尝试设置环境变量
+    if 'PYTHONIOENCODING' not in os.environ:
+        os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # Configure logging
 logging.basicConfig(
@@ -298,7 +305,10 @@ class BackendServer:
             self.unattend_generator = None
         
         # 读取stdin并处理请求
-        for line in sys.stdin:
+        # 将 stdin 包装为 UTF-8 文本流
+        stdin_text = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8', errors='replace')
+        
+        for line in stdin_text:
             if not self.running:
                 break
             
