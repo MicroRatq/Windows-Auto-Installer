@@ -108,3 +108,5 @@ ref/
 logs/
 *.log
 
+# Test
+test/
