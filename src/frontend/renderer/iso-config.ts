@@ -292,18 +292,24 @@ interface StickyKeysSettings {
 
 // 个性化设置
 interface PersonalizationSettings {
-  wallpaperMode: 'default' | 'solid' | 'script'
-  wallpaperColor?: string
-  wallpaperScript?: string
-  lockScreenMode: 'default' | 'script'
-  lockScreenScript?: string
-  colorMode: 'default' | 'custom'
-  systemColorTheme?: 'dark' | 'light'
-  appsColorTheme?: 'dark' | 'light'
-  accentColor?: string
-  accentColorOnStart?: boolean
-  accentColorOnBorders?: boolean
-  enableTransparency?: boolean
+  wallpaper: {
+    mode: 'default' | 'solid' | 'script'
+    color?: string
+    script?: string
+  }
+  lockScreen: {
+    mode: 'default' | 'script'
+    script?: string
+  }
+  color: {
+    mode: 'default' | 'custom'
+    systemTheme?: 'dark' | 'light'
+    appsTheme?: 'dark' | 'light'
+    accentColor?: string
+    accentColorOnStart?: boolean
+    accentColorOnBorders?: boolean
+    enableTransparency?: boolean
+  }
 }
 
 // 预装软件移除
@@ -516,9 +522,15 @@ function createDefaultConfig(): UnattendConfig {
       mode: 'default'
     },
     personalization: {
-      wallpaperMode: 'default',
-      lockScreenMode: 'default',
-      colorMode: 'default'
+      wallpaper: {
+        mode: 'default'
+      },
+      lockScreen: {
+        mode: 'default'
+      },
+      color: {
+        mode: 'default'
+      }
     },
     bloatware: {
       items: []
@@ -557,45 +569,34 @@ class UnattendConfigManager {
     return { ...this.config }
   }
 
+  // 深度合并辅助函数
+  private isObject(item: any): boolean {
+    return item && typeof item === 'object' && !Array.isArray(item)
+  }
+
+  private deepMerge(target: any, source: any): any {
+    const output = { ...target }
+    if (this.isObject(target) && this.isObject(source)) {
+      Object.keys(source).forEach(key => {
+        if (this.isObject(source[key]) && !Array.isArray(source[key])) {
+          if (!(key in target)) {
+            Object.assign(output, { [key]: source[key] })
+          } else {
+            output[key] = this.deepMerge(target[key], source[key])
+          }
+        } else {
+          Object.assign(output, { [key]: source[key] })
+        }
+      })
+    }
+    return output
+  }
+
   // 更新配置
   updateConfig(updates: Partial<UnattendConfig>) {
-    this.config = { ...this.config, ...updates }
+    this.config = this.deepMerge(this.config, updates)
   }
 
-  // 将后端返回的嵌套 personalization 结构转换为前端扁平结构
-  private convertPersonalizationFromBackend(backendPersonalization: any): PersonalizationSettings {
-    if (!backendPersonalization || typeof backendPersonalization !== 'object') {
-      return {
-        wallpaperMode: 'default',
-        lockScreenMode: 'default',
-        colorMode: 'default'
-      }
-    }
-
-    const result: PersonalizationSettings = {
-      wallpaperMode: backendPersonalization.wallpaper?.mode || 'default',
-      wallpaperColor: backendPersonalization.wallpaper?.color,
-      wallpaperScript: backendPersonalization.wallpaper?.script,
-      lockScreenMode: backendPersonalization.lockScreen?.mode || 'default',
-      lockScreenScript: backendPersonalization.lockScreen?.script,
-      colorMode: backendPersonalization.color?.mode || 'default',
-      systemColorTheme: backendPersonalization.color?.systemTheme,
-      appsColorTheme: backendPersonalization.color?.appsTheme,
-      accentColor: backendPersonalization.color?.accentColor,
-      accentColorOnStart: backendPersonalization.color?.accentColorOnStart,
-      accentColorOnBorders: backendPersonalization.color?.accentColorOnBorders,
-      enableTransparency: backendPersonalization.color?.enableTransparency
-    }
-
-    // 清理 undefined 值
-    Object.keys(result).forEach(key => {
-      if (result[key as keyof PersonalizationSettings] === undefined) {
-        delete result[key as keyof PersonalizationSettings]
-      }
-    })
-
-    return result
-  }
 
   // 更新特定模块配置
   updateModule<K extends keyof UnattendConfig>(
@@ -603,8 +604,8 @@ class UnattendConfigManager {
     updates: Partial<UnattendConfig[K]>
   ) {
     const current = this.config[module]
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
-      this.config[module] = { ...current, ...updates } as UnattendConfig[K]
+    if (current && this.isObject(current)) {
+      this.config[module] = this.deepMerge(current, updates) as UnattendConfig[K]
     } else {
       this.config[module] = updates as UnattendConfig[K]
     }
@@ -684,14 +685,8 @@ class UnattendConfigManager {
 
       // 更新配置
       if (response.result?.config) {
-        // 转换 personalization 结构（从后端嵌套结构转换为前端扁平结构）
-        if (response.result.config.personalization) {
-          response.result.config.personalization = this.convertPersonalizationFromBackend(
-            response.result.config.personalization
-          )
-        }
-        
-        this.updateConfig(response.result.config)
+        // 完全替换配置，而不是合并（确保导入时使用后端返回的完整配置）
+        this.config = response.result.config as UnattendConfig
         // 重新渲染所有模块以反映新配置
         this.renderAllModules()
       }
@@ -4314,7 +4309,11 @@ End If`,
     const contentDiv = this.getSectionContent('config-personalization')
     if (!contentDiv) return
 
-    const pers = this.config.personalization
+    const pers = this.config.personalization || {
+      wallpaper: { mode: 'default' },
+      lockScreen: { mode: 'default' },
+      color: { mode: 'default' }
+    }
 
     // 1. Colors - RadioContainer (嵌套)
     const colorModeRadioHtml = createRadioContainer({
@@ -4343,7 +4342,7 @@ End If`,
                 { value: 'light', label: 'Light' },
                 { value: 'dark', label: 'Dark' }
               ],
-              value: pers.systemColorTheme || 'light',
+              value: pers.color?.systemTheme || 'light',
               borderless: true
             },
             {
@@ -4355,7 +4354,7 @@ End If`,
                 { value: 'light', label: 'Light' },
                 { value: 'dark', label: 'Dark' }
               ],
-              value: pers.appsColorTheme || 'light',
+              value: pers.color?.appsTheme || 'light',
               borderless: true
             },
             {
@@ -4363,7 +4362,7 @@ End If`,
               title: t('isoConfig.uiPersonalization.accentColor'),
               description: '',
               controlType: 'text',
-              value: pers.accentColor || '#0078D4',
+              value: pers.color?.accentColor || '#0078D4',
               placeholder: '#0078D4',
               borderless: true
             },
@@ -4372,7 +4371,7 @@ End If`,
               title: t('isoConfig.uiPersonalization.accentColorOnStart'),
               description: '',
               controlType: 'switch',
-              value: pers.accentColorOnStart || false,
+              value: pers.color?.accentColorOnStart || false,
               borderless: true
             },
             {
@@ -4380,7 +4379,7 @@ End If`,
               title: t('isoConfig.uiPersonalization.accentColorOnBorders'),
               description: '',
               controlType: 'switch',
-              value: pers.accentColorOnBorders || false,
+              value: pers.color?.accentColorOnBorders || false,
               borderless: true
             },
             {
@@ -4388,13 +4387,13 @@ End If`,
               title: t('isoConfig.uiPersonalization.enableTransparency'),
               description: '',
               controlType: 'switch',
-              value: pers.enableTransparency || false,
+              value: pers.color?.enableTransparency || false,
               borderless: true
             }
           ]
         }
       ],
-      selectedValue: pers.colorMode || 'default',
+      selectedValue: pers.color?.mode || 'default',
       expanded: false
     })
 
@@ -4421,7 +4420,7 @@ End If`,
               title: t('isoConfig.uiPersonalization.wallpaperColor'),
               description: '',
               controlType: 'text',
-              value: pers.wallpaperColor || '#008080',
+              value: pers.wallpaper?.color || '#008080',
               placeholder: '#008080',
               borderless: true
             }
@@ -4437,7 +4436,7 @@ End If`,
               title: t('isoConfig.uiPersonalization.wallpaperPsScript'),
               description: '',
               icon: 'code',
-              value: pers.wallpaperScript || '',
+              value: pers.wallpaper?.script || '',
               placeholder: `$url = 'https://example.com/wallpaper.jpg';
 & {
   $ProgressPreference = 'SilentlyContinue';
@@ -4450,7 +4449,7 @@ End If`,
           ]
         }
       ],
-      selectedValue: pers.wallpaperMode || 'default',
+      selectedValue: pers.wallpaper?.mode || 'default',
       expanded: false
     })
 
@@ -4477,7 +4476,7 @@ End If`,
               title: t('isoConfig.uiPersonalization.lockScreenPsScript'),
               description: '',
               icon: 'code',
-              value: pers.lockScreenScript || '',
+              value: pers.lockScreen?.script || '',
               placeholder: `foreach( $drive in [System.IO.DriveInfo]::GetDrives() ) {
   if( $found = Join-Path -Path $drive.RootDirectory -ChildPath 'lockscreen.png' -Resolve -ErrorAction 'SilentlyContinue' ) {
     return [System.IO.File]::ReadAllBytes( $found );
@@ -4490,7 +4489,7 @@ End If`,
           ]
         }
       ],
-      selectedValue: pers.lockScreenMode || 'default',
+      selectedValue: pers.lockScreen?.mode || 'default',
       expanded: false
     })
 
@@ -4504,51 +4503,101 @@ End If`,
 
     // 1. Color mode
     setupRadioContainer('color-mode-container', 'color-mode', (value) => {
-      this.updateModule('personalization', { colorMode: value as 'default' | 'custom' })
+      this.updateModule('personalization', { 
+        color: { 
+          ...(pers.color || {}), 
+          mode: value as 'default' | 'custom' 
+        } 
+      })
       this.renderPersonalization()
     }, true)
 
-    if (pers.colorMode === 'custom') {
+    if (pers.color?.mode === 'custom') {
       setupComboCard('system-color-theme-card', (value) => {
-        this.updateModule('personalization', { systemColorTheme: value as 'dark' | 'light' })
+        this.updateModule('personalization', { 
+          color: { 
+            ...(pers.color || {}), 
+            systemTheme: value as 'dark' | 'light' 
+          } 
+        })
       })
 
       setupComboCard('apps-color-theme-card', (value) => {
-        this.updateModule('personalization', { appsColorTheme: value as 'dark' | 'light' })
+        this.updateModule('personalization', { 
+          color: { 
+            ...(pers.color || {}), 
+            appsTheme: value as 'dark' | 'light' 
+          } 
+        })
       })
 
       setupComboCard('accent-color-card', (value) => {
-        this.updateModule('personalization', { accentColor: value as string })
+        this.updateModule('personalization', { 
+          color: { 
+            ...(pers.color || {}), 
+            accentColor: value as string 
+          } 
+        })
       })
 
       setupComboCard('accent-color-on-start-card', (value) => {
-        this.updateModule('personalization', { accentColorOnStart: value as boolean })
+        this.updateModule('personalization', { 
+          color: { 
+            ...(pers.color || {}), 
+            accentColorOnStart: value as boolean 
+          } 
+        })
       })
 
       setupComboCard('accent-color-on-borders-card', (value) => {
-        this.updateModule('personalization', { accentColorOnBorders: value as boolean })
+        this.updateModule('personalization', { 
+          color: { 
+            ...(pers.color || {}), 
+            accentColorOnBorders: value as boolean 
+          } 
+        })
       })
 
       setupComboCard('enable-transparency-card', (value) => {
-        this.updateModule('personalization', { enableTransparency: value as boolean })
+        this.updateModule('personalization', { 
+          color: { 
+            ...(pers.color || {}), 
+            enableTransparency: value as boolean 
+          } 
+        })
       })
     }
 
     // 2. Wallpaper mode
     setupRadioContainer('wallpaper-mode-container', 'wallpaper-mode', (value) => {
-      this.updateModule('personalization', { wallpaperMode: value as 'default' | 'solid' | 'script' })
+      this.updateModule('personalization', { 
+        wallpaper: { 
+          ...(pers.wallpaper || {}), 
+          mode: value as 'default' | 'solid' | 'script' 
+        } 
+      })
       this.renderPersonalization()
     }, true)
 
-    if (pers.wallpaperMode === 'solid') {
+    if (pers.wallpaper?.mode === 'solid') {
       setupComboCard('wallpaper-color-card', (value) => {
-        this.updateModule('personalization', { wallpaperColor: value as string })
+        this.updateModule('personalization', { 
+          wallpaper: { 
+            ...(pers.wallpaper || {}), 
+            color: value as string 
+          } 
+        })
       })
     }
 
-    if (pers.wallpaperMode === 'script') {
+    if (pers.wallpaper?.mode === 'script') {
       setupTextCard('wallpaper-script-card', (value) => {
-        this.updateModule('personalization', { wallpaperScript: value })
+        this.updateModule('personalization', { 
+          wallpaper: { 
+            ...(pers.wallpaper || {}), 
+            script: value 
+          } 
+        })
       }, async () => {
         if (window.electronAPI?.showOpenDialog) {
           const result = await window.electronAPI.showOpenDialog({
@@ -4558,7 +4607,12 @@ End If`,
           if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
             const content = await window.electronAPI.readFile(result.filePaths[0])
             setTextCardValue('wallpaper-script-card', content)
-            this.updateModule('personalization', { wallpaperScript: content })
+            this.updateModule('personalization', { 
+              wallpaper: { 
+                ...(pers.wallpaper || {}), 
+                script: content 
+              } 
+            })
           }
         }
       }, async () => {
@@ -4577,13 +4631,23 @@ End If`,
 
     // 3. Lock Screen mode
     setupRadioContainer('lockscreen-mode-container', 'lockscreen-mode', (value) => {
-      this.updateModule('personalization', { lockScreenMode: value as 'default' | 'script' })
+      this.updateModule('personalization', { 
+        lockScreen: { 
+          ...(pers.lockScreen || {}), 
+          mode: value as 'default' | 'script' 
+        } 
+      })
       this.renderPersonalization()
     }, true)
 
-    if (pers.lockScreenMode === 'script') {
+    if (pers.lockScreen?.mode === 'script') {
       setupTextCard('lockscreen-script-card', (value) => {
-        this.updateModule('personalization', { lockScreenScript: value })
+        this.updateModule('personalization', { 
+          lockScreen: { 
+            ...(pers.lockScreen || {}), 
+            script: value 
+          } 
+        })
       }, async () => {
         if (window.electronAPI?.showOpenDialog) {
           const result = await window.electronAPI.showOpenDialog({
@@ -4593,7 +4657,12 @@ End If`,
           if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
             const content = await window.electronAPI.readFile(result.filePaths[0])
             setTextCardValue('lockscreen-script-card', content)
-            this.updateModule('personalization', { lockScreenScript: content })
+            this.updateModule('personalization', { 
+              lockScreen: { 
+                ...(pers.lockScreen || {}), 
+                script: content 
+              } 
+            })
           }
         }
       }, async () => {
