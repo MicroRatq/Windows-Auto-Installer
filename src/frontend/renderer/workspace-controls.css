@@ -1429,6 +1429,8 @@
     background: var(--workspace-input-fill);
     border-color: var(--workspace-input-border);
     color: var(--text-primary);
+    /* 注意：caret-color 和 user-select 需要通过 JavaScript 在 Shadow DOM 内部设置 */
+    /* 因为 ::part() 选择器无法与 ::selection 伪元素组合使用 */
 }
 
 .workspace .text-card-body fluent-text-area::part(control):hover {
@@ -1523,6 +1525,8 @@
     background: var(--workspace-input-fill);
     border-color: var(--workspace-input-border);
     color: var(--text-primary);
+    /* 注意：caret-color 和 user-select 需要通过 JavaScript 在 Shadow DOM 内部设置 */
+    /* 因为 ::part() 选择器无法与 ::selection 伪元素组合使用 */
 }
 
 .workspace .text-card-borderless .text-card-body fluent-text-area::part(control):hover {

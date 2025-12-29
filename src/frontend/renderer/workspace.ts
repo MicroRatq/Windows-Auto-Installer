@@ -659,8 +659,12 @@ export function createTextCard(config: TextCardConfig): string {
     : ''
 
   // 文本区域HTML (placeholder 需要转义换行符)
+  // 注意：value 不在创建时设置，而是在 setupTextCard 中通过 value 属性设置，避免 HTML 解析问题
   const escapedPlaceholder = placeholder.replace(/\n/g, '&#10;').replace(/"/g, '&quot;')
-  const textareaHtml = `<fluent-text-area id="${id}-textarea" placeholder="${escapedPlaceholder}" rows="${rows}" style="width: 100%; min-height: ${rows * 24}px;">${value || ''}</fluent-text-area>`
+  // 将初始值存储在 data 属性中，使用 base64 编码避免特殊字符问题
+  const initialValueBase64 = value ? btoa(unescape(encodeURIComponent(value))) : ''
+  // 禁用拼写检查，避免脚本内容出现红色下划线
+  const textareaHtml = `<fluent-text-area id="${id}-textarea" placeholder="${escapedPlaceholder}" rows="${rows}" style="width: 100%; min-height: ${rows * 24}px;" spellcheck="false" data-initial-value-base64="${initialValueBase64}"></fluent-text-area>`
 
   // 无边框模式
   if (borderless) {
@@ -716,6 +720,78 @@ export function setupTextCard(
 
   const textarea = card.querySelector(`#${cardId}-textarea`) as any
   if (textarea) {
+    // 禁用拼写检查，避免脚本内容出现红色下划线
+    textarea.spellcheck = false
+
+    // 设置光标和文本选择样式
+    // 通过 Shadow DOM 访问内部的 textarea 元素
+    const setupTextareaStyles = () => {
+      const shadowRoot = textarea.shadowRoot
+      if (shadowRoot) {
+        // 查找内部的 textarea 元素
+        const innerTextarea = shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+        if (innerTextarea) {
+          // 设置光标颜色
+          innerTextarea.style.caretColor = 'var(--text-primary, #000000)'
+          // 确保文本可以选择
+          innerTextarea.style.userSelect = 'text'
+          // 确保元素可编辑（移除可能的只读或禁用状态）
+          innerTextarea.removeAttribute('readonly')
+          innerTextarea.removeAttribute('disabled')
+          // 添加文本选择样式（通过创建 style 元素）
+          if (!shadowRoot.querySelector('style[data-text-selection]')) {
+            const style = document.createElement('style')
+            style.setAttribute('data-text-selection', 'true')
+            style.textContent = `
+              textarea::selection {
+                background-color: var(--accent-fill-rest, #0078d4) !important;
+                color: white !important;
+              }
+              textarea::-moz-selection {
+                background-color: var(--accent-fill-rest, #0078d4) !important;
+                color: white !important;
+              }
+            `
+            shadowRoot.appendChild(style)
+          }
+          return true // 表示成功设置
+        }
+      }
+      return false // 表示 Shadow DOM 尚未准备好
+    }
+
+    // 简化版：确保在 Shadow DOM 完全初始化后设置样式
+    const trySetup = () => setupTextareaStyles()
+
+    // 立即尝试，如果失败则延迟重试
+    if (!trySetup()) {
+      // 延迟重试：等待 Shadow DOM 创建
+      requestAnimationFrame(() => {
+        if (!trySetup()) {
+          setTimeout(trySetup, 100)
+        }
+      })
+
+      // 监听交互事件，确保在用户操作时样式已设置
+      const retryOnInteraction = () => trySetup()
+      textarea.addEventListener('focus', retryOnInteraction, { passive: true })
+      textarea.addEventListener('click', retryOnInteraction, { passive: true })
+    }
+
+    // 从 data-initial-value-base64 属性获取初始值并设置到 textarea
+    const initialValueBase64 = textarea.getAttribute('data-initial-value-base64')
+    if (initialValueBase64 && (!textarea.value || textarea.value.trim() === '')) {
+      try {
+        // 解码 base64 值
+        const initialValue = decodeURIComponent(escape(atob(initialValueBase64)))
+        textarea.value = initialValue
+      } catch (e) {
+        console.error('Failed to decode initial value for TextCard:', cardId, e)
+      }
+      // 清除 data-initial-value-base64 属性，避免重复设置
+      textarea.removeAttribute('data-initial-value-base64')
+    }
+
     textarea.addEventListener('input', (e: any) => {
       const target = e.target as any
       onValueChange(target.value || '')

@@ -846,17 +846,6 @@ class UnattendConfigManager {
 
   // 设置事件监听器
   private setupEventListeners() {
-    // 导入/导出按钮
-    const importBtn = document.getElementById('iso-config-import-btn')
-    const exportBtn = document.getElementById('iso-config-export-btn')
-
-    if (importBtn) {
-      importBtn.addEventListener('click', () => this.handleImport())
-    }
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => this.handleExport())
-    }
-
     // 使用事件委托处理可展开card的展开/折叠
     // 这样动态生成的卡片也能正常工作
     if (this.panel) {
@@ -943,9 +932,17 @@ class UnattendConfigManager {
   private renderImportExport() {
     if (!this.panel) return
 
+    const importCardId = 'iso-config-import-card'
+    const exportCardId = 'iso-config-export-card'
+
+    // 检查卡片是否已存在，如果存在则直接返回，避免重复创建
+    if (this.panel.querySelector(`#${importCardId}`) && this.panel.querySelector(`#${exportCardId}`)) {
+      return
+    }
+
     // 获取或创建导入/导出 section 容器
     let section = this.panel.querySelector('.section:first-child') as HTMLElement
-    if (!section || !section.querySelector('#iso-config-import-btn')) {
+    if (!section || !section.querySelector(`#${importCardId}`)) {
       // 如果不存在，创建一个新的 section
       section = document.createElement('div')
       section.className = 'section'
@@ -960,7 +957,6 @@ class UnattendConfigManager {
     contentDiv.className = 'section-content'
 
     // 创建导入卡片
-    const importCardId = 'iso-config-import-card'
     const importCardHtml = createComboCard({
       id: importCardId,
       title: t('isoConfig.import.title') || '导入配置',
@@ -971,7 +967,6 @@ class UnattendConfigManager {
     })
 
     // 创建导出卡片
-    const exportCardId = 'iso-config-export-card'
     const exportCardHtml = createComboCard({
       id: exportCardId,
       title: t('isoConfig.export.title') || '导出配置',
