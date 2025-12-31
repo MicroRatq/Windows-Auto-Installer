@@ -9,7 +9,7 @@ import tempfile
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 # Configure logging
 logging.basicConfig(
@@ -34,10 +34,10 @@ class ISOReader:
         if not self.iso_path.exists():
             raise FileNotFoundError(f"ISO file not found: {iso_path}")
         
-        self.iso = None
+        self.iso: Optional[Any] = None
         self.use_udf = False
         self.use_joliet = False
-        self.facade = None
+        self.facade: Optional[Any] = None
     
     def __enter__(self) -> 'ISOReader':
         """上下文管理器入口"""
@@ -76,6 +76,9 @@ class ISOReader:
         Returns:
             UDF、Joliet 或 ISO9660 facade
         """
+        if self.iso is None:
+            raise RuntimeError("ISO not opened. Use ISOReader as context manager.")
+        
         if self.use_udf:
             return self.iso.get_udf_facade()
         elif self.use_joliet:
@@ -120,6 +123,8 @@ class ISOReader:
         
         # 如果是 UDF，使用 metadata 获取准确大小
         if self.use_udf:
+            if self.iso is None:
+                raise RuntimeError("ISO not opened. Use ISOReader as context manager.")
             try:
                 udf_facade = self.iso.get_udf_facade()
                 # 尝试不同的路径格式
@@ -151,6 +156,8 @@ class ISOReader:
                 logger.debug(f"Failed to get file size from UDF metadata: {e}, falling back to stream method")
         
         # 对于非 UDF 或 metadata 方法失败的情况，回退到原来的方法
+        if self.facade is None:
+            raise RuntimeError("Facade not initialized. Use ISOReader as context manager.")
         try:
             with self.facade.open_file_from_iso(iso_path) as infp:
                 return infp.seek(0, 2)
@@ -212,6 +219,9 @@ class ISOReader:
         if not iso_path.startswith('/'):
             iso_path = '/' + iso_path
         
+        if self.facade is None:
+            raise RuntimeError("Facade not initialized. Use ISOReader as context manager.")
+        
         try:
             # 使用 metadata 获取文件大小
             file_size = self._get_file_size_from_metadata(iso_path)
@@ -270,6 +280,9 @@ class ISOReader:
         # 标准化路径
         if not iso_path.startswith('/'):
             iso_path = '/' + iso_path
+        
+        if self.facade is None:
+            raise RuntimeError("Facade not initialized. Use ISOReader as context manager.")
         
         try:
             children = list(self.facade.list_children(iso_path))
@@ -411,6 +424,9 @@ class ISOReader:
         # 标准化路径
         if not iso_path.startswith('/'):
             iso_path = '/' + iso_path
+        
+        if self.facade is None:
+            raise RuntimeError("Facade not initialized. Use ISOReader as context manager.")
         
         try:
             with self.facade.open_file_from_iso(iso_path):
