@@ -73,6 +73,7 @@ dist-electron/
 
 # Build outputs
 *.exe
+!src/shared/xorriso/xorriso.exe
 *.msi
 *.dmg
 *.pkg
