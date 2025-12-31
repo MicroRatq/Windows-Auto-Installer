@@ -3,8 +3,11 @@ ISO image read-only operations module
 Supports reading files, listing directories, and extracting files from ISO images
 """
 import sys
+import os
 import logging
 import tempfile
+import subprocess
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +83,80 @@ class ISOReader:
         else:
             return self.iso.get_iso9660_facade()
     
+    def _get_7zip_path(self) -> str:
+        """
+        获取 7-Zip 可执行文件路径
+        
+        Returns:
+            7z.exe 的完整路径
+            
+        Raises:
+            FileNotFoundError: 如果 7z.exe 不存在
+        """
+        project_root = Path(__file__).parent.parent.parent
+        zip7_path = project_root / "src" / "shared" / "7zip" / "7z.exe"
+        
+        if not zip7_path.exists():
+            raise FileNotFoundError(f"7z.exe not found at: {zip7_path}")
+        
+        return str(zip7_path)
+    
+    def _get_file_size_from_metadata(self, iso_path: str) -> int:
+        """
+        从 UDF metadata 获取文件大小（用于获取准确的大文件大小）
+        
+        Args:
+            iso_path: ISO 中的文件路径
+            
+        Returns:
+            文件大小（字节）
+            
+        Raises:
+            FileNotFoundError: 文件不存在或无法获取大小
+        """
+        # 标准化路径
+        if not iso_path.startswith('/'):
+            iso_path = '/' + iso_path
+        
+        # 如果是 UDF，使用 metadata 获取准确大小
+        if self.use_udf:
+            try:
+                udf_facade = self.iso.get_udf_facade()
+                # 尝试不同的路径格式
+                paths_to_try = [
+                    iso_path,
+                    iso_path.lstrip('/'),
+                    iso_path.upper(),
+                    iso_path.lstrip('/').upper()
+                ]
+                
+                file_record = None
+                for path in paths_to_try:
+                    try:
+                        file_record = udf_facade.get_record(path)
+                        break
+                    except:
+                        continue
+                
+                if file_record:
+                    # 使用 get_data_length() 获取实际数据长度
+                    try:
+                        return file_record.get_data_length()
+                    except:
+                        # 如果 get_data_length() 失败，尝试 info_len
+                        if hasattr(file_record, 'info_len'):
+                            return file_record.info_len
+                        raise
+            except Exception as e:
+                logger.debug(f"Failed to get file size from UDF metadata: {e}, falling back to stream method")
+        
+        # 对于非 UDF 或 metadata 方法失败的情况，回退到原来的方法
+        try:
+            with self.facade.open_file_from_iso(iso_path) as infp:
+                return infp.seek(0, 2)
+        except Exception as e:
+            raise FileNotFoundError(f"File not found: {iso_path} ({e})")
+    
     def _decode_filename(self, identifier_bytes: bytes) -> str:
         """
         解码文件名
@@ -136,9 +213,10 @@ class ISOReader:
             iso_path = '/' + iso_path
         
         try:
+            # 使用 metadata 获取文件大小
+            file_size = self._get_file_size_from_metadata(iso_path)
+            
             with self.facade.open_file_from_iso(iso_path) as infp:
-                # 对于大文件，使用分块读取
-                file_size = infp.seek(0, 2)  # 移动到末尾获取大小
                 infp.seek(0)  # 回到开头
                 
                 if file_size > 100 * 1024 * 1024:  # > 100MB
@@ -221,7 +299,7 @@ class ISOReader:
     
     def extract_file(self, iso_path: str, output_path: str) -> None:
         """
-        提取 ISO 中的文件到本地路径（支持大文件分块）
+        提取 ISO 中的文件到本地路径（使用 7-Zip，支持大文件）
         
         Args:
             iso_path: ISO 中的文件路径
@@ -234,33 +312,89 @@ class ISOReader:
         if not iso_path.startswith('/'):
             iso_path = '/' + iso_path
         
+        # 转换为 7-Zip 使用的路径格式（去掉前导斜杠）
+        zip7_path = iso_path.lstrip('/')
+        
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         
+        # 获取文件大小用于日志
         try:
-            with self.facade.open_file_from_iso(iso_path) as infp:
-                # 获取文件大小
-                file_size = infp.seek(0, 2)
-                infp.seek(0)
+            file_size = self._get_file_size_from_metadata(iso_path)
+            logger.info(f"Extracting {iso_path} ({file_size / (1024**2):.2f} MB) to {output_path}")
+        except Exception as e:
+            logger.warning(f"Could not get file size: {e}, proceeding with extraction")
+            file_size = 0
+        
+        # 使用 7-Zip 提取文件
+        try:
+            zip7_exe = self._get_7zip_path()
+            
+            # 创建临时输出目录
+            temp_output_dir = output_file.parent / f"_temp_extract_{output_file.stem}"
+            temp_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            try:
+                # 7-Zip 命令: 7z x <iso> -o<output_dir> <file_path> -y
+                cmd = [
+                    zip7_exe,
+                    "x",
+                    str(self.iso_path),
+                    f"-o{temp_output_dir}",
+                    zip7_path,
+                    "-y"  # 自动确认覆盖
+                ]
                 
-                logger.info(f"Extracting {iso_path} ({file_size / (1024**2):.2f} MB) to {output_path}")
+                logger.debug(f"Running 7-Zip command: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=3600  # 1小时超时
+                )
                 
-                # 分块写入
-                with open(output_file, 'wb') as outfp:
-                    chunk_size = 1024 * 1024  # 1MB
-                    bytes_written = 0
-                    while True:
-                        chunk = infp.read(chunk_size)
-                        if not chunk:
-                            break
-                        outfp.write(chunk)
-                        bytes_written += len(chunk)
-                        # 每 100MB 显示一次进度
-                        if bytes_written % (100 * 1024 * 1024) == 0:
-                            progress = (bytes_written / file_size) * 100
-                            logger.debug(f"Extraction progress: {progress:.1f}% ({bytes_written // (1024*1024)}MB / {file_size // (1024*1024)}MB)")
+                if result.returncode != 0:
+                    error_msg = result.stderr or result.stdout or "Unknown error"
+                    raise subprocess.CalledProcessError(result.returncode, cmd, error_msg)
+                
+                # 查找提取的文件（7-Zip 会保留目录结构）
+                extracted_file = temp_output_dir / zip7_path.replace('/', os.sep)
+                if not extracted_file.exists():
+                    # 尝试其他可能的路径
+                    possible_paths = [
+                        temp_output_dir / zip7_path.replace('/', os.sep),
+                        temp_output_dir / zip7_path.upper().replace('/', os.sep),
+                        temp_output_dir / zip7_path.lower().replace('/', os.sep),
+                    ]
+                    # 递归搜索
+                    for path in temp_output_dir.rglob(extracted_file.name):
+                        extracted_file = path
+                        break
+                    else:
+                        raise FileNotFoundError(f"Extracted file not found in {temp_output_dir}")
+                
+                # 移动到最终位置
+                if extracted_file != output_file:
+                    extracted_file.replace(output_file)
                 
                 logger.info(f"Successfully extracted {iso_path} to {output_path}")
+                
+            finally:
+                # 清理临时目录
+                if temp_output_dir.exists():
+                    try:
+                        temp_output_dir.rmdir()  # 只删除空目录
+                    except:
+                        # 如果目录不为空，尝试删除整个目录树
+                        try:
+                            shutil.rmtree(temp_output_dir)
+                        except:
+                            logger.warning(f"Could not clean up temp directory: {temp_output_dir}")
+                            
+        except subprocess.CalledProcessError as e:
+            raise FileNotFoundError(f"7-Zip extraction failed: {e.stderr or e.stdout or str(e)}")
+        except FileNotFoundError as e:
+            raise
         except Exception as e:
             raise FileNotFoundError(f"File not found or cannot be extracted: {iso_path} ({e})")
     
@@ -286,7 +420,7 @@ class ISOReader:
     
     def get_file_size(self, iso_path: str) -> int:
         """
-        获取文件大小
+        获取文件大小（使用 UDF metadata 获取准确大小）
         
         Args:
             iso_path: ISO 中的文件路径
@@ -297,14 +431,5 @@ class ISOReader:
         Raises:
             FileNotFoundError: 文件不存在
         """
-        # 标准化路径
-        if not iso_path.startswith('/'):
-            iso_path = '/' + iso_path
-        
-        try:
-            with self.facade.open_file_from_iso(iso_path) as infp:
-                file_size = infp.seek(0, 2)  # 移动到末尾
-                return file_size
-        except Exception as e:
-            raise FileNotFoundError(f"File not found: {iso_path} ({e})")
+        return self._get_file_size_from_metadata(iso_path)
 

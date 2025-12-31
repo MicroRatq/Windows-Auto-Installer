@@ -1,7 +1,7 @@
 """
 ISO image write operations module
 Supports adding, replacing, and removing files in ISO images while preserving boot information
-Uses xorriso for ISO creation to handle large files (>4GB) properly
+Uses mkisofs for ISO creation to handle large files (>4GB) properly
 """
 import sys
 import logging
@@ -21,7 +21,7 @@ logger = logging.getLogger('ISOWriter')
 
 
 class ISOWriter:
-    """ISO 写入操作构建器，使用 xorriso 进行 ISO 打包"""
+    """ISO 写入操作构建器，使用 mkisofs 进行 ISO 打包"""
     
     def __init__(self, source_iso_path: str):
         """
@@ -34,8 +34,8 @@ class ISOWriter:
         if not self.source_iso_path.exists():
             raise FileNotFoundError(f"Source ISO file not found: {source_iso_path}")
         
-        # xorriso 工具路径
-        self.xorriso_exe_path = self._get_xorriso_path()
+        # mkisofs 工具路径
+        self.mkisofs_exe_path = self._get_mkisofs_path()
         
         # 源 ISO 信息（用于检测文件系统类型和引导信息）
         self.source_iso = None
@@ -49,31 +49,30 @@ class ISOWriter:
         self.skip_files = set()  # 要跳过的文件（将被替换或删除）
         self.add_files = {}  # {iso_path: local_path} 要添加的文件
     
-    def _get_xorriso_path(self) -> Path:
+    def _get_mkisofs_path(self) -> Path:
         """
-        获取 xorriso.exe 的路径
+        获取 mkisofs.exe 的路径
         
         Returns:
-            xorriso.exe 的 Path 对象
+            mkisofs.exe 的 Path 对象
         
         Raises:
-            FileNotFoundError: 如果 xorriso.exe 不存在
+            FileNotFoundError: 如果 mkisofs.exe 不存在
         """
         # 尝试从项目根目录查找
-        # 假设 iso_writer.py 在 src/backend/，xorriso 在 src/shared/xorriso/
+        # 假设 iso_writer.py 在 src/backend/，mkisofs 在 src/shared/mkisofs/
         current_file = Path(__file__).resolve()
         project_root = current_file.parent.parent.parent
-        xorriso_path = project_root / "src" / "shared" / "xorriso" / "xorriso.exe"
+        mkisofs_path = project_root / "src" / "shared" / "mkisofs" / "mkisofs.exe"
         
-        if xorriso_path.exists():
-            logger.debug(f"Found xorriso at: {xorriso_path}")
-            return xorriso_path
+        if mkisofs_path.exists():
+            logger.debug(f"Found mkisofs at: {mkisofs_path}")
+            return mkisofs_path
         
         # 如果找不到，抛出错误
         raise FileNotFoundError(
-            f"xorriso.exe not found at: {xorriso_path}\n"
-            f"Please ensure xorriso is available at src/shared/xorriso/xorriso.exe\n"
-            f"Download from: https://github.com/PeyTy/xorriso-exe-for-windows"
+            f"mkisofs.exe not found at: {mkisofs_path}\n"
+            f"Please ensure mkisofs is available at src/shared/mkisofs/mkisofs.exe"
         )
     
     def _detect_iso_filesystem(self, iso: Any) -> dict[str, Any]:
@@ -337,26 +336,7 @@ class ISOWriter:
             logger.debug(traceback.format_exc())
             return {"has_boot": False}
     
-    def _windows_to_cygwin_path(self, path: Path) -> str:
-        """
-        将 Windows 路径转换为 Cygwin 路径格式
-        
-        Args:
-            path: Windows 路径
-        
-        Returns:
-            Cygwin 路径格式（如 /cygdrive/c/path/to/file）
-        """
-        path_str = str(path.resolve())
-        # 将 Windows 路径转换为 Cygwin 格式
-        # C:\path\to\file -> /cygdrive/c/path/to/file
-        if path_str[1] == ':':
-            drive = path_str[0].lower()
-            rest = path_str[2:].replace('\\', '/')
-            return f"/cygdrive/{drive}{rest}"
-        return path_str.replace('\\', '/')
-    
-    def _build_xorriso_command(
+    def _build_mkisofs_command(
         self,
         source_dir: Path,
         output_path: Path,
@@ -364,7 +344,7 @@ class ISOWriter:
         boot_info: dict[str, Any]
     ) -> list[str]:
         """
-        构建 xorriso 命令参数
+        构建 mkisofs 命令参数
         
         Args:
             source_dir: 源目录路径（ISO 内容）
@@ -373,30 +353,25 @@ class ISOWriter:
             boot_info: 引导信息
         
         Returns:
-            xorriso 命令参数列表
+            mkisofs 命令参数列表
         """
-        cmd = [str(self.xorriso_exe_path)]
+        cmd = [str(self.mkisofs_exe_path)]
         
-        # 使用 -as mkisofs 模式（兼容 mkisofs 命令）
-        # 注意：对于 UDF ISO，我们使用 Joliet + Rock Ridge，因为 mkisofs 模式不支持 -udf
-        # Joliet + Rock Ridge 也支持大文件（>4GB），可以满足需求
-        cmd.extend(["-as", "mkisofs"])
+        # 输出文件（直接使用 Windows 路径，不需要 Cygwin 转换）
+        cmd.extend(["-o", str(output_path.resolve())])
         
         # 文件系统类型参数
         if fs_info.get("udf"):
-            # UDF 文件系统：使用 Joliet + Rock Ridge 代替（也支持大文件）
-            cmd.append("-J")  # Joliet
-            cmd.append("-R")   # Rock Ridge
-            logger.info("Source ISO uses UDF, creating with Joliet + Rock Ridge (supports large files)")
+            # UDF 文件系统：使用 -udf 参数
+            cmd.append("-udf")
+            logger.info("Source ISO uses UDF, creating with UDF filesystem")
         elif fs_info.get("joliet"):
             # Joliet 文件系统
             cmd.append("-J")
-            cmd.append("-R")  # 通常与 Rock Ridge 一起使用
-            logger.info("Using Joliet filesystem with Rock Ridge")
+            logger.info("Using Joliet filesystem")
         else:
-            # ISO9660 with Rock Ridge
-            cmd.append("-R")
-            logger.info("Using ISO9660 with Rock Ridge")
+            # ISO9660
+            logger.info("Using ISO9660 filesystem")
         
         # 支持大文件（>4GB）
         cmd.extend(["-iso-level", "3"])
@@ -413,9 +388,11 @@ class ISOWriter:
                 bios_file_local = source_dir / bios_file.lstrip('/')
                 
                 if bios_file_local.exists():
-                    # 使用正确的 El Torito BIOS 引导参数
+                    # 使用 mkisofs 的 BIOS 引导参数
+                    # -b 或 -eltorito-boot 都可以，使用 -b 更简洁
+                    bios_path_in_iso = bios_file.lstrip('/')
                     cmd.extend([
-                        "-eltorito-boot", bios_file.lstrip('/'),
+                        "-b", bios_path_in_iso,
                         "-no-emul-boot"
                     ])
                     
@@ -440,18 +417,13 @@ class ISOWriter:
                 uefi_file_local = source_dir / uefi_file.lstrip('/')
                 
                 if uefi_file_local.exists():
-                    # 使用正确的 El Torito UEFI 引导参数
-                    # Windows ISO 的 UEFI 引导使用 -eltorito-alt-boot -e 参数
-                    # 引导文件路径应该是相对于 ISO 根目录的路径（不带前导 /）
+                    # 使用 mkisofs 的 UEFI 引导参数
+                    # -eltorito-alt-boot 后跟 -eltorito-platform 0xEF (UEFI) 和 -b 指定引导文件
                     uefi_path_in_iso = uefi_file.lstrip('/')
-                    
-                    # 使用 -eltorito-alt-boot 创建 UEFI 引导入口
-                    # 注意：-eltorito-alt-boot 会自动创建 Platform ID 0xEF (EFI) 的 section
-                    # 参数顺序：-eltorito-alt-boot 后跟 -e 指定引导文件
-                    # 不需要显式指定 -eltorito-platform，因为 -eltorito-alt-boot 会自动处理
                     cmd.extend([
                         "-eltorito-alt-boot",
-                        "-e", uefi_path_in_iso,
+                        "-eltorito-platform", "0xEF",  # UEFI platform ID
+                        "-b", uefi_path_in_iso,
                         "-no-emul-boot"
                     ])
                     
@@ -473,7 +445,7 @@ class ISOWriter:
                 boot_type = self._identify_boot_type(boot_file_path)
                 if boot_type == 'bios':
                     cmd.extend([
-                        "-eltorito-boot", boot_file_path.lstrip('/'),
+                        "-b", boot_file_path.lstrip('/'),
                         "-no-emul-boot",
                         "-boot-load-size", "8",
                         "-boot-info-table"
@@ -482,29 +454,25 @@ class ISOWriter:
                 else:
                     cmd.extend([
                         "-eltorito-alt-boot",
-                        "-e", boot_file_path.lstrip('/'),
+                        "-eltorito-platform", "0xEF",  # UEFI platform ID
+                        "-b", boot_file_path.lstrip('/'),
                         "-no-emul-boot"
                     ])
                     logger.info(f"Adding UEFI boot (legacy format): {boot_file_path}")
             else:
                 logger.warning(f"Boot file not found in extracted directory: {boot_file_path}")
         
-        # 输出文件（转换为 Cygwin 路径）
-        cygwin_output = self._windows_to_cygwin_path(output_path)
-        cmd.extend(["-o", cygwin_output])
-        
-        # 源目录（转换为 Cygwin 路径，必须是最后一个参数）
-        cygwin_source = self._windows_to_cygwin_path(source_dir)
-        cmd.append(cygwin_source)
+        # 源目录（直接使用 Windows 路径，必须是最后一个参数）
+        cmd.append(str(source_dir.resolve()))
         
         return cmd
     
-    def _run_xorriso(self, cmd: list[str]) -> subprocess.CompletedProcess:
+    def _run_mkisofs(self, cmd: list[str]) -> subprocess.CompletedProcess:
         """
-        执行 xorriso 命令
+        执行 mkisofs 命令
         
         Args:
-            cmd: xorriso 命令参数列表
+            cmd: mkisofs 命令参数列表
         
         Returns:
             subprocess.CompletedProcess 对象
@@ -512,7 +480,7 @@ class ISOWriter:
         Raises:
             subprocess.CalledProcessError: 如果命令执行失败
         """
-        logger.info(f"Running xorriso command: {' '.join(cmd)}")
+        logger.info(f"Running mkisofs command: {' '.join(cmd)}")
         
         try:
             result = subprocess.run(
@@ -523,7 +491,7 @@ class ISOWriter:
             )
             
             if result.returncode != 0:
-                logger.error(f"xorriso failed with return code {result.returncode}")
+                logger.error(f"mkisofs failed with return code {result.returncode}")
                 logger.error(f"stdout: {result.stdout}")
                 logger.error(f"stderr: {result.stderr}")
                 raise subprocess.CalledProcessError(
@@ -533,19 +501,19 @@ class ISOWriter:
                     result.stderr
                 )
             
-            logger.info("xorriso completed successfully")
+            logger.info("mkisofs completed successfully")
             if result.stdout:
-                logger.debug(f"xorriso stdout: {result.stdout}")
+                logger.debug(f"mkisofs stdout: {result.stdout}")
             
             return result
             
         except FileNotFoundError:
             raise FileNotFoundError(
-                f"xorriso.exe not found at: {self.xorriso_exe_path}\n"
-                f"Please ensure xorriso is available"
+                f"mkisofs.exe not found at: {self.mkisofs_exe_path}\n"
+                f"Please ensure mkisofs is available"
             )
         except Exception as e:
-            logger.error(f"Error running xorriso: {e}")
+            logger.error(f"Error running mkisofs: {e}")
             raise
     
     def add_file(self, local_path: str, iso_path: str) -> 'ISOWriter':
@@ -615,7 +583,7 @@ class ISOWriter:
     
     def write(self, output_path: str) -> dict[str, Any]:
         """
-        执行所有操作并写入新 ISO（使用 xorriso）
+        执行所有操作并写入新 ISO（使用 mkisofs）
         
         Args:
             output_path: 输出 ISO 文件路径
@@ -727,15 +695,15 @@ class ISOWriter:
                 shutil.copy2(local_path, target_path)
                 logger.info(f"Added/replaced file: {local_path} -> {iso_path}")
             
-            # 7. 使用 xorriso 创建新 ISO
-            logger.info(f"Creating new ISO using xorriso: {output_file}")
-            xorriso_cmd = self._build_xorriso_command(
+            # 7. 使用 mkisofs 创建新 ISO
+            logger.info(f"Creating new ISO using mkisofs: {output_file}")
+            mkisofs_cmd = self._build_mkisofs_command(
                 self.temp_dir,
                 output_file,
                 fs_info,
                 boot_info
             )
-            self._run_xorriso(xorriso_cmd)
+            self._run_mkisofs(mkisofs_cmd)
             
             # 8. 验证输出文件
             if not output_file.exists():
