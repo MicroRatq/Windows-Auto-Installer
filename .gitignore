@@ -104,6 +104,7 @@ ref/
 *.xml
 !src/shared/winpe/*.wim
 !src/shared/winpe/*.sdi
+src/shared/wimlib/doc
 
 # Logs
 logs/

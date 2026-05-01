@@ -334,7 +334,7 @@ class ISOReader:
         # 获取文件大小用于日志
         try:
             file_size = self._get_file_size_from_metadata(iso_path)
-            logger.info(f"Extracting {iso_path} ({file_size / (1024**2):.2f} MB) to {output_path}")
+            logger.debug(f"Extracting {iso_path} ({file_size / (1024**2):.2f} MB) to {output_path}")
         except Exception as e:
             logger.warning(f"Could not get file size: {e}, proceeding with extraction")
             file_size = 0
@@ -390,7 +390,7 @@ class ISOReader:
                 if extracted_file != output_file:
                     extracted_file.replace(output_file)
                 
-                logger.info(f"Successfully extracted {iso_path} to {output_path}")
+                logger.debug(f"Successfully extracted {iso_path} to {output_path}")
                 
             finally:
                 # 清理临时目录
