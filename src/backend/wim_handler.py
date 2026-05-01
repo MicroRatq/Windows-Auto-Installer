@@ -10,12 +10,7 @@ from ctypes import wintypes
 from pathlib import Path
 from typing import Any, Optional
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(name)s] %(levelname)s: %(message)s',
-    stream=sys.stderr
-)
+
 logger = logging.getLogger('WIMHandler')
 
 
@@ -454,22 +449,17 @@ class WIMHandler:
     
     def get_image_property(self, image: int, property_name: str) -> Optional[str]:
         """
-        Get a property of a specific image
+        Get a specific property of an image using XML metadata
         
         Args:
             image: 1-based image index
-            property_name: Property name (e.g., "NAME", "DESCRIPTION", "WINDOWS/VERSION/BUILD")
-        
+            property_name: Name of the property (e.g., "WINDOWS/VERSION/BUILD", "WINDOWS/ARCH")
+            
         Returns:
-            Property value as string, or None if not found
+            Property value string, or None if not found
         """
-        property_name_ptr = ctypes.c_wchar_p(property_name)
-        result_ptr = self._dll.wimlib_get_image_property(
-            self._wim_ptr,
-            image,
-            property_name_ptr
-        )
-        
+        prop_name_ptr = ctypes.c_wchar_p(property_name)
+        result_ptr = self._dll.wimlib_get_image_property(self._wim_ptr, image, prop_name_ptr)
         if result_ptr:
             return ctypes.wstring_at(result_ptr)
         return None
@@ -503,6 +493,43 @@ class WIMHandler:
         if result_ptr:
             return ctypes.wstring_at(result_ptr)
         return None
+    
+
+    def get_image_info(self, image: int, key: str) -> Any:
+        """
+        Get a specific parsed information field of an image.
+        
+        Supported keys:
+        - name, description, build, sp_build, architecture, architecture_name, 
+          edition, language, os_type, etc.
+        """
+        # 1. 映射常见 Key 到 WIM XML 路径或专用方法
+        mapping = {
+            "name": lambda: self.get_image_name(image),
+            "description": lambda: self.get_image_description(image),
+            "display_name": lambda: self.get_image_property(image, "DISPLAYNAME"),
+            "build": lambda: self.get_image_property(image, "WINDOWS/VERSION/BUILD"),
+            "sp_build": lambda: self.get_image_property(image, "WINDOWS/VERSION/SPBUILD"),
+            "architecture": lambda: self.get_image_property(image, "WINDOWS/ARCH"),
+            "edition": lambda: self.get_image_property(image, "WINDOWS/EDITIONID") or self.get_image_property(image, "WINDOWS/EDITION"),
+            "language": lambda: self.get_image_property(image, "WINDOWS/LANGUAGES/DEFAULT"),
+            "product_name": lambda: self.get_image_property(image, "WINDOWS/PRODUCTNAME"),
+        }
+        
+        if key in mapping:
+            return mapping[key]()
+            
+        # 2. 处理计算型字段
+        if key == "architecture_name":
+            arch_code = self.get_image_property(image, "WINDOWS/ARCH")
+            return {"0": "x86", "9": "x64", "12": "arm64"}.get(arch_code, "unknown")
+            
+        if key == "os_type":
+            build = self.get_image_property(image, "WINDOWS/VERSION/BUILD")
+            return "Windows11" if int(build or 0) >= 22000 else "Windows10"
+            
+        # 3. 默认尝试作为直接属性读取
+        return self.get_image_property(image, key)
     
     def extract_image(self, image: int, target_dir: str, extract_flags: Optional[int] = None) -> None:
         """
