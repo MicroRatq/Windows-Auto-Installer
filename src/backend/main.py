@@ -300,6 +300,13 @@ class BackendServer:
             self.register_handler("unattend_export_xml", self._handle_unattend_export_xml)
             self.register_handler("unattend_import_xml", self._handle_unattend_import_xml)
             self.register_handler("unattend_get_data", self._handle_unattend_get_data)
+            
+            # Phase 2 & 3: ISO Customize and Burn handlers
+            self.register_handler("iso_customize_start", self._handle_iso_customize_start)
+            self.register_handler("iso_customize_status", self._handle_iso_customize_status)
+            self.register_handler("burn_list_devices", self._handle_burn_list_devices)
+            self.register_handler("burn_start", self._handle_burn_start)
+            self.register_handler("burn_status", self._handle_burn_status)
         except ImportError as e:
             logger.error(f"Failed to import Unattend generator: {e}")
             self.unattend_generator = None
@@ -1105,6 +1112,93 @@ class BackendServer:
             import traceback
             logger.error(traceback.format_exc())
             raise
+            
+    def _handle_iso_customize_start(self, params: dict[str, Any]) -> dict[str, str]:
+        """异步定制ISO文件：启动任务"""
+        source_iso = params.get("source_iso")
+        target_iso = params.get("target_iso")
+        config_dict = params.get("config")
+        
+        if not source_iso or not target_iso or not config_dict:
+            raise ValueError("Missing source_iso, target_iso, or config parameter")
+            
+        if not self.unattend_generator:
+            raise Exception("Unattend generator not initialized")
+            
+        # 生成 XML
+        from unattend_generator import config_dict_to_configuration
+        config = config_dict_to_configuration(config_dict, self.unattend_generator)
+        xml_bytes = self.unattend_generator.generate_xml(config)
+        
+        def _customize_job(source_path, target_path, xml_data):
+            import tempfile
+            import os
+            from iso_modifier import ISOModifier
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as temp_xml:
+                temp_xml.write(xml_data)
+                temp_xml_path = temp_xml.name
+                
+            try:
+                # 遵循集成逻辑：通过 ISOModifier 协调写入 autounattend.xml 并利用内部机制使用 mkisofs 重新生成大文件 ISO
+                modifier = ISOModifier(source_path)
+                result = modifier.add_autounattend(temp_xml_path, target_path)
+                if not result.get("success"):
+                    raise Exception(result.get("message", "ISO modification failed"))
+                return result
+            finally:
+                if os.path.exists(temp_xml_path):
+                    try:
+                        os.remove(temp_xml_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove temp xml file {temp_xml_path}: {e}")
+                    
+        task_id = self.task_manager.create_task(
+            "iso_customize",
+            _customize_job,
+            source_iso,
+            target_iso,
+            xml_bytes
+        )
+        return {"task_id": task_id}
+        
+    def _handle_iso_customize_status(self, params: dict[str, Any]) -> dict[str, Any]:
+        """异步定制ISO文件：查询任务状态"""
+        task_id = params.get("task_id")
+        if not task_id:
+            raise ValueError("Missing task_id parameter")
+        return self.task_manager.get_task_status(task_id)
+
+    def _handle_burn_list_devices(self, params: dict[str, Any]) -> dict[str, Any]:
+        """同步获取可用磁盘/U盘设备列表"""
+        from iso_burner import ISOBurner
+        burner = ISOBurner()
+        return {"devices": burner.list_devices()}
+
+    def _handle_burn_start(self, params: dict[str, Any]) -> dict[str, str]:
+        """异步烧录ISO文件：启动任务"""
+        iso_path = params.get("iso_path")
+        device_path = params.get("device_path")
+        if not iso_path or not device_path:
+            raise ValueError("Missing iso_path or device_path parameter")
+            
+        def _burn_job(iso, device):
+            from iso_burner import ISOBurner
+            burner = ISOBurner()
+            result = burner.burn_iso(iso, device)
+            if not result.get("success"):
+                raise Exception(result.get("message", "Burning failed"))
+            return result
+            
+        task_id = self.task_manager.create_task("iso_burn", _burn_job, iso_path, device_path)
+        return {"task_id": task_id}
+
+    def _handle_burn_status(self, params: dict[str, Any]) -> dict[str, Any]:
+        """异步烧录ISO文件：查询任务状态"""
+        task_id = params.get("task_id")
+        if not task_id:
+            raise ValueError("Missing task_id parameter")
+        return self.task_manager.get_task_status(task_id)
 
 
 def main():
