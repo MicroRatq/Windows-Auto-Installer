@@ -72,8 +72,6 @@ dist-electron/
 *.sublime-workspace
 
 # Build outputs
-*.exe
-!src/shared/xorriso/xorriso.exe
 *.msi
 *.dmg
 *.pkg
@@ -104,6 +102,7 @@ ref/
 *.xml
 !src/shared/winpe/*.wim
 !src/shared/winpe/*.sdi
+src/shared/usbimager-cli
 src/shared/wimlib/doc
 
 # Logs

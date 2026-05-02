@@ -25,38 +25,26 @@ class ISOBurner:
     def __init__(self):
         """初始化ISO烧录器"""
         self.platform = platform.system().lower()
-        self.balena_available = self._check_balena_cli()
+        self.project_root = Path(__file__).parent.parent.parent
+        self.burner_cli = self.project_root / "src" / "shared" / "usbimager" / "burner-cli.exe"
+        self.burner_available = self._check_burner_cli()
     
-    def _check_balena_cli(self) -> bool:
+    def _check_burner_cli(self) -> bool:
         """
-        检查 balena CLI 是否可用
+        检查烧录 CLI 是否可用
         
         Returns:
             是否可用
         """
-        try:
-            # 尝试运行 balena version 命令
-            result = subprocess.run(
-                ["balena", "version"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0:
-                logger.info(f"balena CLI is available: {result.stdout.strip()}")
-                return True
-            else:
-                logger.warning("balena CLI is not available (return code != 0)")
-                return False
-        except FileNotFoundError:
-            logger.warning(
-                "balena CLI not found. Please install it:\n"
-                "  npm install -g balena-cli\n"
-                "  or visit: https://github.com/balena-io/balena-cli"
-            )
+        if self.platform != "windows":
+            # Currently only our custom Windows CLI is supported in this update
             return False
-        except Exception as e:
-            logger.warning(f"Error checking balena CLI: {e}")
+            
+        if self.burner_cli.exists():
+            logger.info(f"Custom burner CLI found at: {self.burner_cli}")
+            return True
+        else:
+            logger.warning(f"Custom burner CLI NOT found at: {self.burner_cli}")
             return False
     
     def list_devices(self) -> list[dict[str, Any]]:
@@ -97,57 +85,37 @@ class ISOBurner:
         """Windows 平台设备列表"""
         devices = []
         
+        if not self.burner_available:
+            return []
+
         try:
-            # 使用 wmic 获取逻辑磁盘信息
-            cmd = [
-                "wmic",
-                "logicaldisk",
-                "get",
-                "DeviceID,Size,VolumeName,FileSystem,DriveType",
-                "/format:csv"
-            ]
-            
+            import json
+            # 使用自定义 usbimager-cli 获取磁盘信息
             result = subprocess.run(
-                cmd,
+                [str(self.burner_cli), "--list"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
+                encoding='utf-8'
             )
             
             if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                # 跳过 CSV 标题行
-                for line in lines[1:]:
-                    if not line.strip():
-                        continue
-                    
-                    parts = line.split(',')
-                    if len(parts) >= 5:
-                        device_id = parts[1].strip()
-                        size_str = parts[2].strip()
-                        volume_name = parts[3].strip()
-                        filesystem = parts[4].strip()
-                        drive_type = parts[5].strip() if len(parts) > 5 else ""
-                        
-                        # DriveType: 2 = Removable, 3 = Fixed, 4 = Network, 5 = CD-ROM
-                        removable = (drive_type == "2")
-                        
-                        try:
-                            size = int(size_str) if size_str else 0
-                        except ValueError:
-                            size = 0
-                        
-                        if device_id:
-                            devices.append({
-                                "path": device_id,  # 如 "E:"
-                                "size": size,
-                                "label": volume_name or "No Label",
-                                "filesystem": filesystem or "Unknown",
-                                "removable": removable
-                            })
+                # 解析 JSON 输出
+                try:
+                    data = json.loads(result.stdout)
+                    for dev in data:
+                        devices.append({
+                            "path": str(dev["id"]),  # 对于 usbimager-cli，路径是 ID (PhysicalDrive index)
+                            "size": dev["capacity"],
+                            "label": dev["name"],
+                            "filesystem": "Physical",
+                            "removable": True  # usbimager-cli 只返回非系统盘，默认为可移动或备选盘
+                        })
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse JSON from burner-cli: {result.stdout}")
             
         except Exception as e:
-            logger.error(f"Failed to list Windows devices: {e}")
+            logger.error(f"Failed to list Windows devices using burner-cli: {e}")
         
         return devices
     
@@ -337,8 +305,8 @@ class ISOBurner:
         if not iso_file.exists():
             raise FileNotFoundError(f"ISO file not found: {iso_path}")
         
-        if not self.balena_available:
-            error_msg = "balena CLI is not available. Please install it first."
+        if not self.burner_available:
+            error_msg = "Burner CLI is not available."
             logger.error(error_msg)
             return {
                 "success": False,
@@ -346,68 +314,75 @@ class ISOBurner:
             }
         
         # 验证设备
+        # 注意：这里的 device_path 在 Windows 下现在是数字 ID
         verify_result = self.verify_device(device_path)
         if not verify_result["valid"]:
-            error_msg = f"Device validation failed: {verify_result['message']}"
-            logger.error(error_msg)
-            return {
-                "success": False,
-                "message": error_msg
-            }
+            # 如果只是因为不是 removable，我们这里允许（因为 PhysicalDrive 1 可能被识别为 Fixed）
+            if not any("not marked as removable" in w for w in verify_result.get("warnings", [])):
+                error_msg = f"Device validation failed: {verify_result['message']}"
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "message": error_msg
+                }
         
         try:
-            logger.info(f"Burning ISO {iso_path} to device {device_path}")
+            logger.info(f"Burning ISO {iso_path} to device index {device_path}")
             
-            # 构建 balena 命令
-            # 注意：balena local flash 命令格式可能因版本而异
-            # 这里使用通用格式
+            # 构建 usbimager-cli 命令
             cmd = [
-                "balena",
-                "local",
-                "flash",
+                str(self.burner_cli),
+                "--write",
                 str(iso_file),
-                "--drive", device_path
+                device_path
             ]
-            
-            if not confirm:
-                cmd.append("--yes")
             
             logger.info(f"Running command: {' '.join(cmd)}")
             logger.warning("WARNING: This will erase all data on the target device!")
             
-            # 执行烧录（注意：实际执行需要管理员权限）
-            result = subprocess.run(
+            # 执行烧录
+            # 注意：在 Windows 下直接运行可能需要管理员权限。
+            # 如果当前不是管理员，可能需要通过 powershell 提权运行，
+            # 但这里我们先尝试直接运行，通常后端程序会以管理员权限启动。
+            
+            # 使用 Popen 以便实时获取输出（如果需要进度）
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=3600  # 1小时超时
+                bufsize=1,
+                universal_newlines=True
             )
             
-            if result.returncode == 0:
+            # 实时读取输出并记录日志
+            for line in process.stdout:
+                line = line.strip()
+                if line:
+                    if "Progress:" in line:
+                        # 解析进度 e.g. Progress: 10%
+                        logger.info(line)
+                    else:
+                        logger.info(line)
+            
+            _, stderr = process.communicate()
+            
+            if process.returncode == 0:
                 logger.info("ISO burned successfully")
                 return {
                     "success": True,
-                    "message": f"Successfully burned ISO to {device_path}"
+                    "message": f"Successfully burned ISO to device {device_path}"
                 }
             else:
-                error_msg = f"balena flash failed: {result.stderr}"
+                error_msg = f"Burner failed with exit code {process.returncode}: {stderr}"
                 logger.error(error_msg)
                 return {
                     "success": False,
                     "message": error_msg
                 }
             
-        except subprocess.TimeoutExpired:
-            error_msg = "ISO burning timed out (exceeded 1 hour)"
-            logger.error(error_msg)
-            return {
-                "success": False,
-                "message": error_msg
-            }
         except Exception as e:
             logger.error(f"Failed to burn ISO: {e}")
-            import traceback
-            traceback.print_exc()
             return {
                 "success": False,
                 "message": f"Failed to burn ISO: {str(e)}"
