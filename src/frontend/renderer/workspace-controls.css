@@ -428,6 +428,10 @@
     color: #ff9800;
 }
 
+.workspace .badge.accent {
+    color: #0078d4;
+}
+
 .workspace .badge .badge-icon {
     width: 14px;
     height: 14px;
@@ -602,6 +606,16 @@
     padding: 0 20px 20px 20px;
 }
 
+/* 可展开 Card 内容区顶部统一分隔线 */
+.workspace .card-expandable-content::before {
+    content: '';
+    display: block;
+    height: 1px;
+    background-color: var(--border-color);
+    opacity: 0.6;
+    margin-bottom: 8px;
+}
+
 /* 可展开 Card 内容内部间距 */
 .workspace .card-expandable-content>* {
     margin-top: 16px;
@@ -663,16 +677,6 @@
     flex-direction: column;
     gap: 0;
     margin-top: 8px;
-}
-
-/* Radio 容器折叠区域的顶部分隔线（对比度较大） */
-.workspace .radio-container-content::before {
-    content: '';
-    display: block;
-    height: 1px;
-    background-color: var(--border-color);
-    opacity: 0.6;
-    margin-bottom: 8px;
 }
 
 /* Radio 列表项 */

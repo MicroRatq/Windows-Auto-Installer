@@ -90,14 +90,16 @@ export class IsoBurnWorkspace {
     if (!container) return
 
     if (!template) {
-      container.innerHTML = `
-        <div class="info-card info-card-warning" style="margin-bottom: 20px;">
-          <div class="info-card-content">
-            <div class="info-card-title">未选择镜像模板</div>
-            <div class="info-card-description">请先在“下载与缓存”页面选择一个本地镜像并点击“设为模板”</div>
-          </div>
-        </div>
-      `
+      container.innerHTML = createComboCard({
+        id: 'current-template-empty',
+        title: '未选择镜像模板',
+        description: '请先在“下载与缓存”页面选择一个本地镜像并点击“设为模板”',
+        icon: 'triangle-alert',
+        controlType: 'none',
+        value: '',
+        borderColor: 'rgba(255, 152, 0, 0.4)',
+        backgroundColor: 'rgba(255, 152, 0, 0.05)'
+      })
       return
     }
 

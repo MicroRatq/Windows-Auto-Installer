@@ -28,7 +28,7 @@ export interface RadioContainerConfig {
 }
 
 // Combo容器选项类型
-export type ComboControlType = 'checkbox' | 'select' | 'switch' | 'text' | 'clickable' | 'button'
+export type ComboControlType = 'checkbox' | 'select' | 'switch' | 'text' | 'clickable' | 'button' | 'none'
 
 export interface ComboSelectOption {
   value: string
@@ -74,6 +74,8 @@ export interface ComboCardConfig {
   placeholder?: string // 文本输入框的占位符（用于text类型）
   buttonLabel?: string // 按钮文本（用于button类型）
   buttonAppearance?: 'accent' | 'lightweight' | 'neutral' | 'outline' | 'stealth'
+  borderColor?: string
+  backgroundColor?: string
 }
 
 // ========================================
@@ -517,7 +519,21 @@ export function setupComboContainer(
  * 创建ComboCard HTML
  */
 export function createComboCard(config: ComboCardConfig): string {
-  const { id, title, description, icon, controlType, options, value, borderless = false, placeholder = '', buttonLabel = '执行', buttonAppearance = 'accent' } = config
+  const {
+    id,
+    title,
+    description,
+    icon,
+    controlType,
+    options,
+    value,
+    borderless = false,
+    placeholder = '',
+    buttonLabel = '执行',
+    buttonAppearance = 'accent',
+    borderColor,
+    backgroundColor
+  } = config
 
   // 图标HTML（可选）
   const iconHtml = icon ? `<i data-lucide="${icon}" class="card-icon"></i>` : ''
@@ -552,13 +568,22 @@ export function createComboCard(config: ComboCardConfig): string {
     controlHtml = `<div class="card-indicator"><i data-lucide="chevron-right"></i></div>`
   }
 
+  const styleParts: string[] = []
+  if (borderColor) {
+    styleParts.push(`border-color: ${borderColor}`)
+  }
+  if (backgroundColor) {
+    styleParts.push(`background-color: ${backgroundColor}`)
+  }
+  const containerStyle = styleParts.length > 0 ? ` style="${styleParts.join('; ')}"` : ''
+
   // 可点击模式：添加 card-clickable 类
   const clickableClass = isClickable ? 'card-clickable' : ''
 
   // 无边框模式
   if (borderless) {
     return `
-        <div class="combo-card-borderless ${clickableClass}" id="${id}">
+        <div class="combo-card-borderless ${clickableClass}" id="${id}"${containerStyle}>
           <div class="card-left">
             ${iconHtml}
             <div class="card-content">
@@ -574,7 +599,7 @@ export function createComboCard(config: ComboCardConfig): string {
   }
 
   return `
-    <div class="card combo-card ${clickableClass}" id="${id}">
+    <div class="card combo-card ${clickableClass}" id="${id}"${containerStyle}>
       <div class="card-left">
         ${iconHtml}
         <div class="card-content">
