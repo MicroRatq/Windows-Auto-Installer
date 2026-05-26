@@ -16,10 +16,12 @@ import {
 
 // 导入i18n模块
 import { t, addLanguageChangeListener, waitForI18nInit } from './i18n'
-// 导入镜像缓存模块
+// 导入下载与缓存模块
 import { initIsoCache } from './iso-cache'
-// 导入镜像配置模块
+// 导入自定义配置模块
 import { initIsoConfig } from './iso-config'
+// 导入集成与部署模块
+import { initIsoBurn } from './iso-burn'
 // 导入设置模块
 import { settingsManager } from './settings'
 
@@ -55,9 +57,9 @@ const mainMenuItems: MenuItem[] = [
 
 const subMenuConfig: Record<string, MenuItem[]> = {
   iso: [
-    { id: 'iso-cache', label: '镜像缓存', icon: 'download' },
-    { id: 'iso-config', label: '镜像配置', icon: 'file-edit' },
-    { id: 'iso-burn', label: '镜像烧录', icon: 'disc-2' }
+    { id: 'iso-cache', label: '下载与缓存', icon: 'download' },
+    { id: 'iso-config', label: '自定义配置', icon: 'file-edit' },
+    { id: 'iso-burn', label: '集成与部署', icon: 'disc-2' }
   ],
   system: [
     { id: 'migration', label: '系统迁移', icon: 'move' },
@@ -586,14 +588,19 @@ async function init() {
     })
   }
 
-  // 初始化镜像缓存工作区
+  // 初始化下载与缓存工作区
   if (typeof initIsoCache === 'function') {
     initIsoCache()
   }
 
-  // 初始化镜像配置工作区
+  // 初始化自定义配置工作区
   if (typeof initIsoConfig === 'function') {
     initIsoConfig()
+  }
+
+  // 初始化集成与部署工作区
+  if (typeof initIsoBurn === 'function') {
+    initIsoBurn()
   }
 
   // 初始化设置页面

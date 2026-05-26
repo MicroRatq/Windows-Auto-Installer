@@ -1,7 +1,9 @@
 /**
- * 镜像缓存工作区
+ * 下载与缓存工作区
  * 实现镜像下载、导入、列表管理等功能
  */
+
+import { templateManager } from './iso-burn'
 
 // 通知类型
 type NotificationType = 'error' | 'success' | 'info' | 'warning'
@@ -1011,6 +1013,16 @@ class IsoCacheWorkspace {
         const fileNameText = document.createTextNode(image.name || '未知文件')
         fileName.appendChild(fileNameText)
 
+        // 检查是否是当前模板
+        const currentTemplate = templateManager.getTemplate()
+        if (currentTemplate && currentTemplate.path === image.url) {
+            const templateBadge = document.createElement('span')
+            templateBadge.className = 'badge accent'
+            templateBadge.style.marginLeft = '8px'
+            templateBadge.innerHTML = '<i data-lucide="star" class="badge-icon"></i> <span class="badge-text">当前模板</span>'
+            fileName.appendChild(templateBadge)
+        }
+
         // 仅对文件名格式不匹配的添加"需要识别"标识（在文件名末尾）
         if (image.needs_identification) {
             const identifyBadge = document.createElement('span')
@@ -1093,6 +1105,20 @@ class IsoCacheWorkspace {
         const menu = document.createElement('fluent-menu')
         menu.style.display = 'none'
 
+        const setTemplateItem = document.createElement('fluent-menu-item')
+        setTemplateItem.textContent = '设为模板'
+        setTemplateItem.addEventListener('click', () => {
+            menu.style.display = 'none'
+            templateManager.setTemplate({
+                name: image.name,
+                path: image.url,
+                size: image.size
+            })
+            // 刷新列表以显示徽章
+            this.updateImageList()
+            this.notificationManager.showNotification('success', `已将 ${image.name} 设为当前模板`)
+        })
+
         const deleteItem = document.createElement('fluent-menu-item')
         deleteItem.textContent = '删除'
         deleteItem.addEventListener('click', () => {
@@ -1125,6 +1151,7 @@ class IsoCacheWorkspace {
             menu.appendChild(identifyItem)
         }
 
+        menu.appendChild(setTemplateItem)
         menu.appendChild(deleteItem)
         menu.appendChild(verifyItem)
         menu.appendChild(redownloadItem)

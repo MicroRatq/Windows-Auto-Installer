@@ -85,7 +85,7 @@
 
       <div class="workspace">
         <div class="workspace-content">
-          <h2 id="workspace-title">镜像缓存</h2>
+          <h2 id="workspace-title">下载与缓存</h2>
           <!-- 镜像相关 -->
           <div id="workspace-iso-cache" class="workspace-panel active">
             <!-- 内容由 iso-cache.ts 动态生成 -->
@@ -174,7 +174,36 @@
             </div>
           </div>
           <div id="workspace-iso-burn" class="workspace-panel">
-            <p>镜像烧录功能：将配置添加到ISO镜像</p>
+            <!-- 1. 当前选中的模板镜像卡片 -->
+            <div id="burn-template-card"></div>
+
+            <!-- 2. WIM编辑部分 -->
+            <div class="section" id="burn-wim-edit">
+              <div class="section-title">WIM 编辑</div>
+              <div class="section-content"></div>
+            </div>
+
+            <!-- 3. 导出部分 -->
+            <div class="section" id="burn-export">
+              <div class="section-title">导出与部署</div>
+              <div class="section-content"></div>
+            </div>
+
+            <!-- 4. 虚拟机部署部分 (待开发) -->
+            <div class="section" id="burn-vm-deploy">
+              <div class="section-title">虚拟机部署 (实验室功能)</div>
+              <div class="section-content">
+                <p class="placeholder-text">该功能正在开发中...</p>
+              </div>
+            </div>
+
+            <!-- 5. PXE部署部分 (待开发) -->
+            <div class="section" id="burn-pxe-deploy">
+              <div class="section-title">PXE 网络部署 (实验室功能)</div>
+              <div class="section-content">
+                <p class="placeholder-text">该功能正在开发中...</p>
+              </div>
+            </div>
           </div>
           <!-- 系统配置相关 -->
           <div id="workspace-migration" class="workspace-panel">

@@ -28,7 +28,7 @@ export interface RadioContainerConfig {
 }
 
 // Combo容器选项类型
-export type ComboControlType = 'checkbox' | 'select' | 'switch' | 'text' | 'clickable'
+export type ComboControlType = 'checkbox' | 'select' | 'switch' | 'text' | 'clickable' | 'button'
 
 export interface ComboSelectOption {
   value: string
@@ -72,6 +72,8 @@ export interface ComboCardConfig {
   value: boolean | string
   borderless?: boolean // 是否无边框模式（仅保留内容）
   placeholder?: string // 文本输入框的占位符（用于text类型）
+  buttonLabel?: string // 按钮文本（用于button类型）
+  buttonAppearance?: 'accent' | 'lightweight' | 'neutral' | 'outline' | 'stealth'
 }
 
 // ========================================
@@ -515,7 +517,7 @@ export function setupComboContainer(
  * 创建ComboCard HTML
  */
 export function createComboCard(config: ComboCardConfig): string {
-  const { id, title, description, icon, controlType, options, value, borderless = false, placeholder = '' } = config
+  const { id, title, description, icon, controlType, options, value, borderless = false, placeholder = '', buttonLabel = '执行', buttonAppearance = 'accent' } = config
 
   // 图标HTML（可选）
   const iconHtml = icon ? `<i data-lucide="${icon}" class="card-icon"></i>` : ''
@@ -543,6 +545,8 @@ export function createComboCard(config: ComboCardConfig): string {
   } else if (controlType === 'text') {
     const textVal = typeof value === 'string' ? value : ''
     controlHtml = `<fluent-text-field id="${id}-control" value="${textVal}" placeholder="${placeholder}" style="min-width: 150px; max-width: 300px; width: auto;"></fluent-text-field>`
+  } else if (controlType === 'button') {
+    controlHtml = `<fluent-button id="${id}-control" appearance="${buttonAppearance}">${buttonLabel}</fluent-button>`
   } else if (controlType === 'clickable') {
     isClickable = true
     controlHtml = `<div class="card-indicator"><i data-lucide="chevron-right"></i></div>`
@@ -628,6 +632,15 @@ export function setupComboCard(
     control.addEventListener('input', (e: any) => {
       const target = e.target as any
       onValueChange(target.value || '')
+    })
+  } else if (controlType === 'fluent-button') {
+    control.addEventListener('click', (e: Event) => {
+      e.stopPropagation()
+      if (onClick) {
+        onClick()
+      } else {
+        onValueChange('')
+      }
     })
   }
 }
