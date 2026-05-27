@@ -14,6 +14,7 @@ import {
   type ComboContainerConfig,
   type DynamicListContainerConfig
 } from './workspace'
+import { getConfigManager, createDefaultConfig } from './iso-config'
 
 // ========================================
 // 模板状态管理
@@ -63,6 +64,13 @@ export class IsoBurnWorkspace {
     targetPath: string
   }> = []
   private exportDirectory = ''
+  private latestBuiltIsoPath = ''
+  private buildTaskId: string | null = null
+  private buildStatus: 'idle' | 'running' | 'completed' | 'failed' = 'idle'
+  private buildMessage = '根据当前模板与配置生成镜像文件'
+  private burnTaskId: string | null = null
+  private burnStatus: 'idle' | 'running' | 'completed' | 'failed' = 'idle'
+  private burnMessage = '使用内建驱动器直接将镜像写入选中的 U 盘'
 
   constructor() {
     this.panel = document.getElementById('workspace-iso-burn')
@@ -225,13 +233,35 @@ export class IsoBurnWorkspace {
     }
 
     const deviceSelectConfig = this.createDeviceSelectCardConfig('burn-device-select-burn')
+    const burnRefreshDevicesConfig: ComboCardConfig = {
+      id: 'burn-refresh-devices-burn',
+      title: '刷新存储设备列表',
+      description: '重新扫描当前可用于烧录的移动存储设备',
+      icon: 'refresh-cw',
+      controlType: 'button',
+      buttonLabel: '刷新列表',
+      buttonAppearance: 'outline',
+      value: '',
+      borderless: true
+    }
     const burnActionConfig: ComboCardConfig = {
       id: 'burn-action-direct',
       title: '烧录镜像到可移动存储设备',
-      description: '使用内建驱动器直接将镜像写入选中的 U 盘',
+      description: this.getBurnActionDescription(),
       icon: 'zap',
       controlType: 'button',
       buttonLabel: '开始烧录',
+      value: '',
+      borderless: true
+    }
+    const burnClearActionConfig: ComboCardConfig = {
+      id: 'burn-action-clear',
+      title: '清除所有部署环境',
+      description: '恢复目标设备为普通单分区数据盘状态',
+      icon: 'trash-2',
+      controlType: 'button',
+      buttonLabel: '清除环境',
+      buttonAppearance: 'outline',
       value: '',
       borderless: true
     }
@@ -242,10 +272,21 @@ export class IsoBurnWorkspace {
       description: '选择设备后将生成的 ISO 直接写入启动盘',
       icon: 'hard-drive-download',
       expanded: false,
-      nestedCards: [deviceSelectConfig, burnActionConfig]
+      nestedCards: [deviceSelectConfig, burnRefreshDevicesConfig, burnActionConfig, burnClearActionConfig]
     }
 
     const ventoyDeviceConfig = this.createDeviceSelectCardConfig('burn-device-select-ventoy')
+    const ventoyRefreshDevicesConfig: ComboCardConfig = {
+      id: 'burn-refresh-devices-ventoy',
+      title: '刷新存储设备列表',
+      description: '重新扫描当前可用于 Ventoy 部署的移动存储设备',
+      icon: 'refresh-cw',
+      controlType: 'button',
+      buttonLabel: '刷新列表',
+      buttonAppearance: 'outline',
+      value: '',
+      borderless: true
+    }
     const ventoyActionConfig: ComboCardConfig = {
       id: 'burn-action-ventoy',
       title: '将 Ventoy 部署到移动设备并复制镜像',
@@ -257,25 +298,13 @@ export class IsoBurnWorkspace {
       borderless: true
     }
 
-    const clearActionConfig: ComboCardConfig = {
-      id: 'burn-action-clear',
-      title: '清除所有部署环境',
-      description: '恢复 U 盘为普通单分区数据盘状态',
-      icon: 'trash-2',
-      controlType: 'button',
-      buttonLabel: '清除环境',
-      buttonAppearance: 'outline',
-      value: '',
-      borderless: true
-    }
-
     const ventoyDeployConfig: ComboContainerConfig = {
       id: 'burn-ventoy-deploy-container',
       title: 'Ventoy 部署',
-      description: '部署 Ventoy、复制 ISO，或清理部署环境',
+      description: '部署 Ventoy 并复制生成的 ISO 到目标设备',
       icon: 'package-open',
       expanded: false,
-      nestedCards: [ventoyDeviceConfig, ventoyActionConfig, clearActionConfig]
+      nestedCards: [ventoyDeviceConfig, ventoyRefreshDevicesConfig, ventoyActionConfig]
     }
 
     container.innerHTML = `
@@ -295,12 +324,20 @@ export class IsoBurnWorkspace {
       console.log('Burn device selected:', val)
     })
 
+    setupComboCard('burn-refresh-devices-burn', () => { }, () => {
+      void this.refreshDeviceList()
+    })
+
     setupComboCard('burn-device-select-ventoy', (val) => {
       console.log('Ventoy device selected:', val)
     })
 
+    setupComboCard('burn-refresh-devices-ventoy', () => { }, () => {
+      void this.refreshDeviceList()
+    })
+
     setupComboCard('burn-action-direct', () => { }, () => {
-      console.log('Execute direct burn')
+      void this.startBurnTask()
     })
 
     setupComboCard('burn-action-ventoy', () => { }, () => {
@@ -312,8 +349,28 @@ export class IsoBurnWorkspace {
     })
 
     setupComboCard('burn-action-export-local', () => { }, () => {
-      console.log('Execute local export')
+      void this.startBuildTask()
     })
+  }
+
+  private getBurnActionDescription(): string {
+    if (this.burnStatus === 'running') {
+      return this.burnMessage
+    }
+
+    if (this.burnStatus === 'completed' && this.latestBuiltIsoPath) {
+      return `最近烧录镜像: ${this.latestBuiltIsoPath}`
+    }
+
+    if (this.burnStatus === 'failed') {
+      return this.burnMessage
+    }
+
+    if (this.latestBuiltIsoPath) {
+      return `将使用最近导出的镜像: ${this.latestBuiltIsoPath}`
+    }
+
+    return this.burnMessage
   }
 
   private createMappingCardConfig(mapping?: { id: string, sourcePath: string, targetPath: string }): ComboContainerConfig {
@@ -378,7 +435,7 @@ export class IsoBurnWorkspace {
     return {
       id: 'burn-action-export-local',
       title: '导出 ISO 到本地目录',
-      description: '根据当前模板与配置生成镜像文件',
+      description: this.buildMessage,
       icon: 'download',
       controlType: 'button',
       buttonLabel: '执行导出',
@@ -422,6 +479,208 @@ export class IsoBurnWorkspace {
     } catch (err) {
       console.error('Failed to pick directory:', err)
     }
+  }
+
+  private async startBuildTask() {
+    const template = templateManager.getTemplate()
+    if (!template?.path) {
+      alert('请先在“下载与缓存”中选择一个镜像模板')
+      return
+    }
+
+    if (!this.exportDirectory) {
+      alert('请先选择导出目录')
+      return
+    }
+
+    if (!window.electronAPI?.sendToBackend) {
+      alert('Electron API 不可用')
+      return
+    }
+
+    const configManager = getConfigManager()
+    const config = configManager ? configManager.getConfig() : createDefaultConfig()
+    const outputName = `${this.sanitizeFileName(template.name || 'custom')}_customized.iso`
+
+    this.buildStatus = 'running'
+    this.buildMessage = '正在构建 ISO，请稍候...'
+    this.syncExportActionCards()
+
+    try {
+      const response = await window.electronAPI.sendToBackend({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'deployment_build_start',
+        params: {
+          template_iso: template.path,
+          export_dir: this.exportDirectory,
+          output_name: outputName,
+          integrate_installer: true,
+          file_mappings: this.fileMappings.map(item => ({
+            source_path: item.sourcePath,
+            target_path: item.targetPath
+          })),
+          config
+        }
+      })
+
+      const taskId = response?.result?.task_id as string | undefined
+      if (!taskId) {
+        throw new Error('未获取到构建任务 ID')
+      }
+
+      this.buildTaskId = taskId
+      this.pollBuildStatus(taskId)
+    } catch (err: any) {
+      this.buildStatus = 'failed'
+      this.buildMessage = `导出失败: ${err?.message || '未知错误'}`
+      this.syncExportActionCards()
+    }
+  }
+
+  private async pollBuildStatus(taskId: string) {
+    if (!window.electronAPI?.sendToBackend) return
+
+    try {
+      const response = await window.electronAPI.sendToBackend({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'deployment_build_status',
+        params: { task_id: taskId }
+      })
+
+      const status = response?.result || {}
+      if (status.status === 'completed') {
+        this.buildStatus = 'completed'
+        this.latestBuiltIsoPath = status.result?.iso_path || status.result?.output_path || ''
+        this.buildMessage = this.latestBuiltIsoPath
+          ? `导出完成: ${this.latestBuiltIsoPath}`
+          : '导出完成'
+        this.syncExportActionCards()
+        return
+      }
+
+      if (status.status === 'failed') {
+        this.buildStatus = 'failed'
+        this.buildMessage = `导出失败: ${status.error || '未知错误'}`
+        this.syncExportActionCards()
+        return
+      }
+
+      this.buildMessage = '正在构建 ISO，请稍候...'
+      this.syncExportActionCards()
+      window.setTimeout(() => {
+        void this.pollBuildStatus(taskId)
+      }, 1000)
+    } catch (err: any) {
+      this.buildStatus = 'failed'
+      this.buildMessage = `导出状态查询失败: ${err?.message || '未知错误'}`
+      this.syncExportActionCards()
+    }
+  }
+
+  private async startBurnTask() {
+    if (!this.latestBuiltIsoPath) {
+      alert('请先执行本地导出，生成可烧录的 ISO')
+      return
+    }
+
+    const burnDeviceSelect = document.getElementById('burn-device-select-burn-control') as any
+    const devicePath = burnDeviceSelect?.value || ''
+    if (!devicePath) {
+      alert('请选择目标移动存储设备')
+      return
+    }
+
+    if (!window.electronAPI?.sendToBackend) {
+      alert('Electron API 不可用')
+      return
+    }
+
+    this.burnStatus = 'running'
+    this.burnMessage = '正在烧录镜像，请勿移除设备...'
+    this.syncExportActionCards()
+
+    try {
+      const response = await window.electronAPI.sendToBackend({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'burn_start',
+        params: {
+          iso_path: this.latestBuiltIsoPath,
+          device_path: devicePath
+        }
+      })
+
+      const taskId = response?.result?.task_id as string | undefined
+      if (!taskId) {
+        throw new Error('未获取到烧录任务 ID')
+      }
+
+      this.burnTaskId = taskId
+      this.pollBurnStatus(taskId)
+    } catch (err: any) {
+      this.burnStatus = 'failed'
+      this.burnMessage = `烧录失败: ${err?.message || '未知错误'}`
+      this.syncExportActionCards()
+    }
+  }
+
+  private async pollBurnStatus(taskId: string) {
+    if (!window.electronAPI?.sendToBackend) return
+
+    try {
+      const response = await window.electronAPI.sendToBackend({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'burn_status',
+        params: { task_id: taskId }
+      })
+
+      const status = response?.result || {}
+      if (status.status === 'completed') {
+        this.burnStatus = 'completed'
+        this.burnMessage = '烧录完成'
+        this.syncExportActionCards()
+        return
+      }
+
+      if (status.status === 'failed') {
+        this.burnStatus = 'failed'
+        this.burnMessage = `烧录失败: ${status.error || '未知错误'}`
+        this.syncExportActionCards()
+        return
+      }
+
+      this.burnMessage = '正在烧录镜像，请勿移除设备...'
+      this.syncExportActionCards()
+      window.setTimeout(() => {
+        void this.pollBurnStatus(taskId)
+      }, 1000)
+    } catch (err: any) {
+      this.burnStatus = 'failed'
+      this.burnMessage = `烧录状态查询失败: ${err?.message || '未知错误'}`
+      this.syncExportActionCards()
+    }
+  }
+
+  private syncExportActionCards() {
+    this.updateCardDescription('burn-action-export-local', this.buildMessage)
+    this.updateCardDescription('burn-action-direct', this.getBurnActionDescription())
+  }
+
+  private updateCardDescription(cardId: string, description: string) {
+    const card = document.getElementById(cardId) as HTMLElement | null
+    const descriptionEl = card?.querySelector('.card-description') as HTMLElement | null
+    if (descriptionEl) {
+      descriptionEl.textContent = description
+    }
+  }
+
+  private sanitizeFileName(name: string): string {
+    const baseName = name.replace(/\.[^.]+$/, '')
+    const sanitized = baseName.replace(/[<>:"/\\|?*]+/g, '_').trim()
+    return sanitized || 'custom'
   }
 
   private async refreshDeviceList() {
