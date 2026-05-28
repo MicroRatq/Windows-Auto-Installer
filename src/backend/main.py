@@ -8,7 +8,10 @@ import io
 import sys
 import traceback
 import logging
+import inspect
+import shutil
 import threading
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -67,7 +70,15 @@ class TaskManager:
                 task["updated_at"] = time.time()
 
             try:
-                result = func(*args, **kwargs)
+                func_kwargs = dict(kwargs)
+                try:
+                    signature = inspect.signature(func)
+                    if "task_updater" in signature.parameters:
+                        func_kwargs["task_updater"] = lambda **updates: self.update_task(task_id, **updates)
+                except (TypeError, ValueError):
+                    pass
+
+                result = func(*args, **func_kwargs)
                 with self._lock:
                     task = self._tasks.get(task_id)
                     if not task:
@@ -89,6 +100,17 @@ class TaskManager:
         thread = threading.Thread(target=_runner, daemon=True)
         thread.start()
         return task_id
+
+    def update_task(self, task_id: str, **updates: Any) -> None:
+        """更新任务状态附加信息"""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if not task:
+                return
+
+            for key, value in updates.items():
+                task[key] = value
+            task["updated_at"] = time.time()
 
     def get_task_status(self, task_id: str) -> dict[str, Any]:
         """查询任务状态"""
@@ -304,6 +326,9 @@ class BackendServer:
             # Phase 2 & 3: ISO Customize and Burn handlers
             self.register_handler("iso_customize_start", self._handle_iso_customize_start)
             self.register_handler("iso_customize_status", self._handle_iso_customize_status)
+            self.register_handler("deployment_list_wim_images", self._handle_deployment_list_wim_images)
+            self.register_handler("deployment_build_start", self._handle_deployment_build_start)
+            self.register_handler("deployment_build_status", self._handle_deployment_build_status)
             self.register_handler("burn_list_devices", self._handle_burn_list_devices)
             self.register_handler("burn_start", self._handle_burn_start)
             self.register_handler("burn_status", self._handle_burn_status)
@@ -1164,6 +1189,328 @@ class BackendServer:
         
     def _handle_iso_customize_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """异步定制ISO文件：查询任务状态"""
+        task_id = params.get("task_id")
+        if not task_id:
+            raise ValueError("Missing task_id parameter")
+        return self.task_manager.get_task_status(task_id)
+
+    def _find_install_image_iso_path(self, template_iso: str) -> str:
+        from iso_modifier import ISOModifier
+
+        modifier = ISOModifier(template_iso)
+        sources_files = modifier.list_directory('/sources')
+        for filename in sources_files:
+            normalized = filename.lower()
+            if normalized.startswith('install.') and (normalized.endswith('.wim') or normalized.endswith('.esd')):
+                return f"/sources/{filename}"
+
+        raise FileNotFoundError("install.wim or install.esd not found in ISO")
+
+    def _extract_install_image(self, template_iso: str, output_path: str) -> str:
+        from iso_modifier import ISOModifier
+
+        install_image_iso_path = self._find_install_image_iso_path(template_iso)
+        modifier = ISOModifier(template_iso)
+        modifier.extract_file(install_image_iso_path, output_path)
+        return install_image_iso_path
+
+    def _list_wim_images(self, wim_path: str) -> list[dict[str, Any]]:
+        from wim_handler import WIMHandler
+
+        images: list[dict[str, Any]] = []
+        with WIMHandler(wim_path) as handler:
+            image_count = handler.get_image_count()
+            for index in range(1, image_count + 1):
+                name = handler.get_image_name(index)
+                edition = handler.get_image_info(index, "edition")
+                architecture = handler.get_image_info(index, "architecture_name")
+                build = handler.get_image_info(index, "build")
+                description = handler.get_image_description(index)
+                images.append({
+                    "index": index,
+                    "name": name,
+                    "edition": edition,
+                    "architecture": architecture,
+                    "build": build,
+                    "description": description,
+                    "label": self._build_wim_image_label(index, name, edition, architecture, build),
+                })
+
+        return images
+
+    def _build_wim_image_label(
+        self,
+        index: int,
+        name: str | None,
+        edition: str | None,
+        architecture: str | None,
+        build: str | None,
+    ) -> str:
+        primary = (name or "").strip() or f"Image {index}"
+        extras = [value for value in [edition, architecture, build] if value]
+        if extras:
+            return f"{index} - {primary} ({', '.join(extras)})"
+        return f"{index} - {primary}"
+
+    def _normalize_wim_target_path(self, target_path: str) -> str:
+        normalized = str(target_path or "").strip().replace('/', '\\')
+        if not normalized:
+            raise ValueError("target_path cannot be empty")
+        if not normalized.startswith('\\'):
+            normalized = '\\' + normalized
+        return normalized
+
+    def _validate_file_mappings(self, file_mappings: Any) -> list[tuple[str, str]]:
+        normalized_mappings: list[tuple[str, str]] = []
+        if not file_mappings:
+            return normalized_mappings
+
+        if not isinstance(file_mappings, list):
+            raise ValueError("file_mappings must be a list")
+
+        for index, mapping in enumerate(file_mappings, start=1):
+            if not isinstance(mapping, dict):
+                raise ValueError(f"file_mappings[{index}] must be an object")
+
+            source_path = str(mapping.get("source_path") or "").strip()
+            target_path = str(mapping.get("target_path") or "").strip()
+
+            if not source_path:
+                raise ValueError(f"file_mappings[{index}].source_path cannot be empty")
+            if not os.path.exists(source_path):
+                raise FileNotFoundError(f"file_mappings[{index}].source_path not found: {source_path}")
+            if not target_path:
+                raise ValueError(f"file_mappings[{index}].target_path cannot be empty")
+
+            normalized_mappings.append((source_path, self._normalize_wim_target_path(target_path)))
+
+        return normalized_mappings
+
+    def _resolve_wim_image_index(self, wim_path: str, selected_index: Any, config_dict: dict[str, Any]) -> int:
+        from wim_handler import WIMHandler
+
+        with WIMHandler(wim_path) as handler:
+            image_count = handler.get_image_count()
+
+            if selected_index not in (None, ""):
+                try:
+                    resolved_index = int(selected_index)
+                except (TypeError, ValueError):
+                    raise ValueError("selected_wim_image_index must be an integer")
+
+                if resolved_index < 1 or resolved_index > image_count:
+                    raise ValueError(f"selected_wim_image_index {resolved_index} is out of range (1-{image_count})")
+                return resolved_index
+
+            source_image = config_dict.get("sourceImage") or {}
+            mode = source_image.get("mode", "automatic")
+
+            if mode == "index":
+                resolved_index = int(source_image.get("imageIndex") or 1)
+                if resolved_index < 1 or resolved_index > image_count:
+                    raise ValueError(f"sourceImage.imageIndex {resolved_index} is out of range (1-{image_count})")
+                return resolved_index
+
+            if mode == "name":
+                target_name = str(source_image.get("imageName") or "").strip()
+                if not target_name:
+                    raise ValueError("sourceImage.imageName cannot be empty when mode=name")
+
+                for index in range(1, image_count + 1):
+                    if handler.get_image_name(index) == target_name:
+                        return index
+
+                raise ValueError(f"sourceImage.imageName not found: {target_name}")
+
+            return 1
+
+    def _build_installer_payload(self, work_dir: Path) -> Path:
+        payload_root = work_dir / "installer_payload" / "WindowsAutoInstaller"
+        payload_root.mkdir(parents=True, exist_ok=True)
+
+        runtime_sources = [
+            (self.project_root / "src" / "backend", payload_root / "backend"),
+            (self.project_root / "src" / "shared", payload_root / "shared"),
+            (self.project_root / "src" / "frontend" / "dist", payload_root / "frontend" / "dist"),
+            (self.project_root / "src" / "frontend" / "electron", payload_root / "frontend" / "electron"),
+        ]
+
+        copied_any = False
+        ignore_patterns = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "node_modules")
+
+        for source_path, target_path in runtime_sources:
+            if source_path.exists():
+                shutil.copytree(source_path, target_path, dirs_exist_ok=True, ignore=ignore_patterns)
+                copied_any = True
+
+        frontend_package = self.project_root / "src" / "frontend" / "package.json"
+        if frontend_package.exists():
+            (payload_root / "frontend").mkdir(parents=True, exist_ok=True)
+            shutil.copy2(frontend_package, payload_root / "frontend" / "package.json")
+            copied_any = True
+
+        if not copied_any:
+            raise FileNotFoundError("No installer runtime payload was found to integrate into WIM")
+
+        return payload_root
+
+    def _handle_deployment_list_wim_images(self, params: dict[str, Any]) -> dict[str, Any]:
+        """读取模板 ISO 中的 install.wim/install.esd 映像列表"""
+        template_iso = params.get("template_iso")
+        if not template_iso:
+            raise ValueError("Missing template_iso parameter")
+
+        template_path = Path(template_iso)
+        if not template_path.exists() or not template_path.is_file():
+            raise ValueError("template_iso does not exist or is not a file")
+
+        with tempfile.TemporaryDirectory(prefix="deployment_wim_list_") as temp_dir:
+            install_image_iso_path = self._find_install_image_iso_path(str(template_path))
+            extracted_wim_path = Path(temp_dir) / Path(install_image_iso_path).name
+            self._extract_install_image(str(template_path), str(extracted_wim_path))
+            images = self._list_wim_images(str(extracted_wim_path))
+
+        return {
+            "install_image_path": install_image_iso_path,
+            "images": images,
+        }
+
+    def _handle_deployment_build_start(self, params: dict[str, Any]) -> dict[str, str]:
+        """集成与部署：构建带 WIM 修改和 autounattend 注入的新 ISO"""
+        template_iso = params.get("template_iso")
+        export_dir = params.get("export_dir")
+        output_name = params.get("output_name")
+        integrate_installer = bool(params.get("integrate_installer", False))
+        file_mappings = params.get("file_mappings") or []
+        selected_wim_image_index = params.get("selected_wim_image_index")
+        config_dict = params.get("config")
+
+        if not template_iso or not export_dir or not config_dict:
+            raise ValueError("Missing template_iso, export_dir, or config parameter")
+
+        if not self.unattend_generator:
+            raise Exception("Unattend generator not initialized")
+
+        export_dir_path = Path(export_dir)
+        if not export_dir_path.exists() or not export_dir_path.is_dir():
+            raise ValueError("export_dir does not exist or is not a directory")
+
+        template_path = Path(template_iso)
+        if not template_path.exists() or not template_path.is_file():
+            raise ValueError("template_iso does not exist or is not a file")
+
+        if not output_name:
+            output_name = f"{template_path.stem}_customized.iso"
+        elif not str(output_name).lower().endswith('.iso'):
+            output_name = f"{output_name}.iso"
+
+        target_iso = str(export_dir_path / output_name)
+
+        from unattend_generator import config_dict_to_configuration
+        config = config_dict_to_configuration(config_dict, self.unattend_generator)
+        xml_bytes = self.unattend_generator.generate_xml(config)
+        validated_mappings = self._validate_file_mappings(file_mappings)
+
+        def _build_job(source_path, target_path, xml_data, mappings, should_integrate_installer, selected_image_index, full_config, task_updater=None):
+            from iso_modifier import ISOModifier
+            from wim_handler import WIMHandler
+
+            def report(stage: str, message: str, percent: int) -> None:
+                if task_updater:
+                    task_updater(progress={
+                        "stage": stage,
+                        "message": message,
+                        "percent": percent,
+                    })
+
+            report("validate", "正在校验构建参数", 5)
+
+            work_dir = Path(tempfile.mkdtemp(prefix="deployment_build_"))
+            install_image_iso_path = self._find_install_image_iso_path(source_path)
+            wim_file_name = Path(install_image_iso_path).name
+            original_wim_path = work_dir / wim_file_name
+            updated_wim_path = work_dir / f"updated_{wim_file_name}"
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as temp_xml:
+                temp_xml.write(xml_data)
+                temp_xml_path = temp_xml.name
+
+            try:
+                report("extract_wim", f"正在提取 {wim_file_name}", 15)
+                self._extract_install_image(source_path, str(original_wim_path))
+
+                report("resolve_image", "正在解析目标 WIM 映像", 25)
+                target_image_index = self._resolve_wim_image_index(
+                    str(original_wim_path),
+                    selected_image_index,
+                    full_config,
+                )
+
+                add_files = list(mappings)
+
+                if should_integrate_installer:
+                    report("integrate_installer", "正在准备 Windows Auto Installer 运行文件", 40)
+                    payload_root = self._build_installer_payload(work_dir)
+                    add_files.append((str(payload_root), "\\Windows\\Setup\\Scripts\\WindowsAutoInstaller"))
+
+                if add_files:
+                    report("apply_mappings", f"正在写入 {len(add_files)} 项 WIM 更新", 55)
+                    with WIMHandler(str(original_wim_path), write_access=True) as handler:
+                        handler.update_image(target_image_index, add_files=add_files)
+                        report("write_wim", "正在写出更新后的 WIM 文件", 70)
+                        handler.write_wim(str(updated_wim_path))
+                else:
+                    shutil.copy2(original_wim_path, updated_wim_path)
+
+                modifier = ISOModifier(source_path)
+                writer = modifier.create_writer()
+                report("replace_wim_in_iso", "正在将新的 WIM 写回 ISO", 80)
+                writer.replace_file(install_image_iso_path, str(updated_wim_path))
+
+                report("inject_unattend", "正在写入 autounattend.xml", 90)
+                if modifier.file_exists('/autounattend.xml'):
+                    writer.replace_file('/autounattend.xml', temp_xml_path)
+                else:
+                    writer.add_file(temp_xml_path, '/autounattend.xml')
+
+                report("finalize", "正在生成最终 ISO", 95)
+                result = writer.write(target_path)
+                if not result.get("success"):
+                    raise Exception(result.get("message", "Deployment build failed"))
+
+                result["iso_path"] = target_path
+                result["source_iso"] = source_path
+                result["install_image_path"] = install_image_iso_path
+                result["selected_wim_image_index"] = target_image_index
+                report("done", "构建完成", 100)
+                return result
+            finally:
+                if os.path.exists(temp_xml_path):
+                    try:
+                        os.remove(temp_xml_path)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove temp xml file {temp_xml_path}: {e}")
+                if work_dir.exists():
+                    try:
+                        shutil.rmtree(work_dir)
+                    except Exception as e:
+                        logger.warning(f"Failed to remove temp work directory {work_dir}: {e}")
+
+        task_id = self.task_manager.create_task(
+            "deployment_build",
+            _build_job,
+            str(template_path),
+            target_iso,
+            xml_bytes,
+            validated_mappings,
+            integrate_installer,
+            selected_wim_image_index,
+            config_dict,
+        )
+        return {"task_id": task_id}
+
+    def _handle_deployment_build_status(self, params: dict[str, Any]) -> dict[str, Any]:
+        """集成与部署：查询构建任务状态"""
         task_id = params.get("task_id")
         if not task_id:
             raise ValueError("Missing task_id parameter")
