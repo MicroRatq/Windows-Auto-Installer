@@ -1401,6 +1401,7 @@ class UnattendConfigManager {
         nestedCards: [
           {
             id: `config-account-name-${acc.id}`,
+            field: 'name',
             title: t('isoConfig.nameAccount.accountName'),
             controlType: 'text',
             value: acc.name,
@@ -1409,6 +1410,7 @@ class UnattendConfigManager {
           },
           {
             id: `config-account-display-name-${acc.id}`,
+            field: 'displayName',
             title: t('isoConfig.nameAccount.displayName'),
             controlType: 'text',
             value: acc.displayName,
@@ -1417,6 +1419,7 @@ class UnattendConfigManager {
           },
           {
             id: `config-account-password-${acc.id}`,
+            field: 'password',
             title: t('isoConfig.nameAccount.password'),
             controlType: 'text',
             value: acc.password,
@@ -1425,6 +1428,7 @@ class UnattendConfigManager {
           },
           {
             id: `config-account-group-${acc.id}`,
+            field: 'group',
             title: t('isoConfig.nameAccount.group'),
             controlType: 'select',
             options: [
@@ -1468,6 +1472,7 @@ class UnattendConfigManager {
           nestedCards: [
             {
               id: `config-account-name-${newId}`,
+              field: 'name',
               title: t('isoConfig.nameAccount.accountName'),
               controlType: 'text',
               value: '',
@@ -1476,6 +1481,7 @@ class UnattendConfigManager {
             },
             {
               id: `config-account-display-name-${newId}`,
+              field: 'displayName',
               title: t('isoConfig.nameAccount.displayName'),
               controlType: 'text',
               value: '',
@@ -1484,6 +1490,7 @@ class UnattendConfigManager {
             },
             {
               id: `config-account-password-${newId}`,
+              field: 'password',
               title: t('isoConfig.nameAccount.password'),
               controlType: 'text',
               value: '',
@@ -1492,6 +1499,7 @@ class UnattendConfigManager {
             },
             {
               id: `config-account-group-${newId}`,
+              field: 'group',
               title: t('isoConfig.nameAccount.group'),
               controlType: 'select',
               options: [
@@ -1712,6 +1720,7 @@ class UnattendConfigManager {
             nestedCards: [
               {
                 id: `config-account-name-${newId}`,
+                field: 'name',
                 title: t('isoConfig.nameAccount.accountName'),
                 controlType: 'text',
                 value: '',
@@ -1720,6 +1729,7 @@ class UnattendConfigManager {
               },
               {
                 id: `config-account-display-name-${newId}`,
+                field: 'displayName',
                 title: t('isoConfig.nameAccount.displayName'),
                 controlType: 'text',
                 value: '',
@@ -1728,6 +1738,7 @@ class UnattendConfigManager {
               },
               {
                 id: `config-account-password-${newId}`,
+                field: 'password',
                 title: t('isoConfig.nameAccount.password'),
                 controlType: 'text',
                 value: '',
@@ -1736,6 +1747,7 @@ class UnattendConfigManager {
               },
               {
                 id: `config-account-group-${newId}`,
+                field: 'group',
                 title: t('isoConfig.nameAccount.group'),
                 controlType: 'select',
                 options: [
@@ -1776,24 +1788,10 @@ class UnattendConfigManager {
         const account = accs.find(acc => acc.id === itemId)
 
         if (account) {
-          // 从 values 中提取 name、displayName、password 和 group
-          const nameKey = Object.keys(values).find(k => k.includes('name') && !k.includes('display'))
-          const displayNameKey = Object.keys(values).find(k => k.includes('display'))
-          const passwordKey = Object.keys(values).find(k => k.includes('password'))
-          const groupKey = Object.keys(values).find(k => k.includes('group'))
-
-          if (nameKey) {
-            account.name = (values[nameKey] as string) || ''
-          }
-          if (displayNameKey) {
-            account.displayName = (values[displayNameKey] as string) || ''
-          }
-          if (passwordKey) {
-            account.password = (values[passwordKey] as string) || ''
-          }
-          if (groupKey) {
-            account.group = (values[groupKey] as 'Administrators' | 'Users') || 'Users'
-          }
+          account.name = (values.name as string) || ''
+          account.displayName = (values.displayName as string) || ''
+          account.password = (values.password as string) || ''
+          account.group = (values.group as 'Administrators' | 'Users') || 'Users'
           this.updateModule('accountSettings', { accounts: accs })
         }
       }
@@ -4814,6 +4812,7 @@ End If`,
         nestedCards: [
           {
             id: `config-${phase}-script-type-${item.id}`,
+            field: 'type',
             title: t('isoConfig.customScripts.scriptType'),
             controlType: 'select',
             options: typeOptions,
@@ -4822,6 +4821,7 @@ End If`,
           },
           {
             id: `config-${phase}-script-content-${item.id}`,
+            field: 'content',
             title: t('isoConfig.customScripts.scriptContent'),
             description: t('isoConfig.customScripts.scriptContentDesc'),
             value: item.content,
@@ -4873,6 +4873,7 @@ End If`,
           nestedCards: [
             {
               id: `config-system-script-type-${newId}`,
+              field: 'type',
               title: t('isoConfig.customScripts.scriptType'),
               controlType: 'select' as const,
               options: typeOptions,
@@ -4881,6 +4882,7 @@ End If`,
             },
             {
               id: `config-system-script-content-${newId}`,
+              field: 'content',
               title: t('isoConfig.customScripts.scriptContent'),
               description: t('isoConfig.customScripts.scriptContentDesc'),
               value: '',
@@ -4918,6 +4920,7 @@ End If`,
           nestedCards: [
             {
               id: `config-defaultuser-script-type-${newId}`,
+              field: 'type',
               title: t('isoConfig.customScripts.scriptType'),
               controlType: 'select' as const,
               options: typeOptions,
@@ -4926,6 +4929,7 @@ End If`,
             },
             {
               id: `config-defaultuser-script-content-${newId}`,
+              field: 'content',
               title: t('isoConfig.customScripts.scriptContent'),
               description: t('isoConfig.customScripts.scriptContentDesc'),
               value: '',
@@ -5084,6 +5088,7 @@ End If`,
               nestedCards: [
                 {
                   id: `config-${phase}-script-type-${newId}`,
+                  field: 'type',
                   title: t('isoConfig.customScripts.scriptType'),
                   controlType: 'select' as const,
                   options: typeOptions,
@@ -5092,6 +5097,7 @@ End If`,
                 },
                 {
                   id: `config-${phase}-script-content-${newId}`,
+                  field: 'content',
                   title: t('isoConfig.customScripts.scriptContent'),
                   description: t('isoConfig.customScripts.scriptContentDesc'),
                   value: '',
@@ -5126,21 +5132,11 @@ End If`,
           this.renderCustomScripts()
         },
         (itemId: string, values: any) => {
-          // 更新项 - values 现在是从 ComboContainer 收集的值对象
-          // 需要从 values 中提取 type 和 content
-          // 值的 key 格式为：script_type_xxx 和 script_content_xxx（最后两部分）
-          const typeKey = Object.keys(values).find(k => k.includes('type') && !k.includes('content'))
-          const contentKey = Object.keys(values).find(k => k.includes('content'))
-
           const phaseScripts = scripts[phase].map(item => {
             if (item.id === itemId) {
               const updatedItem = { ...item }
-              if (typeKey) {
-                updatedItem.type = (values[typeKey] as string) || item.type
-              }
-              if (contentKey) {
-                updatedItem.content = (values[contentKey] as string) || item.content
-              }
+              updatedItem.type = (values.type as string) || item.type
+              updatedItem.content = (values.content as string) || item.content
               return updatedItem
             }
             return item
@@ -5277,6 +5273,7 @@ End If`,
         nestedCards: [
           {
             id: `config-xml-component-name-${comp.id}`,
+            field: 'component',
             title: t('isoConfig.xmlMarkup.component'),
             controlType: 'text',
             value: comp.component,
@@ -5285,6 +5282,7 @@ End If`,
           },
           {
             id: `config-xml-component-pass-${comp.id}`,
+            field: 'pass',
             title: t('isoConfig.xmlMarkup.pass'),
             controlType: 'select',
             options: passOptions,
@@ -5293,6 +5291,7 @@ End If`,
           },
           {
             id: `config-xml-component-markup-${comp.id}`,
+            field: 'markup',
             title: t('isoConfig.xmlMarkup.xmlMarkup'),
             description: '',
             value: comp.markup,
@@ -5339,6 +5338,7 @@ End If`,
           nestedCards: [
             {
               id: `config-xml-component-name-${newId}`,
+              field: 'component',
               title: t('isoConfig.xmlMarkup.component'),
               controlType: 'text',
               value: '',
@@ -5347,6 +5347,7 @@ End If`,
             },
             {
               id: `config-xml-component-pass-${newId}`,
+              field: 'pass',
               title: t('isoConfig.xmlMarkup.pass'),
               controlType: 'select',
               options: passOptions,
@@ -5355,6 +5356,7 @@ End If`,
             },
             {
               id: `config-xml-component-markup-${newId}`,
+              field: 'markup',
               title: t('isoConfig.xmlMarkup.xmlMarkup'),
               description: '',
               value: '',
@@ -5395,6 +5397,7 @@ End If`,
             nestedCards: [
               {
                 id: `config-xml-component-name-${newId}`,
+                field: 'component',
                 title: t('isoConfig.xmlMarkup.component'),
                 controlType: 'text',
                 value: '',
@@ -5403,6 +5406,7 @@ End If`,
               },
               {
                 id: `config-xml-component-pass-${newId}`,
+                field: 'pass',
                 title: t('isoConfig.xmlMarkup.pass'),
                 controlType: 'select',
                 options: passOptions,
@@ -5411,6 +5415,7 @@ End If`,
               },
               {
                 id: `config-xml-component-markup-${newId}`,
+                field: 'markup',
                 title: t('isoConfig.xmlMarkup.xmlMarkup'),
                 description: '',
                 value: '',
@@ -5449,20 +5454,9 @@ End If`,
         const component = components.find(comp => comp.id === itemId)
 
         if (component) {
-          // 从 values 中提取 component、pass 和 markup
-          const componentKey = Object.keys(values).find(k => k.includes('name') && !k.includes('pass') && !k.includes('markup'))
-          const passKey = Object.keys(values).find(k => k.includes('pass'))
-          const markupKey = Object.keys(values).find(k => k.includes('markup'))
-
-          if (componentKey) {
-            component.component = (values[componentKey] as string) || ''
-          }
-          if (passKey) {
-            component.pass = (values[passKey] as string) || 'windowsPE'
-          }
-          if (markupKey) {
-            component.markup = (values[markupKey] as string) || ''
-          }
+          component.component = (values.component as string) || ''
+          component.pass = (values.pass as string) || 'windowsPE'
+          component.markup = (values.markup as string) || ''
           this.updateModule('xmlMarkup', { components })
         }
       }

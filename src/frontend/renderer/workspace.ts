@@ -62,6 +62,7 @@ export interface ComboContainerConfig {
 
 export interface ComboCardConfig {
   id: string
+  field?: string
   title: string
   description?: string
   icon?: string // 图标改为可选
@@ -84,6 +85,7 @@ export interface ComboCardConfig {
 
 export interface TextCardConfig {
   id: string
+  field?: string
   title: string
   description?: string
   icon?: string // 图标可选
@@ -401,70 +403,38 @@ export function setupComboContainer(
 
   // 注意：展开/折叠功能由父容器的事件委托处理，这里不需要单独绑定
 
-  // 从嵌套卡片中收集所有值
-  const getAllValues = (): Record<string, boolean | string> => {
-    const result: Record<string, boolean | string> = {}
-
-    if (!config || !config.nestedCards) {
-      return result
+  const resolveFieldKey = (cardConfig: ComboCardConfig | TextCardConfig): string => {
+    if (cardConfig.field && cardConfig.field.trim()) {
+      return cardConfig.field.trim()
     }
 
-    // 遍历嵌套卡片，从每个卡片中获取值
+    return cardConfig.id.split('-').slice(-2).join('_')
+  }
+
+  const currentValues: Record<string, boolean | string> = {}
+
+  if (config && config.nestedCards) {
     config.nestedCards.forEach(cardConfig => {
-      // 检查是否为 MultiColumnCheckbox 配置
       if (typeof cardConfig === 'object' && 'type' in cardConfig && (cardConfig as any).type === 'multiColumnCheckbox') {
         const multiColumnConfig = (cardConfig as any).config as MultiColumnCheckboxConfig
-        const multiColumnContainer = container.querySelector(`#${multiColumnConfig.id}`) as HTMLElement
-        if (multiColumnContainer) {
-          // 从 MultiColumnCheckboxContainer 中获取值
-          const items = multiColumnContainer.querySelectorAll('.multi-column-checkbox-item') as NodeListOf<HTMLElement>
-          items.forEach(item => {
-            const checkbox = item.querySelector('fluent-checkbox') as any
-            const value = item.dataset.value
-            if (value && checkbox) {
-              result[value] = checkbox.checked || false
-            }
-          })
-        }
+        Object.entries(multiColumnConfig.values).forEach(([key, value]) => {
+          currentValues[key] = value
+        })
+        return
+      }
+
+      const cardConfigAny = cardConfig as any
+      const fieldKey = resolveFieldKey(cardConfigAny)
+      if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
+        currentValues[fieldKey] = cardConfigAny.value || ''
       } else {
-        // 检查是否为 TextCard 配置
-        const cardConfigAny = cardConfig as any
-        if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
-          // TextCard
-          const textCardId = cardConfigAny.id
-          const value = getTextCardValue(textCardId, false)
-          // 使用 card id 的最后部分作为 key（例如：script-content-xxx -> content）
-          const key = textCardId.split('-').slice(-2).join('_') // 取最后两部分，如 script_content_xxx
-          result[key] = value
-        } else {
-          // ComboCard
-          const comboCardId = cardConfigAny.id
-          const comboCard = container.querySelector(`#${comboCardId}`) as HTMLElement
-          if (comboCard) {
-            const controlType = cardConfigAny.controlType
-            let value: boolean | string = ''
-
-            if (controlType === 'checkbox' || controlType === 'switch') {
-              const control = comboCard.querySelector(`#${comboCardId}-control`) as any
-              value = control ? control.checked : false
-            } else if (controlType === 'select') {
-              const select = comboCard.querySelector(`#${comboCardId}-control`) as any
-              value = select ? (select.value || '') : ''
-            } else if (controlType === 'text') {
-              const textField = comboCard.querySelector(`#${comboCardId}-control`) as any
-              value = textField ? (textField.value || '') : ''
-            }
-
-            // 使用 card id 的最后部分作为 key（例如：script-type-xxx -> type）
-            // 或者使用完整 id 作为 key
-            const key = comboCardId.split('-').slice(-2).join('_') // 取最后两部分，如 script_type_xxx
-            result[key] = value
-          }
-        }
+        currentValues[fieldKey] = cardConfigAny.value ?? ''
       }
     })
+  }
 
-    return result
+  const emitValues = () => {
+    onValueChange({ ...currentValues })
   }
 
   // 为嵌套卡片设置事件监听
@@ -476,22 +446,25 @@ export function setupComboContainer(
         setupMultiColumnCheckboxContainer(
           multiColumnConfig.id,
           multiColumnConfig.name,
-          (_values: Record<string, boolean>) => {
-            // 当 MultiColumnCheckbox 的值变化时，收集所有值并调用回调
-            onValueChange(getAllValues())
+          (values: Record<string, boolean>) => {
+            Object.entries(values).forEach(([key, value]) => {
+              currentValues[key] = value
+            })
+            emitValues()
           },
           false // 不更新头部值（由父容器处理）
         )
       } else {
         // 检查是否为 TextCard 配置
         const cardConfigAny = cardConfig as any
+        const fieldKey = resolveFieldKey(cardConfigAny)
         if ('rows' in cardConfigAny || 'showImportExport' in cardConfigAny) {
           // TextCard
           setupTextCard(
             cardConfigAny.id,
-            (_value: string) => {
-              // 当 TextCard 的值变化时，收集所有值并调用回调
-              onValueChange(getAllValues())
+            (value: string) => {
+              currentValues[fieldKey] = value
+              emitValues()
             },
             undefined, // 导入功能（如果需要可以传递）
             undefined  // 导出功能（如果需要可以传递）
@@ -500,9 +473,9 @@ export function setupComboContainer(
           // ComboCard
           setupComboCard(
             cardConfigAny.id,
-            (_value: boolean | string) => {
-              // 当 ComboCard 的值变化时，收集所有值并调用回调
-              onValueChange(getAllValues())
+            (value: boolean | string) => {
+              currentValues[fieldKey] = value
+              emitValues()
             }
           )
         }

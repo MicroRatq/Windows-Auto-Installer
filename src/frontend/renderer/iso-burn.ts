@@ -58,11 +58,23 @@ export const templateManager = new TemplateManager()
 
 export class IsoBurnWorkspace {
   private panel: HTMLElement | null = null
+  private integrateInstaller = true
   private fileMappings: Array<{
     id: string
     sourcePath: string
     targetPath: string
   }> = []
+  private wimImages: Array<{
+    index: number
+    name?: string
+    edition?: string
+    architecture?: string
+    build?: string
+    label: string
+  }> = []
+  private selectedWimImageIndex = ''
+  private wimImageMessage = '选择当前要写入文件映射和安装器内容的映像索引'
+  private wimImageLoading = false
   private exportDirectory = ''
   private latestBuiltIsoPath = ''
   private buildTaskId: string | null = null
@@ -84,6 +96,7 @@ export class IsoBurnWorkspace {
     // 1. 订阅模板变化并渲染顶部卡片
     templateManager.addListener((template) => {
       this.renderTemplateCard(template)
+      void this.refreshWimImages(template)
     })
 
     // 2. 渲染 WIM 编辑部分
@@ -108,6 +121,7 @@ export class IsoBurnWorkspace {
         borderColor: 'rgba(255, 152, 0, 0.4)',
         backgroundColor: 'rgba(255, 152, 0, 0.05)'
       })
+      this.refreshIcons()
       return
     }
 
@@ -126,6 +140,7 @@ export class IsoBurnWorkspace {
       const cacheMenu = document.querySelector('fluent-option[value="iso-cache"]') as any
       if (cacheMenu) cacheMenu.click()
     })
+    this.refreshIcons()
   }
 
   private renderWimEdit() {
@@ -139,7 +154,17 @@ export class IsoBurnWorkspace {
       description: '勾选后，会在目标镜像中预置本安装器及所需运行环境',
       icon: 'package-plus',
       controlType: 'switch',
-      value: true
+      value: this.integrateInstaller
+    }
+
+    const wimImageSelectConfig: ComboCardConfig = {
+      id: 'burn-selected-wim-image',
+      title: '目标 WIM 映像',
+      description: this.wimImageMessage,
+      icon: 'layers',
+      controlType: 'select',
+      options: this.getWimImageOptions(),
+      value: this.selectedWimImageIndex
     }
 
     // 2. 文件映射动态列表
@@ -157,11 +182,16 @@ export class IsoBurnWorkspace {
 
     container.innerHTML = `
       ${createComboCard(switchConfig)}
+      ${createComboCard(wimImageSelectConfig)}
       ${createDynamicListContainer(mappingConfig)}
     `
 
     setupComboCard('burn-integrate-installer', (val) => {
-      console.log('Integrate installer:', val)
+      this.integrateInstaller = Boolean(val)
+    })
+
+    setupComboCard('burn-selected-wim-image', (val) => {
+      this.selectedWimImageIndex = String(val || '')
     })
 
     // Mapping 列表监听
@@ -185,17 +215,16 @@ export class IsoBurnWorkspace {
         this.fileMappings = this.fileMappings.map(mapping => {
           if (mapping.id !== itemId) return mapping
 
-          const sourceKey = Object.keys(value).find(key => key.includes('source'))
-          const targetKey = Object.keys(value).find(key => key.includes('target'))
-
           return {
             ...mapping,
-            sourcePath: (sourceKey ? value[sourceKey] : '') as string || '',
-            targetPath: (targetKey ? value[targetKey] : '') as string || ''
+            sourcePath: (value.sourcePath as string) || '',
+            targetPath: (value.targetPath as string) || ''
           }
         })
       }
     )
+
+    this.refreshIcons()
   }
 
   private setupEventListeners() {
@@ -351,6 +380,8 @@ export class IsoBurnWorkspace {
     setupComboCard('burn-action-export-local', () => { }, () => {
       void this.startBuildTask()
     })
+
+    this.refreshIcons()
   }
 
   private getBurnActionDescription(): string {
@@ -387,6 +418,7 @@ export class IsoBurnWorkspace {
       nestedCards: [
         {
           id: `burn-file-mapping-source-${mappingId}`,
+          field: 'sourcePath',
           title: '本地源路径',
           description: '输入待集成的本地文件或目录路径',
           icon: 'folder-open',
@@ -397,6 +429,7 @@ export class IsoBurnWorkspace {
         },
         {
           id: `burn-file-mapping-target-${mappingId}`,
+          field: 'targetPath',
           title: 'WIM 内目标路径',
           description: '输入镜像内的目标目录',
           icon: 'folder-tree',
@@ -501,6 +534,10 @@ export class IsoBurnWorkspace {
     const configManager = getConfigManager()
     const config = configManager ? configManager.getConfig() : createDefaultConfig()
     const outputName = `${this.sanitizeFileName(template.name || 'custom')}_customized.iso`
+    const validatedMappings = this.getValidatedFileMappings()
+    if (!validatedMappings) {
+      return
+    }
 
     this.buildStatus = 'running'
     this.buildMessage = '正在构建 ISO，请稍候...'
@@ -515,11 +552,9 @@ export class IsoBurnWorkspace {
           template_iso: template.path,
           export_dir: this.exportDirectory,
           output_name: outputName,
-          integrate_installer: true,
-          file_mappings: this.fileMappings.map(item => ({
-            source_path: item.sourcePath,
-            target_path: item.targetPath
-          })),
+          integrate_installer: this.integrateInstaller,
+          selected_wim_image_index: this.selectedWimImageIndex,
+          file_mappings: validatedMappings,
           config
         }
       })
@@ -550,6 +585,7 @@ export class IsoBurnWorkspace {
       })
 
       const status = response?.result || {}
+      const progress = status.progress || {}
       if (status.status === 'completed') {
         this.buildStatus = 'completed'
         this.latestBuiltIsoPath = status.result?.iso_path || status.result?.output_path || ''
@@ -567,7 +603,7 @@ export class IsoBurnWorkspace {
         return
       }
 
-      this.buildMessage = '正在构建 ISO，请稍候...'
+      this.buildMessage = this.formatBuildProgressMessage(progress)
       this.syncExportActionCards()
       window.setTimeout(() => {
         void this.pollBuildStatus(taskId)
@@ -681,6 +717,117 @@ export class IsoBurnWorkspace {
     const baseName = name.replace(/\.[^.]+$/, '')
     const sanitized = baseName.replace(/[<>:"/\\|?*]+/g, '_').trim()
     return sanitized || 'custom'
+  }
+
+  private refreshIcons() {
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
+  private getWimImageOptions(): Array<{ value: string, label: string }> {
+    if (this.wimImages.length === 0) {
+      return [{ value: '', label: '暂无可用映像' }]
+    }
+
+    return this.wimImages.map(image => ({
+      value: String(image.index),
+      label: image.label
+    }))
+  }
+
+  private async refreshWimImages(template: IsoTemplate | null) {
+    this.wimImages = []
+    this.selectedWimImageIndex = ''
+    this.wimImageLoading = false
+
+    if (!template?.path) {
+      this.wimImageMessage = '请先选择镜像模板'
+      this.renderWimEdit()
+      return
+    }
+
+    this.wimImageLoading = true
+    this.wimImageMessage = '已检测到模板变化，正在读取 WIM 映像列表...'
+    this.renderWimEdit()
+
+    if (!window.electronAPI?.sendToBackend) {
+      this.wimImageLoading = false
+      this.wimImageMessage = 'Electron API 不可用，无法读取 WIM 映像列表'
+      this.renderWimEdit()
+      return
+    }
+
+    try {
+      const response = await window.electronAPI.sendToBackend({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'deployment_list_wim_images',
+        params: {
+          template_iso: template.path
+        }
+      })
+
+      if (templateManager.getTemplate()?.path !== template.path) {
+        return
+      }
+
+      const images = Array.isArray(response?.result?.images) ? response.result.images : []
+      this.wimImages = images.map((image: any) => ({
+        index: Number(image.index),
+        name: image.name,
+        edition: image.edition,
+        architecture: image.architecture,
+        build: image.build,
+        label: image.label || `${image.index} - ${image.name || 'Image'}`
+      })).filter(image => Number.isFinite(image.index) && image.index > 0)
+
+      if (this.wimImages.length > 0) {
+        this.selectedWimImageIndex = String(this.wimImages[0].index)
+        this.wimImageMessage = '选择当前要写入文件映射和安装器内容的映像索引'
+      } else {
+        this.wimImageMessage = '当前模板未发现可编辑的 install.wim/install.esd 映像'
+      }
+    } catch (err: any) {
+      this.wimImages = []
+      this.selectedWimImageIndex = ''
+      this.wimImageMessage = `读取 WIM 映像失败: ${err?.message || '未知错误'}`
+    } finally {
+      this.wimImageLoading = false
+    }
+
+    this.renderWimEdit()
+  }
+
+  private getValidatedFileMappings(): Array<{ source_path: string, target_path: string }> | null {
+    const normalized = this.fileMappings
+      .map(item => ({
+        source_path: item.sourcePath.trim(),
+        target_path: item.targetPath.trim()
+      }))
+      .filter(item => item.source_path || item.target_path)
+
+    for (const mapping of normalized) {
+      if (!mapping.source_path || !mapping.target_path) {
+        alert('自定义文件映射中的本地源路径和 WIM 目标路径都必须填写')
+        return null
+      }
+    }
+
+    return normalized
+  }
+
+  private formatBuildProgressMessage(progress: any): string {
+    const message = typeof progress?.message === 'string' ? progress.message : ''
+    const percent = typeof progress?.percent === 'number' ? `${progress.percent}%` : ''
+
+    if (message && percent) {
+      return `${message} (${percent})`
+    }
+    if (message) {
+      return message
+    }
+    return '正在构建 ISO，请稍候...'
   }
 
   private async refreshDeviceList() {
