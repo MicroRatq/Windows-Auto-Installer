@@ -134,7 +134,7 @@ echo 环境配置完成！
 echo ================================
 echo.
 echo 下一步：
-echo 1. 运行 scripts\run_dev.bat 进行本地测试
+echo 1. 运行 powershell -ExecutionPolicy Bypass -File .\scripts\run_dev.ps1 进行本地测试
 echo 2. 或继续完成项目初始化
 echo.
 pause

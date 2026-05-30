@@ -36,8 +36,8 @@ scripts\setup_env.bat
 
 运行开发脚本：
 
-```bash
-scripts\run_dev.bat
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_dev.ps1
 ```
 
 该脚本会：
@@ -69,7 +69,7 @@ Windows-Auto-Installer/
 │   └── shared/            # 共享资源
 ├── scripts/               # 脚本目录
 │   ├── setup_env.bat      # 环境配置脚本
-│   └── run_dev.bat        # 开发模式启动脚本
+│   └── run_dev.ps1        # 开发模式启动脚本
 └── environment.yml        # Conda环境配置
 ```
 

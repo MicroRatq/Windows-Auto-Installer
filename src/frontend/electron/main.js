@@ -345,7 +345,7 @@ function createWindow() {
           <div class="error-box">
             <h1>Vite开发服务器未启动</h1>
             <p>请确保Vite开发服务器正在运行在 http://localhost:5173</p>
-            <p>检查"Vite Dev Server"窗口是否有错误信息</p>
+            <p>请检查当前开发终端中的 Vite 日志是否有错误信息</p>
             <button onclick="location.reload()">重试</button>
           </div>
         </body>
@@ -496,4 +496,3 @@ app.on('before-quit', () => {
     pythonProcess = null
   }
 })
-
