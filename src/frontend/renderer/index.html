@@ -70,15 +70,19 @@
             </div>
           </div>
           <!-- 折叠后的图标菜单 -->
-          <fluent-listbox id="icon-menu" class="icon-menu" style="display: none;">
+          <fluent-listbox id="icon-menu" class="icon-menu">
             <!-- 动态生成 -->
           </fluent-listbox>
 
           <div class="sidebar-footer">
-            <button class="settings-button" id="settings-button">
-              <i data-lucide="settings" class="settings-icon"></i>
-              <span class="settings-text">设置</span>
-            </button>
+            <fluent-listbox id="settings-menu" class="settings-menu">
+              <fluent-option id="settings-option" value="settings">
+                <span class="menu-option-content">
+                  <i data-lucide="settings" class="menu-icon"></i>
+                  <span class="menu-label">设置</span>
+                </span>
+              </fluent-option>
+            </fluent-listbox>
           </div>
         </div>
       </div>

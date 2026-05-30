@@ -49,6 +49,8 @@ interface MenuItem {
   icon: string // Lucide图标名称
 }
 
+const settingsMenuItem: MenuItem = { id: 'settings', label: '设置', icon: 'settings' }
+
 const mainMenuItems: MenuItem[] = [
   { id: 'iso', label: '镜像', icon: 'disc' },
   { id: 'system', label: '系统配置', icon: 'settings' },
@@ -88,6 +90,133 @@ let collapseToggleBtn: HTMLElement | null = null
 let collapseIcon: HTMLElement | null = null
 let sidebarMenuGroups: HTMLElement | null = null
 let iconMenuEl: any = null
+let settingsMenuEl: any = null
+let pendingSidebarWidth: number | null = null
+let resizeFrameId: number | null = null
+let activeResizePointerId: number | null = null
+let isSidebarAnimating = false
+let sidebarAnimationTimeoutId: number | null = null
+
+function findMenuItemById(id: string): MenuItem | undefined {
+  if (id === settingsMenuItem.id) {
+    return settingsMenuItem
+  }
+
+  for (const items of Object.values(subMenuConfig)) {
+    const item = items.find(menuItem => menuItem.id === id)
+    if (item) {
+      return item
+    }
+  }
+
+  return undefined
+}
+
+function updateSettingsMenuState() {
+  if (!settingsMenuEl) return
+
+  const settingsOption = settingsMenuEl.querySelector('fluent-option') as any
+  if (!settingsOption) return
+
+  const isActive = currentSubMenu === settingsMenuItem.id
+  settingsMenuEl.value = isActive ? settingsMenuItem.id : ''
+  settingsOption.selected = isActive
+  settingsOption.setAttribute('aria-selected', isActive ? 'true' : 'false')
+}
+
+function clearListboxSelection(listbox: any) {
+  if (!listbox) return
+
+  if ('selectedIndex' in listbox) {
+    listbox.selectedIndex = -1
+  }
+
+  const options = listbox.querySelectorAll('fluent-option') as NodeListOf<any>
+  options.forEach((option: any) => {
+    option.selected = false
+    option.setAttribute('aria-selected', 'false')
+  })
+}
+
+function setActiveWorkspacePanel(id: string) {
+  workspacePanels.forEach((panel, panelId) => {
+    const isActive = panelId === id
+    panel.classList.toggle('active', isActive)
+    panel.style.display = isActive ? 'block' : 'none'
+  })
+}
+
+function syncExpandedMenuSelection() {
+  if (!currentSubMenu || !currentMainMenu) return
+
+  const currentSubMenuEl = subMenuEls.get(currentMainMenu)
+  if (!currentSubMenuEl) return
+
+  currentSubMenuEl.value = currentSubMenu
+  const options = currentSubMenuEl.querySelectorAll('fluent-option') as NodeListOf<any>
+  options.forEach((option: any) => {
+    const isSelected = option.value === currentSubMenu
+    option.selected = isSelected
+    option.setAttribute('aria-selected', isSelected ? 'true' : 'false')
+  })
+}
+
+function syncCollapsedIconSelection() {
+  if (!currentSubMenu || !iconMenuEl) return
+
+  iconMenuEl.value = currentSubMenu
+  const options = iconMenuEl.querySelectorAll('fluent-option') as NodeListOf<any>
+  options.forEach((option: any) => {
+    const isSelected = option.value === currentSubMenu
+    option.selected = isSelected
+    option.setAttribute('aria-selected', isSelected ? 'true' : 'false')
+  })
+}
+
+function finalizeSidebarAnimation(collapsed: boolean) {
+  if (!sidebarEl) return
+
+  isSidebarAnimating = false
+
+  if (sidebarAnimationTimeoutId !== null) {
+    window.clearTimeout(sidebarAnimationTimeoutId)
+    sidebarAnimationTimeoutId = null
+  }
+
+  sidebarEl.classList.remove('expanding', 'collapsing')
+
+  if (collapsed) {
+    sidebarEl.classList.add('collapsed')
+    syncCollapsedIconSelection()
+  } else {
+    sidebarEl.classList.remove('collapsed')
+    syncExpandedMenuSelection()
+  }
+
+  if (window.lucide) {
+    window.lucide.createIcons()
+  }
+}
+
+function runSidebarWidthTransition(collapsed: boolean) {
+  if (!sidebarEl) return
+
+  const handleTransitionEnd = (event: TransitionEvent) => {
+    if (event.target !== sidebarEl || event.propertyName !== 'width') {
+      return
+    }
+
+    sidebarEl.removeEventListener('transitionend', handleTransitionEnd)
+    finalizeSidebarAnimation(collapsed)
+  }
+
+  sidebarEl.addEventListener('transitionend', handleTransitionEnd)
+
+  sidebarAnimationTimeoutId = window.setTimeout(() => {
+    sidebarEl?.removeEventListener('transitionend', handleTransitionEnd)
+    finalizeSidebarAnimation(collapsed)
+  }, 380)
+}
 
 // 创建带图标的选项
 function createMenuOption(item: MenuItem, showLabel: boolean = true): any {
@@ -110,9 +239,11 @@ function createMenuOption(item: MenuItem, showLabel: boolean = true): any {
   wrapper.appendChild(iconEl)
 
   if (showLabel) {
-    // 展开状态：图标 + 文字
-    const textNode = document.createTextNode(item.label)
-    wrapper.appendChild(textNode)
+    // 展开状态：图标 + 文字，使用独立标签避免宽度过渡中被挤成竖排
+    const labelEl = document.createElement('span')
+    labelEl.className = 'menu-label'
+    labelEl.textContent = item.label
+    wrapper.appendChild(labelEl)
   } else {
     // 折叠状态：仅图标
     option.title = item.label // 添加提示文字
@@ -189,24 +320,31 @@ function updateIconMenu() {
 // 更新工作区标题和内容
 function updateWorkspaceTitle() {
   if (!workspaceTitleEl) return
-  const items = subMenuConfig[currentMainMenu] || []
-  const item = items.find(item => item.id === currentSubMenu)
+  const item = findMenuItemById(currentSubMenu)
   workspaceTitleEl.textContent = item ? item.label : '未知'
-
-  // 切换工作区面板
-  workspacePanels.forEach((panel, id) => {
-    if (id === currentSubMenu) {
-      panel.classList.add('active')
-    } else {
-      panel.classList.remove('active')
-    }
-  })
+  setActiveWorkspacePanel(currentSubMenu)
+  updateSettingsMenuState()
 }
 
 // 选择子菜单
 function selectSubMenu(id: string) {
   console.log('Selecting sub menu:', id)
   currentSubMenu = id
+
+  if (id === settingsMenuItem.id) {
+    subMenuEls.forEach((subMenuEl) => {
+      clearListboxSelection(subMenuEl)
+    })
+
+    clearListboxSelection(iconMenuEl)
+    updateSettingsMenuState()
+
+    requestAnimationFrame(() => {
+      updateWorkspaceTitle()
+    })
+
+    return
+  }
 
   // 确定该子菜单属于哪个主菜单
   let parentMainMenu = currentMainMenu
@@ -254,6 +392,9 @@ function selectSubMenu(id: string) {
     if (iconMenuEl && 'selectedIndex' in iconMenuEl) {
       (iconMenuEl as any).selectedIndex = -1
     }
+
+    clearListboxSelection(settingsMenuEl)
+
     const currentSubMenuEl = subMenuEls.get(currentMainMenu)
     if (currentSubMenuEl) {
       currentSubMenuEl.value = id
@@ -298,123 +439,127 @@ function toggleTheme() {
 }
 
 // 侧边栏调整宽度
-function startResize(e: MouseEvent) {
+function startResize(e: PointerEvent) {
+  e.preventDefault()
+
+  if (isCollapsed || !sidebarResizerEl) {
+    return
+  }
+
+  activeResizePointerId = e.pointerId
+  sidebarResizerEl.setPointerCapture(e.pointerId)
+
   const startX = e.clientX
   const startWidth = sidebarWidth
 
-  function onMouseMove(e: MouseEvent) {
-    const newWidth = startWidth + (e.clientX - startX)
-    if (newWidth >= 150 && newWidth <= 400) {
-      sidebarWidth = newWidth
-      if (sidebarEl) {
-        sidebarEl.style.width = sidebarWidth + 'px'
-      }
+  document.body.classList.add('sidebar-resizing')
+
+  const flushSidebarWidth = () => {
+    resizeFrameId = null
+
+    if (pendingSidebarWidth === null || !sidebarEl) {
+      return
+    }
+
+    sidebarWidth = pendingSidebarWidth
+    sidebarEl.style.width = `${sidebarWidth}px`
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (e.pointerId !== activeResizePointerId) {
+      return
+    }
+
+    e.preventDefault()
+
+    pendingSidebarWidth = Math.max(150, Math.min(400, startWidth + (e.clientX - startX)))
+
+    if (resizeFrameId === null) {
+      resizeFrameId = requestAnimationFrame(flushSidebarWidth)
     }
   }
 
-  function onMouseUp() {
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
+  function stopResize() {
+    document.body.classList.remove('sidebar-resizing')
+
+    if (resizeFrameId !== null) {
+      cancelAnimationFrame(resizeFrameId)
+      resizeFrameId = null
+    }
+
+    if (pendingSidebarWidth !== null && sidebarEl) {
+      sidebarWidth = pendingSidebarWidth
+      sidebarEl.style.width = `${sidebarWidth}px`
+    }
+
+    pendingSidebarWidth = null
+    activeResizePointerId = null
+    document.removeEventListener('pointermove', onPointerMove)
+    document.removeEventListener('pointerup', onPointerUp)
+    document.removeEventListener('pointercancel', onPointerCancel)
+    window.removeEventListener('blur', onWindowBlur)
+
+    if (sidebarResizerEl && sidebarResizerEl.hasPointerCapture(e.pointerId)) {
+      sidebarResizerEl.releasePointerCapture(e.pointerId)
+    }
   }
 
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
+  function onPointerUp(e: PointerEvent) {
+    if (e.pointerId !== activeResizePointerId) {
+      return
+    }
+
+    stopResize()
+  }
+
+  function onPointerCancel(e: PointerEvent) {
+    if (e.pointerId !== activeResizePointerId) {
+      return
+    }
+
+    stopResize()
+  }
+
+  function onWindowBlur() {
+    stopResize()
+  }
+
+  document.addEventListener('pointermove', onPointerMove)
+  document.addEventListener('pointerup', onPointerUp)
+  document.addEventListener('pointercancel', onPointerCancel)
+  window.addEventListener('blur', onWindowBlur)
 }
 
 // 打开设置
 function openSettings() {
   console.log('打开设置')
-
-  // 隐藏所有工作区面板
-  const allPanels = document.querySelectorAll('.workspace-panel')
-  allPanels.forEach(panel => {
-    panel.classList.remove('active')
-      ; (panel as HTMLElement).style.display = 'none'
-  })
-
-  // 显示设置面板
-  const settingsPanel = document.getElementById('workspace-settings')
-  if (settingsPanel) {
-    settingsPanel.classList.add('active')
-    settingsPanel.style.display = 'block'
-    settingsManager.show()
-  }
-
-  // 更新标题
-  const titleEl = document.getElementById('workspace-title')
-  if (titleEl) {
-    titleEl.textContent = '设置'
-  }
+  selectSubMenu(settingsMenuItem.id)
 }
 
 // 切换侧边栏折叠状态
 function toggleCollapse() {
-  isCollapsed = !isCollapsed
-
   if (!sidebarEl || !sidebarMenuGroups || !iconMenuEl || !collapseIcon) return
 
+  if (isSidebarAnimating) {
+    return
+  }
+
+  isCollapsed = !isCollapsed
+  isSidebarAnimating = true
+
   if (isCollapsed) {
-    // 折叠：先添加折叠类让文本立即消失，然后更新图标菜单
-    sidebarEl.classList.add('collapsed') // 添加折叠类，文本立即消失
-    sidebarEl.style.width = '70px' // 折叠后的宽度，确保图标完整显示
-
-    // 使用requestAnimationFrame确保文本消失后再更新图标菜单
-    requestAnimationFrame(() => {
-      updateIconMenu()
-
-      // 确保图标菜单可见
-      if (iconMenuEl) {
-        iconMenuEl.style.display = 'block'
-      }
-
-      // 延迟确保激活状态，等待updateIconMenu中的setTimeout完成
-      setTimeout(() => {
-        if (currentSubMenu && iconMenuEl) {
-          iconMenuEl.value = currentSubMenu
-          const options = iconMenuEl.querySelectorAll('fluent-option') as NodeListOf<any>
-          options.forEach((option: any) => {
-            const isSelected = option.value === currentSubMenu
-            option.selected = isSelected
-            option.setAttribute('aria-selected', isSelected ? 'true' : 'false')
-          })
-        }
-
-        // 重新初始化Lucide图标
-        if (window.lucide) {
-          window.lucide.createIcons()
-        }
-      }, 10)
-    })
+    syncExpandedMenuSelection()
+    updateIconMenu()
+    sidebarEl.classList.remove('expanding', 'collapsed')
+    sidebarEl.classList.add('collapsing')
+    sidebarEl.style.width = '70px'
+    runSidebarWidthTransition(true)
   } else {
-    // 展开：先移除折叠类，然后隐藏图标菜单
-    sidebarEl.classList.remove('collapsed') // 移除折叠类，触发CSS过渡
+    syncExpandedMenuSelection()
+    sidebarEl.classList.remove('collapsing', 'collapsed')
+    sidebarEl.classList.add('expanding')
     sidebarEl.style.width = sidebarWidth + 'px'
-
-    // 使用requestAnimationFrame确保动画流畅
-    requestAnimationFrame(() => {
-      if (iconMenuEl) {
-        iconMenuEl.style.display = 'none'
-      }
-
-      // 保持当前激活状态在对应的二级菜单中
-      if (currentSubMenu && currentMainMenu) {
-        const currentSubMenuEl = subMenuEls.get(currentMainMenu)
-        if (currentSubMenuEl) {
-          currentSubMenuEl.value = currentSubMenu
-          const options = currentSubMenuEl.querySelectorAll('fluent-option') as NodeListOf<any>
-          options.forEach((option: any) => {
-            const isSelected = option.value === currentSubMenu
-            option.selected = isSelected
-            option.setAttribute('aria-selected', isSelected ? 'true' : 'false')
-          })
-        }
-      }
-
-      // 重新初始化Lucide图标
-      if (window.lucide) {
-        window.lucide.createIcons()
-      }
-    })
+    runSidebarWidthTransition(false)
   }
 }
 
@@ -431,6 +576,7 @@ async function init() {
   collapseIcon = document.getElementById('collapse-icon')
   sidebarMenuGroups = document.getElementById('sidebar-menu-groups')
   iconMenuEl = document.getElementById('icon-menu')
+  settingsMenuEl = document.getElementById('settings-menu')
 
   // 初始化所有二级菜单listbox
   const mainMenuIds = ['iso', 'system', 'software']
@@ -445,7 +591,8 @@ async function init() {
   const panelIds = [
     'iso-cache', 'iso-config', 'iso-burn',
     'migration', 'activation',
-    'office', 'packages'
+    'office', 'packages',
+    'settings'
   ]
   panelIds.forEach(id => {
     const panel = document.getElementById(`workspace-${id}`)
@@ -498,6 +645,16 @@ async function init() {
         if (selectedValue !== currentSubMenu) {
           selectSubMenu(selectedValue)
         }
+      }
+    })
+  }
+
+  if (settingsMenuEl) {
+    settingsMenuEl.addEventListener('click', (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      const option = target.closest('fluent-option') as any
+      if (option?.value === settingsMenuItem.id && currentSubMenu !== settingsMenuItem.id) {
+        selectSubMenu(settingsMenuItem.id)
       }
     })
   }
@@ -564,14 +721,9 @@ async function init() {
   }
 
   // 设置按钮
-  const settingsBtn = document.getElementById('settings-button')
-  if (settingsBtn) {
-    settingsBtn.addEventListener('click', openSettings)
-  }
-
   // 侧边栏调整
   if (sidebarResizerEl) {
-    sidebarResizerEl.addEventListener('mousedown', startResize)
+    sidebarResizerEl.addEventListener('pointerdown', startResize)
   }
 
   // 测试后端连接
