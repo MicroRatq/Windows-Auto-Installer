@@ -17,6 +17,8 @@ import {
   setTextCardValue,
   createDynamicListContainer,
   setupDynamicListContainer,
+  showWorkspaceConfirmDialog,
+  showWorkspaceMessageDialog,
   type DynamicListItem,
   type ComboContainerConfig
 } from './workspace'
@@ -408,6 +410,8 @@ const EMPTY_PRESET: PresetData = {
   bloatwareItems: []
 }
 
+const CONFIG_STORAGE_KEY = 'windows-auto-installer.iso-config'
+
 // ========================================
 // 默认配置
 // ========================================
@@ -561,12 +565,92 @@ class UnattendConfigManager {
   private presetData: PresetData = EMPTY_PRESET
 
   constructor() {
-    this.config = createDefaultConfig()
+    this.config = this.loadPersistedConfig()
   }
 
   // 获取配置
   getConfig(): UnattendConfig {
-    return { ...this.config }
+    return this.cloneConfig(this.config)
+  }
+
+  private cloneConfig<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T
+  }
+
+  private normalizeAccount(account: Partial<Account> | undefined): Account {
+    return {
+      id: account?.id || this.generateUUID(),
+      name: account?.name || '',
+      displayName: account?.displayName || '',
+      password: account?.password || '',
+      group: account?.group === 'Administrators' ? 'Administrators' : 'Users'
+    }
+  }
+
+  private normalizeScriptItem(script: Partial<ScriptItem> | undefined): ScriptItem {
+    return {
+      id: script?.id || this.generateUUID(),
+      type: script?.type || '.ps1',
+      content: script?.content || ''
+    }
+  }
+
+  private normalizeXmlMarkupComponent(component: Partial<XmlMarkupComponent> & { xml?: string } | undefined): XmlMarkupComponent {
+    return {
+      id: component?.id || this.generateUUID(),
+      component: component?.component || '',
+      pass: component?.pass || 'specialize',
+      markup: component?.markup ?? component?.xml ?? ''
+    }
+  }
+
+  private normalizeConfig(config: Partial<UnattendConfig> | null | undefined): UnattendConfig {
+    const merged = this.deepMerge(createDefaultConfig(), this.cloneConfig(config || {})) as UnattendConfig
+
+    merged.accountSettings.accounts = Array.isArray(merged.accountSettings.accounts)
+      ? merged.accountSettings.accounts.map(account => this.normalizeAccount(account))
+      : []
+
+    merged.scripts.system = Array.isArray(merged.scripts.system)
+      ? merged.scripts.system.map(item => this.normalizeScriptItem(item))
+      : []
+    merged.scripts.defaultUser = Array.isArray(merged.scripts.defaultUser)
+      ? merged.scripts.defaultUser.map(item => this.normalizeScriptItem(item))
+      : []
+    merged.scripts.firstLogon = Array.isArray(merged.scripts.firstLogon)
+      ? merged.scripts.firstLogon.map(item => this.normalizeScriptItem(item))
+      : []
+    merged.scripts.userOnce = Array.isArray(merged.scripts.userOnce)
+      ? merged.scripts.userOnce.map(item => this.normalizeScriptItem(item))
+      : []
+
+    merged.xmlMarkup.components = Array.isArray(merged.xmlMarkup.components)
+      ? merged.xmlMarkup.components.map(component => this.normalizeXmlMarkupComponent(component as XmlMarkupComponent & { xml?: string }))
+      : []
+
+    return merged
+  }
+
+  private persistConfig() {
+    try {
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(this.config))
+    } catch (error) {
+      console.error('Persist iso-config failed:', error)
+    }
+  }
+
+  private loadPersistedConfig(): UnattendConfig {
+    try {
+      const raw = localStorage.getItem(CONFIG_STORAGE_KEY)
+      if (!raw) {
+        return createDefaultConfig()
+      }
+
+      return this.normalizeConfig(JSON.parse(raw) as Partial<UnattendConfig>)
+    } catch (error) {
+      console.error('Load persisted iso-config failed:', error)
+      return createDefaultConfig()
+    }
   }
 
   // 深度合并辅助函数
@@ -594,7 +678,8 @@ class UnattendConfigManager {
 
   // 更新配置
   updateConfig(updates: Partial<UnattendConfig>) {
-    this.config = this.deepMerge(this.config, updates)
+    this.config = this.normalizeConfig(this.deepMerge(this.config, updates))
+    this.persistConfig()
   }
 
 
@@ -609,6 +694,8 @@ class UnattendConfigManager {
     } else {
       this.config[module] = updates as UnattendConfig[K]
     }
+    this.config = this.normalizeConfig(this.config)
+    this.persistConfig()
   }
 
   // 获取预设数据
@@ -686,7 +773,8 @@ class UnattendConfigManager {
       // 更新配置
       if (response.result?.config) {
         // 完全替换配置，而不是合并（确保导入时使用后端返回的完整配置）
-        this.config = response.result.config as UnattendConfig
+        this.config = this.normalizeConfig(response.result.config as Partial<UnattendConfig>)
+        this.persistConfig()
         // 重新渲染所有模块以反映新配置
         this.renderAllModules()
       }
@@ -878,13 +966,13 @@ class UnattendConfigManager {
           if (fileContent) {
             // 调用后端解析 XML
             await this.importFromXml(fileContent)
-            alert('导入成功！')
+            await showWorkspaceMessageDialog('导入成功', '配置已从 XML 导入并应用到当前页面。')
           } else {
-            alert('读取文件失败')
+            await showWorkspaceMessageDialog('读取失败', '无法读取所选文件。')
           }
         }
       } catch (error: any) {
-        alert(`导入失败: ${error.message || '未知错误'}`)
+        await showWorkspaceMessageDialog('导入失败', error.message || '未知错误')
         console.error('Import error:', error)
       }
     }
@@ -905,7 +993,7 @@ class UnattendConfigManager {
 
         if (!result.canceled && result.filePath) {
           await window.electronAPI.writeFile(result.filePath, xml)
-          alert('导出成功！')
+          await showWorkspaceMessageDialog('导出成功', '当前配置已导出为 XML 文件。')
         }
       } else {
         // 如果没有保存对话框，使用下载
@@ -918,9 +1006,37 @@ class UnattendConfigManager {
         URL.revokeObjectURL(url)
       }
     } catch (error: any) {
-      alert(`导出失败: ${error.message || '未知错误'}`)
+      await showWorkspaceMessageDialog('导出失败', error.message || '未知错误')
       console.error('Export error:', error)
     }
+  }
+
+  private restoreWindowFocus() {
+    const refocus = () => {
+      window.focus()
+      const activeElement = document.activeElement as HTMLElement | null
+      if (activeElement && typeof activeElement.blur === 'function') {
+        activeElement.blur()
+      }
+    }
+
+    requestAnimationFrame(() => {
+      refocus()
+      setTimeout(refocus, 50)
+    })
+  }
+
+  // 恢复默认配置
+  private async handleResetToDefault() {
+    const confirmed = await showWorkspaceConfirmDialog('恢复默认值', '这会清空当前自定义配置并恢复为默认值。是否继续？')
+    if (!confirmed) {
+      return
+    }
+
+    this.config = createDefaultConfig()
+    this.persistConfig()
+    this.renderAllModules()
+    this.restoreWindowFocus()
   }
 
   // 渲染导入和导出卡片
@@ -929,9 +1045,10 @@ class UnattendConfigManager {
 
     const importCardId = 'iso-config-import-card'
     const exportCardId = 'iso-config-export-card'
+    const resetCardId = 'iso-config-reset-card'
 
     // 检查卡片是否已存在，如果存在则直接返回，避免重复创建
-    if (this.panel.querySelector(`#${importCardId}`) && this.panel.querySelector(`#${exportCardId}`)) {
+    if (this.panel.querySelector(`#${importCardId}`) && this.panel.querySelector(`#${exportCardId}`) && this.panel.querySelector(`#${resetCardId}`)) {
       return
     }
 
@@ -971,8 +1088,17 @@ class UnattendConfigManager {
       value: ''
     })
 
+    const resetCardHtml = createComboCard({
+      id: resetCardId,
+      title: '恢复默认值',
+      description: '将当前自定义配置恢复为初始默认状态',
+      icon: 'rotate-ccw',
+      controlType: 'clickable',
+      value: ''
+    })
+
     // 直接将卡片 HTML 设置到 contentDiv（与其他 section 保持一致）
-    contentDiv.innerHTML = importCardHtml + exportCardHtml
+    contentDiv.innerHTML = importCardHtml + exportCardHtml + resetCardHtml
     section.appendChild(contentDiv)
 
     // 初始化图标
@@ -986,6 +1112,9 @@ class UnattendConfigManager {
     })
     setupComboCard(exportCardId, () => { }, () => {
       this.handleExport()
+    })
+    setupComboCard(resetCardId, () => { }, () => {
+      this.handleResetToDefault()
     })
   }
 

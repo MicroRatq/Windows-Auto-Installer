@@ -146,6 +146,120 @@ export interface DynamicListContainerConfig {
   embedded?: boolean // 是否为嵌入模式，默认false
 }
 
+export interface WorkspaceDialogOptions {
+  title: string
+  message: string
+  confirmText?: string
+  cancelText?: string
+  showCancel?: boolean
+}
+
+let workspaceDialogElement: HTMLElement | null = null
+
+function restoreWindowFocus(): void {
+  const refocus = () => {
+    window.focus()
+    const activeElement = document.activeElement as HTMLElement | null
+    if (activeElement && typeof activeElement.blur === 'function') {
+      activeElement.blur()
+    }
+  }
+
+  requestAnimationFrame(() => {
+    refocus()
+    setTimeout(refocus, 50)
+  })
+}
+
+function ensureWorkspaceDialog(): HTMLElement {
+  if (workspaceDialogElement) {
+    return workspaceDialogElement
+  }
+
+  const dialog = document.createElement('div')
+  dialog.className = 'workspace-dialog-overlay hidden'
+  dialog.innerHTML = `
+    <div class="workspace-dialog" role="dialog" aria-modal="true" aria-labelledby="workspace-dialog-title">
+      <div class="workspace-dialog-header">
+        <div class="workspace-dialog-title" id="workspace-dialog-title"></div>
+      </div>
+      <div class="workspace-dialog-body"></div>
+      <div class="workspace-dialog-actions">
+        <fluent-button appearance="outline" id="workspace-dialog-cancel" class="hidden">取消</fluent-button>
+        <fluent-button appearance="accent" id="workspace-dialog-confirm">确定</fluent-button>
+      </div>
+    </div>
+  `
+
+  document.body.appendChild(dialog)
+  workspaceDialogElement = dialog
+  return dialog
+}
+
+export function showWorkspaceDialog(options: WorkspaceDialogOptions): Promise<boolean> {
+  const dialog = ensureWorkspaceDialog()
+  const titleEl = dialog.querySelector('.workspace-dialog-title') as HTMLElement
+  const bodyEl = dialog.querySelector('.workspace-dialog-body') as HTMLElement
+  const confirmBtn = dialog.querySelector('#workspace-dialog-confirm') as any
+  const cancelBtn = dialog.querySelector('#workspace-dialog-cancel') as any
+  const {
+    title,
+    message,
+    confirmText = '确定',
+    cancelText = '取消',
+    showCancel = false
+  } = options
+
+  titleEl.textContent = title
+  bodyEl.textContent = message
+  confirmBtn.textContent = confirmText
+  cancelBtn.textContent = cancelText
+  cancelBtn.classList.toggle('hidden', !showCancel)
+  dialog.classList.remove('hidden')
+
+  return new Promise(resolve => {
+    const cleanup = () => {
+      dialog.classList.add('hidden')
+      confirmBtn.removeEventListener('click', handleConfirm)
+      cancelBtn.removeEventListener('click', handleCancel)
+      restoreWindowFocus()
+    }
+
+    const handleConfirm = () => {
+      cleanup()
+      resolve(true)
+    }
+
+    const handleCancel = () => {
+      cleanup()
+      resolve(false)
+    }
+
+    confirmBtn.addEventListener('click', handleConfirm, { once: true })
+    cancelBtn.addEventListener('click', handleCancel, { once: true })
+    requestAnimationFrame(() => {
+      confirmBtn.focus?.()
+    })
+  })
+}
+
+export function showWorkspaceMessageDialog(
+  title: string,
+  message: string,
+  confirmText: string = '确定'
+): Promise<void> {
+  return showWorkspaceDialog({ title, message, confirmText, showCancel: false }).then(() => { })
+}
+
+export function showWorkspaceConfirmDialog(
+  title: string,
+  message: string,
+  confirmText: string = '确定',
+  cancelText: string = '取消'
+): Promise<boolean> {
+  return showWorkspaceDialog({ title, message, confirmText, cancelText, showCancel: true })
+}
+
 // ========================================
 // Radio容器控件
 // ========================================
