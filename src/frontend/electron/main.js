@@ -12,28 +12,28 @@ function waitForViteServer(maxRetries = 30, delay = 1000) {
     const http = require('http')
     let retries = 0
 
-    console.log('[Electron] 等待Vite服务器启动...')
+      console.log('等待Vite服务器启动...')
 
     function checkServer() {
       // 尝试访问index.html来确认Vite服务器是否就绪
       const req = http.get('http://localhost:5173/index.html', (res) => {
         // 任何响应状态码都表示服务器在运行
         if (res.statusCode === 200) {
-          console.log('[Electron] ✓ Vite服务器已就绪 (200)')
+          console.log('✓ Vite服务器已就绪 (200)')
           resolve()
         } else if (res.statusCode === 404) {
           // 404可能表示服务器在运行但路径不对，也尝试继续
-          console.log('[Electron] ✓ Vite服务器已就绪 (404, 但服务器运行中)')
+          console.log('✓ Vite服务器已就绪 (404, 但服务器运行中)')
           resolve()
         } else {
-          console.log(`[Electron] Vite服务器响应状态码: ${res.statusCode}, 继续等待...`)
+          console.log(`Vite服务器响应状态码: ${res.statusCode}, 继续等待...`)
           retry()
         }
       })
 
       req.on('error', (err) => {
         if (retries % 5 === 0) {
-          console.log(`[Electron] 等待Vite服务器... (${retries}/${maxRetries})`)
+          console.log(`等待Vite服务器... (${retries}/${maxRetries})`)
         }
         retry()
       })
@@ -47,7 +47,7 @@ function waitForViteServer(maxRetries = 30, delay = 1000) {
     function retry() {
       retries++
       if (retries >= maxRetries) {
-        console.error('[Electron] ✗ Vite服务器启动超时')
+        console.error('✗ Vite服务器启动超时')
         reject(new Error('Vite服务器启动超时，请检查Vite开发服务器是否正在运行'))
       } else {
         setTimeout(checkServer, delay)
@@ -104,8 +104,8 @@ function startPythonBackend() {
       pythonExe = 'python'
     }
 
-    console.log(`[Backend] 使用Python: ${pythonExe}`)
-    console.log(`[Backend] 启动脚本: ${backendPath}`)
+      console.log(`[Backend] 使用Python: ${pythonExe}`)
+      console.log(`[Backend] 启动脚本: ${backendPath}`)
 
     try {
       pythonProcess = spawn(pythonExe, [backendPath], options)
@@ -160,7 +160,7 @@ function startPythonBackend() {
           }
         } catch (e) {
           // 非JSON输出，可能是日志
-          console.log('[Python]', message)
+          console.log('[Backend]', message)
         }
       }
     }
@@ -171,7 +171,7 @@ function startPythonBackend() {
   })
 
   pythonProcess.on('exit', (code) => {
-    console.log(`[Python] 进程退出，代码: ${code}`)
+    console.log(`[Backend] 进程退出，代码: ${code}`)
     // 清理进程引用
     pythonProcess = null
     // 拒绝所有待处理的请求
@@ -191,7 +191,7 @@ function startPythonBackend() {
   })
 
   pythonProcess.on('error', (error) => {
-    console.error('[Python] 进程错误:', error)
+    console.error('[Backend] 进程错误:', error)
     // 清理进程引用
     pythonProcess = null
     // 拒绝所有待处理的请求
@@ -224,7 +224,7 @@ function createWindow() {
     // F12: 切换开发者工具
     if (input.key === 'F12') {
       event.preventDefault()
-      console.log('[Electron] F12 pressed, toggling DevTools')
+      console.log('F12 pressed, toggling DevTools')
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()
       } else {
@@ -242,7 +242,7 @@ function createWindow() {
   // 延迟注册，确保窗口已创建
   setTimeout(() => {
     const registered = globalShortcut.register('F12', () => {
-      console.log('[Electron] F12 global shortcut triggered')
+      console.log('F12 global shortcut triggered')
       if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.webContents.isDevToolsOpened()) {
           mainWindow.webContents.closeDevTools()
@@ -253,9 +253,9 @@ function createWindow() {
     })
 
     if (!registered) {
-      console.log('[Electron] F12 global shortcut registration failed, using before-input-event instead')
+      console.log('F12 global shortcut registration failed, using before-input-event instead')
     } else {
-      console.log('[Electron] F12 global shortcut registered successfully')
+      console.log('F12 global shortcut registered successfully')
     }
   }, 1000)
 
@@ -278,35 +278,35 @@ function createWindow() {
   if (isDev) {
     // 等待Vite服务器就绪
     waitForViteServer().then(() => {
-      console.log('[Electron] 加载Vite开发服务器...')
+      console.log('加载Vite开发服务器...')
       // 加载Vite开发服务器（Vite会自动提供index.html）
       mainWindow.loadURL('http://localhost:5173/')
       mainWindow.webContents.openDevTools()
 
       // 监听页面加载完成
       mainWindow.webContents.on('did-finish-load', () => {
-        console.log('[Electron] 页面加载完成')
+        console.log('页面加载完成')
       })
 
       // 监听加载错误
       mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-        console.error('[Electron] 页面加载失败:', errorCode, errorDescription, validatedURL)
+        console.error('页面加载失败:', errorCode, errorDescription, validatedURL)
         if (errorCode === -106 || errorCode === -105) {
           // ERR_INTERNET_DISCONNECTED 或 ERR_NAME_NOT_RESOLVED
-          console.log('[Electron] 连接失败，等待Vite服务器...')
+          console.log('连接失败，等待Vite服务器...')
           setTimeout(() => {
             mainWindow.reload()
           }, 2000)
         } else {
           // 其他错误，尝试直接加载根路径
-          console.log('[Electron] 尝试加载根路径...')
+          console.log('尝试加载根路径...')
           setTimeout(() => {
             mainWindow.loadURL('http://localhost:5173/')
           }, 1000)
         }
       })
     }).catch((error) => {
-      console.error('[Electron] Vite服务器启动失败:', error)
+      console.error('Vite服务器启动失败:', error)
       const errorHtml = `
         <!DOCTYPE html>
         <html>

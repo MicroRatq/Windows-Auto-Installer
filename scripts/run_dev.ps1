@@ -126,6 +126,51 @@ function Unregister-ProcessOutput {
     $script:outputEventStyles = @{}
 }
 
+function Get-LogTagColor {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Tag,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DefaultColor
+    )
+
+    switch ($Tag) {
+        'Electron' { return 'Cyan' }
+        'IPC' { return 'Magenta' }
+        'Backend' { return 'Yellow' }
+        'Python' { return 'DarkYellow' }
+        default { return $DefaultColor }
+    }
+}
+
+function Write-ColoredTaggedLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Line,
+
+        [Parameter(Mandatory = $true)]
+        [string]$TagColor,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DefaultColor
+    )
+
+    if ($Line -match '^\[(?<tag>[^\]]+)\](?<rest>.*)$') {
+        $matchedTagColor = Get-LogTagColor -Tag $matches.tag -DefaultColor $TagColor
+        Write-Host -NoNewline "[$($matches.tag)]" -ForegroundColor $matchedTagColor
+
+        if ($matches.rest) {
+            Write-Host $matches.rest -NoNewline:$false -ForegroundColor $DefaultColor
+        } else {
+            Write-Host ''
+        }
+        return
+    }
+
+    Write-Host $Line -ForegroundColor $DefaultColor
+}
+
 function Flush-ProcessOutput {
     param(
         [int]$TimeoutSeconds = 1
@@ -143,20 +188,11 @@ function Flush-ProcessOutput {
                 $eventArgs = $queuedEvent.SourceArgs[1]
                 $line = $eventArgs.Data
                 if ($line) {
-                    $lineColor = $style.Color
-                    if ($style.Label -eq 'ELECTRON') {
-                        if ($line -match '^\[(?<tag>[^\]]+)\]') {
-                            switch ($matches.tag) {
-                                'Electron' { $lineColor = 'Cyan' }
-                                'IPC' { $lineColor = 'Magenta' }
-                                'Backend' { $lineColor = 'Yellow' }
-                                'Python' { $lineColor = 'DarkYellow' }
-                                default { $lineColor = $style.Color }
-                            }
-                        }
+                    if ($style.Label -ne 'ELECTRON') {
+                        Write-Host -NoNewline "[$($style.Label)]" -ForegroundColor $style.Color
+                        Write-Host -NoNewline ' '
                     }
-
-                    Write-Host "[$($style.Label)] $line" -ForegroundColor $lineColor
+                    Write-ColoredTaggedLine -Line $line -TagColor $style.Color -DefaultColor 'Gray'
                 }
             }
 
