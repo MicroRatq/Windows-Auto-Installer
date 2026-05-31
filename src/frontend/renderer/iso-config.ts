@@ -1127,9 +1127,7 @@ class UnattendConfigManager {
     const lang = this.config.languageSettings
     const tz = this.config.timeZone
 
-    // 规范化键盘ID为大写，避免解析大小写不一致导致选项无法匹配
     const normalizeKeyboardId = (id?: string) => (id || '').toUpperCase()
-    // 为未设置的值提供后端默认选项，避免空白下拉
     const defaultUiLanguage = preset.languages[0]?.id || ''
     const defaultSystemLocale = preset.locales[0]?.id || defaultUiLanguage
     const defaultKeyboard = normalizeKeyboardId(preset.keyboards[0]?.id || '')
@@ -1141,6 +1139,8 @@ class UnattendConfigManager {
     const firstKeyboardValue = normalizeKeyboardId(lang.inputLocale || defaultKeyboard)
     const homeRegionValue = lang.geoLocation || defaultGeo
 
+    const getOptionLabel = (_type: string, _id: string, backendName: string): string => backendName
+
     // 语言模式 Switch ComboCard
     const languageModeCardHtml = createComboCard({
       id: 'config-language-mode-card',
@@ -1151,60 +1151,52 @@ class UnattendConfigManager {
       value: lang.mode === 'interactive'
     })
 
-    // Windows display language ComboCard
-    const uiLanguageCardHtml = lang.mode === 'unattended'
-      ? createComboCard({
-        id: 'config-ui-language-card',
-        title: t('isoConfig.regionLanguage.uiLanguageTitle'),
-        description: t('isoConfig.regionLanguage.uiLanguageDesc'),
-        icon: 'globe',
-        controlType: 'select',
-        options: preset.languages.map(l => ({ value: l.id, label: l.name })),
-        value: lang.uiLanguage || ''
-      })
-      : ''
+    // Windows display language ComboCard（始终生成，通过容器控制显隐）
+    const uiLanguageCardHtml = createComboCard({
+      id: 'config-ui-language-card',
+      title: t('isoConfig.regionLanguage.uiLanguageTitle'),
+      description: t('isoConfig.regionLanguage.uiLanguageDesc'),
+      icon: 'globe',
+      controlType: 'select',
+      options: preset.languages.map(l => ({ value: l.id, label: getOptionLabel('language', l.id, l.name) })),
+      value: lang.uiLanguage || ''
+    })
 
     // First language ComboCard
-    const firstLanguageCardHtml = lang.mode === 'unattended'
-      ? createComboCard({
-        id: 'config-first-language-card',
-        title: t('isoConfig.regionLanguage.firstLanguageTitle'),
-        description: t('isoConfig.regionLanguage.firstLanguageDesc'),
-        icon: 'languages',
-        controlType: 'select',
-        options: preset.locales.map(l => ({ value: l.id, label: l.name })),
-        value: firstLanguageValue
-      })
-      : ''
+    const firstLanguageCardHtml = createComboCard({
+      id: 'config-first-language-card',
+      title: t('isoConfig.regionLanguage.firstLanguageTitle'),
+      description: t('isoConfig.regionLanguage.firstLanguageDesc'),
+      icon: 'languages',
+      controlType: 'select',
+      options: preset.locales.map(l => ({ value: l.id, label: getOptionLabel('locale', l.id, l.name) })),
+      value: firstLanguageValue
+    })
 
     // First keyboard layout ComboCard
-    const firstKeyboardCardHtml = lang.mode === 'unattended'
-      ? createComboCard({
-        id: 'config-first-keyboard-card',
-        title: t('isoConfig.regionLanguage.firstKeyboardTitle'),
-        description: '',
-        icon: 'keyboard',
-        controlType: 'select',
-        options: preset.keyboards.map(k => ({ value: k.id, label: k.name })),
-        value: firstKeyboardValue
-      })
-      : ''
+    const firstKeyboardCardHtml = createComboCard({
+      id: 'config-first-keyboard-card',
+      title: t('isoConfig.regionLanguage.firstKeyboardTitle'),
+      description: '',
+      icon: 'keyboard',
+      controlType: 'select',
+      options: preset.keyboards.filter(k => k.type !== 'IME').map(k => ({ value: k.id, label: getOptionLabel('keyboard', k.id, k.name) })),
+      value: firstKeyboardValue
+    })
 
-    // Home location / device setup region ComboCard（使用后端 geoLocations）
-    const homeRegionCardHtml = lang.mode === 'unattended'
-      ? createComboCard({
-        id: 'config-home-region-card',
-        title: t('isoConfig.regionLanguage.homeRegionTitle'),
-        description: t('isoConfig.regionLanguage.homeRegionDesc'),
-        icon: 'map',
-        controlType: 'select',
-        options: (preset.geoLocations.length ? preset.geoLocations : preset.locales).map(l => ({
-          value: l.id,
-          label: l.name
-        })),
-        value: homeRegionValue
-      })
-      : ''
+    // Home location ComboCard
+    const homeRegionCardHtml = createComboCard({
+      id: 'config-home-region-card',
+      title: t('isoConfig.regionLanguage.homeRegionTitle'),
+      description: t('isoConfig.regionLanguage.homeRegionDesc'),
+      icon: 'map',
+      controlType: 'select',
+      options: (preset.geoLocations.length ? preset.geoLocations : preset.locales).map(l => ({
+        value: l.id,
+        label: getOptionLabel('geoLocation', l.id, l.name)
+      })),
+      value: homeRegionValue
+    })
 
     // 时区模式 Switch ComboCard
     const timezoneModeCardHtml = createComboCard({
@@ -1216,35 +1208,40 @@ class UnattendConfigManager {
       value: tz.mode === 'implicit'
     })
 
-    // 时区选择 ComboCard
-    const timezoneSelectCardHtml = tz.mode === 'explicit'
-      ? createComboCard({
-        id: 'config-timezone-card',
-        title: t('isoConfig.regionLanguage.useThisTimeZone'),
-        description: '',
-        icon: 'map-pin',
-        controlType: 'select',
-        options: preset.timeZones.map(t => ({ value: t.id, label: t.name })),
-        value: tz.timeZone || defaultTimeZone
-      })
-      : ''
+    // 时区选择 ComboCard（始终生成，通过容器控制显隐）
+    const timezoneSelectCardHtml = createComboCard({
+      id: 'config-timezone-card',
+      title: t('isoConfig.regionLanguage.useThisTimeZone'),
+      description: '',
+      icon: 'map-pin',
+      controlType: 'select',
+      options: preset.timeZones.map(t => ({ value: t.id, label: getOptionLabel('timezone', t.id, t.name) })),
+      value: tz.timeZone || defaultTimeZone
+    })
+
+    const unattendedVisible = lang.mode === 'unattended'
+    const explicitVisible = tz.mode === 'explicit'
 
     contentDiv.innerHTML = `
       ${languageModeCardHtml}
-      ${uiLanguageCardHtml}
-      ${firstLanguageCardHtml}
-      ${firstKeyboardCardHtml}
-      ${homeRegionCardHtml}
+      <div id="config-lang-unattended-group" style="display: ${unattendedVisible ? 'flex' : 'none'}; flex-direction: column;">
+        ${uiLanguageCardHtml}
+        ${firstLanguageCardHtml}
+        ${firstKeyboardCardHtml}
+        ${homeRegionCardHtml}
+      </div>
       ${timezoneModeCardHtml}
-      ${timezoneSelectCardHtml}
+      <div id="config-timezone-explicit-group" style="display: ${explicitVisible ? 'block' : 'none'};">
+        ${timezoneSelectCardHtml}
+      </div>
     `
 
-    // 设置语言模式 Switch ComboCard 事件监听
+    // 语言模式 Switch 事件监听（仅切换显隐，不重新渲染）
+    const langGroup = contentDiv.querySelector('#config-lang-unattended-group') as HTMLElement
     setupComboCard('config-language-mode-card', (value) => {
       this.updateModule('languageSettings', {
         mode: value ? 'interactive' : 'unattended'
       })
-      // 当切换到 unattended 时，如果缺少值，自动填充后端默认选项
       if (!value) {
         this.updateModule('languageSettings', {
           uiLanguage: uiLanguageValue || defaultUiLanguage,
@@ -1253,44 +1250,41 @@ class UnattendConfigManager {
           geoLocation: homeRegionValue || defaultGeo
         })
       }
-      this.renderRegionLanguageTimeZone()
+      if (langGroup) {
+        langGroup.style.display = value ? 'none' : 'flex'
+      }
     })
 
-    // 设置 Windows display language ComboCard 事件监听
-    if (lang.mode === 'unattended') {
-      setupComboCard('config-ui-language-card', (value) => {
-        this.updateModule('languageSettings', { uiLanguage: value as string })
-      })
+    // 语言子卡片事件监听（始终绑定，因为卡片始终存在）
+    setupComboCard('config-ui-language-card', (value) => {
+      this.updateModule('languageSettings', { uiLanguage: value as string })
+    })
+    setupComboCard('config-first-language-card', (value) => {
+      this.updateModule('languageSettings', { systemLocale: value as string })
+    })
+    setupComboCard('config-first-keyboard-card', (value) => {
+      this.updateModule('languageSettings', { inputLocale: normalizeKeyboardId(value as string) })
+    })
+    setupComboCard('config-home-region-card', (value) => {
+      this.updateModule('languageSettings', { geoLocation: value as string })
+    })
 
-      setupComboCard('config-first-language-card', (value) => {
-        this.updateModule('languageSettings', { systemLocale: value as string })
-      })
-
-      setupComboCard('config-first-keyboard-card', (value) => {
-        this.updateModule('languageSettings', { inputLocale: normalizeKeyboardId(value as string) })
-      })
-
-      setupComboCard('config-home-region-card', (value) => {
-        this.updateModule('languageSettings', { geoLocation: value as string })
-      })
-    }
-
-    // 设置时区模式 Switch ComboCard 事件监听
+    // 时区模式 Switch 事件监听（仅切换显隐，不重新渲染）
+    const tzGroup = contentDiv.querySelector('#config-timezone-explicit-group') as HTMLElement
     setupComboCard('config-timezone-mode-card', (value) => {
       this.updateModule('timeZone', {
         mode: value ? 'implicit' : 'explicit'
       })
-      this.renderRegionLanguageTimeZone()
+      if (tzGroup) {
+        tzGroup.style.display = value ? 'none' : 'block'
+      }
     })
 
-    // 设置时区选择 ComboCard 事件监听
-    if (tz.mode === 'explicit') {
-      setupComboCard('config-timezone-card', (value) => {
-        this.updateModule('timeZone', { timeZone: value as string })
-      })
-    }
+    // 时区选择事件监听（始终绑定）
+    setupComboCard('config-timezone-card', (value) => {
+      this.updateModule('timeZone', { timeZone: value as string })
+    })
 
-    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }
