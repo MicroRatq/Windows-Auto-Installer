@@ -1,154 +1,192 @@
 [
   {
     "Id": "ar-SA",
-    "DisplayName": "Arabic"
+    "DisplayName": "Arabic",
+    "DisplayName_zh": "阿拉伯语"
   },
   {
     "Id": "pt-BR",
-    "DisplayName": "Brazilian Portuguese"
+    "DisplayName": "Brazilian Portuguese",
+    "DisplayName_zh": "巴西葡萄牙语"
   },
   {
     "Id": "bg-BG",
-    "DisplayName": "Bulgarian"
+    "DisplayName": "Bulgarian",
+    "DisplayName_zh": "保加利亚语"
   },
   {
     "Id": "zh-CN",
-    "DisplayName": "Chinese Simplified"
+    "DisplayName": "Chinese Simplified",
+    "DisplayName_zh": "中文 (简体)"
   },
   {
     "Id": "zh-TW",
-    "DisplayName": "Chinese Traditional"
+    "DisplayName": "Chinese Traditional",
+    "DisplayName_zh": "中文 (繁体)"
   },
   {
     "Id": "hr-HR",
-    "DisplayName": "Croatian"
+    "DisplayName": "Croatian",
+    "DisplayName_zh": "克罗地亚语"
   },
   {
     "Id": "cs-CZ",
-    "DisplayName": "Czech"
+    "DisplayName": "Czech",
+    "DisplayName_zh": "捷克语"
   },
   {
     "Id": "da-DK",
-    "DisplayName": "Danish"
+    "DisplayName": "Danish",
+    "DisplayName_zh": "丹麦语"
   },
   {
     "Id": "nl-NL",
-    "DisplayName": "Dutch"
+    "DisplayName": "Dutch",
+    "DisplayName_zh": "荷兰语"
   },
   {
     "Id": "en-US",
-    "DisplayName": "English"
+    "DisplayName": "English",
+    "DisplayName_zh": "英语"
   },
   {
     "Id": "en-GB",
-    "DisplayName": "English International"
+    "DisplayName": "English International",
+    "DisplayName_zh": "英语 (国际)"
   },
   {
     "Id": "et-EE",
-    "DisplayName": "Estonian"
+    "DisplayName": "Estonian",
+    "DisplayName_zh": "爱沙尼亚语"
   },
   {
     "Id": "fi-FI",
-    "DisplayName": "Finnish"
+    "DisplayName": "Finnish",
+    "DisplayName_zh": "芬兰语"
   },
   {
     "Id": "fr-FR",
-    "DisplayName": "French"
+    "DisplayName": "French",
+    "DisplayName_zh": "法语"
   },
   {
     "Id": "fr-CA",
-    "DisplayName": "French Canadian"
+    "DisplayName": "French Canadian",
+    "DisplayName_zh": "法语 (加拿大)"
   },
   {
     "Id": "de-DE",
-    "DisplayName": "German"
+    "DisplayName": "German",
+    "DisplayName_zh": "德语"
   },
   {
     "Id": "el-GR",
-    "DisplayName": "Greek"
+    "DisplayName": "Greek",
+    "DisplayName_zh": "希腊语"
   },
   {
     "Id": "he-IL",
-    "DisplayName": "Hebrew"
+    "DisplayName": "Hebrew",
+    "DisplayName_zh": "希伯来语"
   },
   {
     "Id": "hu-HU",
-    "DisplayName": "Hungarian"
+    "DisplayName": "Hungarian",
+    "DisplayName_zh": "匈牙利语"
   },
   {
     "Id": "it-IT",
-    "DisplayName": "Italian"
+    "DisplayName": "Italian",
+    "DisplayName_zh": "意大利语"
   },
   {
     "Id": "ja-JP",
-    "DisplayName": "Japanese"
+    "DisplayName": "Japanese",
+    "DisplayName_zh": "日语"
   },
   {
     "Id": "ko-KR",
-    "DisplayName": "Korean"
+    "DisplayName": "Korean",
+    "DisplayName_zh": "韩语"
   },
   {
     "Id": "lv-LV",
-    "DisplayName": "Latvian"
+    "DisplayName": "Latvian",
+    "DisplayName_zh": "拉脱维亚语"
   },
   {
     "Id": "lt-LT",
-    "DisplayName": "Lithuanian"
+    "DisplayName": "Lithuanian",
+    "DisplayName_zh": "立陶宛语"
   },
   {
     "Id": "nb-NO",
-    "DisplayName": "Norwegian"
+    "DisplayName": "Norwegian",
+    "DisplayName_zh": "挪威语"
   },
   {
     "Id": "pl-PL",
-    "DisplayName": "Polish"
+    "DisplayName": "Polish",
+    "DisplayName_zh": "波兰语"
   },
   {
     "Id": "pt-PT",
-    "DisplayName": "Portuguese"
+    "DisplayName": "Portuguese",
+    "DisplayName_zh": "葡萄牙语"
   },
   {
     "Id": "ro-RO",
-    "DisplayName": "Romanian"
+    "DisplayName": "Romanian",
+    "DisplayName_zh": "罗马尼亚语"
   },
   {
     "Id": "ru-RU",
-    "DisplayName": "Russian"
+    "DisplayName": "Russian",
+    "DisplayName_zh": "俄语"
   },
   {
     "Id": "sr-Latn-RS",
-    "DisplayName": "Serbian Latin"
+    "DisplayName": "Serbian Latin",
+    "DisplayName_zh": "塞尔维亚语 (拉丁)"
   },
   {
     "Id": "sk-SK",
-    "DisplayName": "Slovak"
+    "DisplayName": "Slovak",
+    "DisplayName_zh": "斯洛伐克语"
   },
   {
     "Id": "sl-SI",
-    "DisplayName": "Slovenian"
+    "DisplayName": "Slovenian",
+    "DisplayName_zh": "斯洛文尼亚语"
   },
   {
     "Id": "es-ES",
-    "DisplayName": "Spanish"
+    "DisplayName": "Spanish",
+    "DisplayName_zh": "西班牙语"
   },
   {
     "Id": "es-MX",
-    "DisplayName": "Spanish (Mexico)"
+    "DisplayName": "Spanish (Mexico)",
+    "DisplayName_zh": "西班牙语 (墨西哥)"
   },
   {
     "Id": "sv-SE",
-    "DisplayName": "Swedish"
+    "DisplayName": "Swedish",
+    "DisplayName_zh": "瑞典语"
   },
   {
     "Id": "th-TH",
-    "DisplayName": "Thai"
+    "DisplayName": "Thai",
+    "DisplayName_zh": "泰语"
   },
   {
     "Id": "tr-TR",
-    "DisplayName": "Turkish"
+    "DisplayName": "Turkish",
+    "DisplayName_zh": "土耳其语"
   },
   {
     "Id": "uk-UA",
-    "DisplayName": "Ukrainian"
+    "DisplayName": "Ukrainian",
+    "DisplayName_zh": "乌克兰语"
   }
 ]

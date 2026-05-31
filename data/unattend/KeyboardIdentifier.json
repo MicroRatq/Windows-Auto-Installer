@@ -2,1216 +2,1459 @@
   {
     "Id": "00140c00",
     "DisplayName": "ADLaM",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿德拉姆文"
   },
   {
     "Id": "0000041c",
     "DisplayName": "Albanian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿尔巴尼亚语"
   },
   {
     "Id": "00000401",
     "DisplayName": "Arabic (101)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿拉伯语 (101)"
   },
   {
     "Id": "00010401",
     "DisplayName": "Arabic (102)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿拉伯语 (102)"
   },
   {
     "Id": "00020401",
     "DisplayName": "Arabic (102) AZERTY",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿拉伯语 (102) AZERTY"
   },
   {
     "Id": "0000042b",
     "DisplayName": "Armenian Eastern (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "东亚美尼亚语 (传统)"
   },
   {
     "Id": "0002042b",
     "DisplayName": "Armenian Phonetic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "亚美尼亚语注音"
   },
   {
     "Id": "0003042b",
     "DisplayName": "Armenian Typewriter",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "亚美尼亚语打字机"
   },
   {
     "Id": "0001042b",
     "DisplayName": "Armenian Western (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "西亚美尼亚语 (传统)"
   },
   {
     "Id": "0000044d",
     "DisplayName": "Assamese - INSCRIPT",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿萨姆语 - INSCRIPT"
   },
   {
     "Id": "0001042c",
     "DisplayName": "Azerbaijani (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿塞拜疆 (标准)"
   },
   {
     "Id": "0000082c",
     "DisplayName": "Azerbaijani Cyrillic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿塞拜疆语(西里尔文)"
   },
   {
     "Id": "0000042c",
     "DisplayName": "Azerbaijani Latin",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "阿塞拜疆语(拉丁语)"
   },
   {
     "Id": "00000445",
     "DisplayName": "Bangla",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "孟加拉语"
   },
   {
     "Id": "00020445",
     "DisplayName": "Bangla - INSCRIPT",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "孟加拉语 - INSCRIPT"
   },
   {
     "Id": "00010445",
     "DisplayName": "Bangla - INSCRIPT (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "孟加拉语 - INSCRIPT (传统)"
   },
   {
     "Id": "0000046d",
     "DisplayName": "Bashkir",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "巴什基尔语"
   },
   {
     "Id": "00000423",
     "DisplayName": "Belarusian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "白俄罗斯语"
   },
   {
     "Id": "0001080c",
     "DisplayName": "Belgian (Comma)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "比利时语 (Comma)"
   },
   {
     "Id": "00000813",
     "DisplayName": "Belgian (Period)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "比利时语 (Period)"
   },
   {
     "Id": "0000080c",
     "DisplayName": "Belgian French",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "比利时法语"
   },
   {
     "Id": "0000201a",
     "DisplayName": "Bosnian (Cyrillic)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "波斯尼亚语 (西里尔文)"
   },
   {
     "Id": "000b0c00",
     "DisplayName": "Buginese",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "布吉斯语"
   },
   {
     "Id": "00030402",
     "DisplayName": "Bulgarian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "保加利亚语"
   },
   {
     "Id": "00010402",
     "DisplayName": "Bulgarian (Latin)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "保加利亚语 (拉丁文)"
   },
   {
     "Id": "00040402",
     "DisplayName": "Bulgarian (Phonetic Traditional)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "保加利亚语 (传统拼音)"
   },
   {
     "Id": "00020402",
     "DisplayName": "Bulgarian (Phonetic)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "保加利亚语 (拼音)"
   },
   {
     "Id": "00000402",
     "DisplayName": "Bulgarian (Typewriter)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "保加利亚语 (打字机)"
   },
   {
     "Id": "00001009",
     "DisplayName": "Canadian French",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "加拿大法语"
   },
   {
     "Id": "00000c0c",
     "DisplayName": "Canadian French (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "加拿大法语 (传统)"
   },
   {
     "Id": "00011009",
     "DisplayName": "Canadian Multilingual Standard",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "加拿大多语言标准"
   },
   {
     "Id": "0000085f",
     "DisplayName": "Central Atlas Tamazight",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中阿特拉斯塔马塞特文"
   },
   {
     "Id": "00000492",
     "DisplayName": "Central Kurdish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中部库尔德语"
   },
   {
     "Id": "0000045c",
     "DisplayName": "Cherokee Nation",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "切罗基语民族"
   },
   {
     "Id": "0001045c",
     "DisplayName": "Cherokee Phonetic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "切罗基语注音"
   },
   {
     "Id": "00000804",
     "DisplayName": "Chinese (Simplified) - US",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中文 (简体) - 美式键盘"
   },
   {
     "Id": "00001004",
     "DisplayName": "Chinese (Simplified, Singapore) - US",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中文 (简体，新加坡) - 美式键盘"
   },
   {
     "Id": "00000404",
     "DisplayName": "Chinese (Traditional) - US",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中文 (繁体) - 美式键盘"
   },
   {
     "Id": "00000c04",
     "DisplayName": "Chinese (Traditional, Hong Kong S.A.R.) - US",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中文 (繁体，香港特别行政区) - 美式键盘"
   },
   {
     "Id": "00001404",
     "DisplayName": "Chinese (Traditional, Macao S.A.R.) - US",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "中文 (繁体，澳门特别行政区) - 美式键盘"
   },
   {
     "Id": "00060409",
     "DisplayName": "Colemak",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "Colemak 键盘"
   },
   {
     "Id": "00000405",
     "DisplayName": "Czech",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "捷克语"
   },
   {
     "Id": "00010405",
     "DisplayName": "Czech (QWERTY)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "捷克语 (标准键盘)"
   },
   {
     "Id": "00020405",
     "DisplayName": "Czech Programmers",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "捷克语程序员"
   },
   {
     "Id": "00000406",
     "DisplayName": "Danish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "丹麦语"
   },
   {
     "Id": "00000439",
     "DisplayName": "Devanagari - INSCRIPT",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "梵语 - INSCRIPT"
   },
   {
     "Id": "00000465",
     "DisplayName": "Divehi Phonetic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "第维埃语拼音"
   },
   {
     "Id": "00010465",
     "DisplayName": "Divehi Typewriter",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "迪维希语印刷文字"
   },
   {
     "Id": "00000413",
     "DisplayName": "Dutch",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "荷兰语"
   },
   {
     "Id": "00000c51",
     "DisplayName": "Dzongkha",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "宗喀语"
   },
   {
     "Id": "00004009",
     "DisplayName": "English (India)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "英语 (印度)"
   },
   {
     "Id": "00000425",
     "DisplayName": "Estonian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "爱沙尼亚语"
   },
   {
     "Id": "00000438",
     "DisplayName": "Faeroese",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "法罗语"
   },
   {
     "Id": "0000040b",
     "DisplayName": "Finnish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "芬兰语"
   },
   {
     "Id": "0001083b",
     "DisplayName": "Finnish with Sami",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "芬兰萨米语"
   },
   {
     "Id": "0000040c",
     "DisplayName": "French (Legacy, AZERTY)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "法语 (传统, AZERTY)"
   },
   {
     "Id": "0001040c",
     "DisplayName": "French (Standard, AZERTY)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "法语"
   },
   {
     "Id": "0002040c",
     "DisplayName": "French (Standard, BÉPO)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "法语 (标准, BÉPO)"
   },
   {
     "Id": "00120c00",
     "DisplayName": "Futhark",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "弗萨克文"
   },
   {
     "Id": "00020437",
     "DisplayName": "Georgian (Ergonomic)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "格鲁吉亚语 (人机工程学)"
   },
   {
     "Id": "00000437",
     "DisplayName": "Georgian (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "格鲁吉亚语 (传统)"
   },
   {
     "Id": "00030437",
     "DisplayName": "Georgian (MES)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "格鲁吉亚语 (MES)"
   },
   {
     "Id": "00040437",
     "DisplayName": "Georgian (Old Alphabets)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "格鲁吉亚语 (旧字母)"
   },
   {
     "Id": "00010437",
     "DisplayName": "Georgian (QWERTY)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "格鲁吉亚语 (标准键盘)"
   },
   {
     "Id": "00000407",
     "DisplayName": "German",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "德语"
   },
   {
     "Id": "00010407",
     "DisplayName": "German (IBM)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "德语 (IBM)"
   },
   {
     "Id": "00020407",
     "DisplayName": "German Extended (E1)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "德语扩展 (E1)"
   },
   {
     "Id": "00030407",
     "DisplayName": "German Extended (E2)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "德语扩展 (E2)"
   },
   {
     "Id": "000c0c00",
     "DisplayName": "Gothic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "哥特语"
   },
   {
     "Id": "00000408",
     "DisplayName": "Greek",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希腊语"
   },
   {
     "Id": "00010408",
     "DisplayName": "Greek (220)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希腊语 (220)"
   },
   {
     "Id": "00030408",
     "DisplayName": "Greek (220) Latin",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希腊语 (220) 拉丁文"
   },
   {
     "Id": "00020408",
     "DisplayName": "Greek (319)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希腊语 (319)"
   },
   {
     "Id": "00040408",
     "DisplayName": "Greek (319) Latin",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希腊语 (319) 拉丁文"
   },
   {
     "Id": "00050408",
     "DisplayName": "Greek Latin",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希腊语拉丁文"
   },
   {
     "Id": "00060408",
     "DisplayName": "Greek Polytonic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "多元化希腊语"
   },
   {
     "Id": "0000046f",
     "DisplayName": "Greenlandic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "格陵兰语"
   },
   {
     "Id": "00000474",
     "DisplayName": "Guarani",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "瓜拉尼语"
   },
   {
     "Id": "00000447",
     "DisplayName": "Gujarati",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "古吉拉特语"
   },
   {
     "Id": "00000468",
     "DisplayName": "Hausa",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "豪撒语"
   },
   {
     "Id": "00000475",
     "DisplayName": "Hawaiian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "夏威夷语"
   },
   {
     "Id": "0000040d",
     "DisplayName": "Hebrew",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希伯来语"
   },
   {
     "Id": "0002040d",
     "DisplayName": "Hebrew (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希伯来语 (标准)"
   },
   {
     "Id": "0003040d",
     "DisplayName": "Hebrew (Standard, 2018)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "希伯来语 (标准, 2018)"
   },
   {
     "Id": "00010439",
     "DisplayName": "Hindi Traditional",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "传统印地语"
   },
   {
     "Id": "0000040e",
     "DisplayName": "Hungarian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "匈牙利语"
   },
   {
     "Id": "0001040e",
     "DisplayName": "Hungarian 101-key",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "匈牙利语 101键"
   },
   {
     "Id": "0000040f",
     "DisplayName": "Icelandic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "冰岛语"
   },
   {
     "Id": "00000470",
     "DisplayName": "Igbo",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "伊博语"
   },
   {
     "Id": "0000085d",
     "DisplayName": "Inuktitut - Latin",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "因纽特语 - 拉丁语"
   },
   {
     "Id": "0001045d",
     "DisplayName": "Inuktitut - Naqittaut",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "因纽特语"
   },
   {
     "Id": "00001809",
     "DisplayName": "Irish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "爱尔兰语"
   },
   {
     "Id": "00000410",
     "DisplayName": "Italian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "意大利语"
   },
   {
     "Id": "00010410",
     "DisplayName": "Italian (142)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "意大利语 (142)"
   },
   {
     "Id": "00000411",
     "DisplayName": "Japanese",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "日语"
   },
   {
     "Id": "00110c00",
     "DisplayName": "Javanese",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "爪哇文"
   },
   {
     "Id": "0000044b",
     "DisplayName": "Kannada",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "卡纳达语"
   },
   {
     "Id": "0000043f",
     "DisplayName": "Kazakh",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "哈萨克语"
   },
   {
     "Id": "00000453",
     "DisplayName": "Khmer",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "高棉语"
   },
   {
     "Id": "00010453",
     "DisplayName": "Khmer (NIDA)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "高棉语 (NIDA)"
   },
   {
     "Id": "00000412",
     "DisplayName": "Korean",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "朝鲜语"
   },
   {
     "Id": "00000440",
     "DisplayName": "Kyrgyz Cyrillic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "吉尔吉斯语西里尔文"
   },
   {
     "Id": "00000454",
     "DisplayName": "Lao",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "老挝语"
   },
   {
     "Id": "0000080a",
     "DisplayName": "Latin American",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "拉丁美洲语"
   },
   {
     "Id": "00000426",
     "DisplayName": "Latvian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "拉脱维亚语"
   },
   {
     "Id": "00010426",
     "DisplayName": "Latvian (QWERTY)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "拉脱维亚语 (标准键盘)"
   },
   {
     "Id": "00020426",
     "DisplayName": "Latvian (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "拉脱维亚语 (标准)"
   },
   {
     "Id": "00070c00",
     "DisplayName": "Lisu (Basic)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "傈僳语 (基本)"
   },
   {
     "Id": "00080c00",
     "DisplayName": "Lisu (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "傈僳语 (标准)"
   },
   {
     "Id": "00010427",
     "DisplayName": "Lithuanian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "立陶宛语"
   },
   {
     "Id": "00000427",
     "DisplayName": "Lithuanian IBM",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "立陶宛语 IBM"
   },
   {
     "Id": "00020427",
     "DisplayName": "Lithuanian Standard",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "标准立陶宛语"
   },
   {
     "Id": "0000046e",
     "DisplayName": "Luxembourgish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "卢森堡语"
   },
   {
     "Id": "0000042f",
     "DisplayName": "Macedonian (North Macedonia)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "马其顿语"
   },
   {
     "Id": "0001042f",
     "DisplayName": "Macedonian (North Macedonia) - Standard",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "马其顿语 - 标准"
   },
   {
     "Id": "0000044c",
     "DisplayName": "Malayalam",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "马拉雅拉姆语"
   },
   {
     "Id": "0000043a",
     "DisplayName": "Maltese 47-Key",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "马耳他语 47 键"
   },
   {
     "Id": "0001043a",
     "DisplayName": "Maltese 48-Key",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "马耳他语 48 键"
   },
   {
     "Id": "00000481",
     "DisplayName": "Maori",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "毛利语"
   },
   {
     "Id": "0000044e",
     "DisplayName": "Marathi",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "马拉地语"
   },
   {
     "Id": "00000850",
     "DisplayName": "Mongolian (Mongolian Script)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "蒙古语 (蒙古文)"
   },
   {
     "Id": "00000450",
     "DisplayName": "Mongolian Cyrillic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "蒙古语西里尔文"
   },
   {
     "Id": "00010c00",
     "DisplayName": "Myanmar (Phonetic order)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "缅甸语 (拼音顺序)"
   },
   {
     "Id": "00130c00",
     "DisplayName": "Myanmar (Visual order)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "缅甸语 (视觉顺序)"
   },
   {
     "Id": "00000461",
     "DisplayName": "Nepali",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "尼泊尔语"
   },
   {
     "Id": "00020c00",
     "DisplayName": "New Tai Lue",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "西双版纳新傣文"
   },
   {
     "Id": "00090c00",
     "DisplayName": "N’Ko",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "恩科语键盘"
   },
   {
     "Id": "00000414",
     "DisplayName": "Norwegian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "挪威语"
   },
   {
     "Id": "0000043b",
     "DisplayName": "Norwegian with Sami",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "挪威萨米语"
   },
   {
     "Id": "00001409",
     "DisplayName": "NZ Aotearoa",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "新西兰奥特亚罗瓦"
   },
   {
     "Id": "00000448",
     "DisplayName": "Odia",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "奥里亚语"
   },
   {
     "Id": "00040c00",
     "DisplayName": "Ogham",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "欧甘文"
   },
   {
     "Id": "000d0c00",
     "DisplayName": "Ol Chiki",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "欧甘语"
   },
   {
     "Id": "000f0c00",
     "DisplayName": "Old Italic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "古意大利文"
   },
   {
     "Id": "00150c00",
     "DisplayName": "Osage",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "奥塞奇文"
   },
   {
     "Id": "000e0c00",
     "DisplayName": "Osmanya",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "索马里语"
   },
   {
     "Id": "00000463",
     "DisplayName": "Pashto (Afghanistan)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "普什图语 (阿富汗)"
   },
   {
     "Id": "00000429",
     "DisplayName": "Persian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "波斯语"
   },
   {
     "Id": "00050429",
     "DisplayName": "Persian (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "波斯语 (标准)"
   },
   {
     "Id": "000a0c00",
     "DisplayName": "Phags-pa",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "八思巴文"
   },
   {
     "Id": "00010415",
     "DisplayName": "Polish (214)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "波兰语 (214)"
   },
   {
     "Id": "00000415",
     "DisplayName": "Polish (Programmers)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "波兰语 (程序员)"
   },
   {
     "Id": "00000816",
     "DisplayName": "Portuguese",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "葡萄牙语"
   },
   {
     "Id": "00000416",
     "DisplayName": "Portuguese (Brazil ABNT)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "葡萄牙语 (巴西 ABNT)"
   },
   {
     "Id": "00010416",
     "DisplayName": "Portuguese (Brazil ABNT2)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "葡萄牙语 (巴西 ABNT2)"
   },
   {
     "Id": "00000446",
     "DisplayName": "Punjabi",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "旁遮普语"
   },
   {
     "Id": "00000418",
     "DisplayName": "Romanian (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "罗马尼亚语 (传统)"
   },
   {
     "Id": "00020418",
     "DisplayName": "Romanian (Programmers)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "罗马尼亚语 (程序员)"
   },
   {
     "Id": "00010418",
     "DisplayName": "Romanian (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "罗马尼亚语 (标准)"
   },
   {
     "Id": "00000419",
     "DisplayName": "Russian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "俄语"
   },
   {
     "Id": "00020419",
     "DisplayName": "Russian - Mnemonic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "俄语 - 助记键"
   },
   {
     "Id": "00010419",
     "DisplayName": "Russian (Typewriter)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "俄语 (打字机)"
   },
   {
     "Id": "00000485",
     "DisplayName": "Sakha",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "萨哈语"
   },
   {
     "Id": "0002083b",
     "DisplayName": "Sami Extended Finland-Sweden",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "芬兰瑞典萨米语"
   },
   {
     "Id": "0001043b",
     "DisplayName": "Sami Extended Norway",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "挪威萨米语(扩展)"
   },
   {
     "Id": "00011809",
     "DisplayName": "Scottish Gaelic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "苏格兰盖尔语"
   },
   {
     "Id": "00000c1a",
     "DisplayName": "Serbian (Cyrillic)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "塞尔维亚语 (西里尔)"
   },
   {
     "Id": "0000081a",
     "DisplayName": "Serbian (Latin)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "塞尔维亚语 (拉丁语)"
   },
   {
     "Id": "0000046c",
     "DisplayName": "Sesotho sa Leboa",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "北索托语"
   },
   {
     "Id": "00000432",
     "DisplayName": "Setswana",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "茨瓦纳语"
   },
   {
     "Id": "0000045b",
     "DisplayName": "Sinhala",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "僧伽罗语"
   },
   {
     "Id": "0001045b",
     "DisplayName": "Sinhala - Wij 9",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "僧伽罗语 - Wij 9"
   },
   {
     "Id": "0000041b",
     "DisplayName": "Slovak",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "斯洛伐克语"
   },
   {
     "Id": "0001041b",
     "DisplayName": "Slovak (QWERTY)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "斯洛伐克语 (标准键盘)"
   },
   {
     "Id": "00000424",
     "DisplayName": "Slovenian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "斯洛文尼亚语"
   },
   {
     "Id": "00100c00",
     "DisplayName": "Sora",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "索拉文"
   },
   {
     "Id": "0001042e",
     "DisplayName": "Sorbian Extended",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "扩展索布语"
   },
   {
     "Id": "0002042e",
     "DisplayName": "Sorbian Standard",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "标准索布语"
   },
   {
     "Id": "0000042e",
     "DisplayName": "Sorbian Standard (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "标准索布语 (旧版)"
   },
   {
     "Id": "0000040a",
     "DisplayName": "Spanish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "西班牙语"
   },
   {
     "Id": "0001040a",
     "DisplayName": "Spanish Variation",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "西班牙语变体"
   },
   {
     "Id": "0000041a",
     "DisplayName": "Standard",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "标准"
   },
   {
     "Id": "0000041d",
     "DisplayName": "Swedish",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "瑞典语"
   },
   {
     "Id": "0000083b",
     "DisplayName": "Swedish with Sami",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "瑞典萨米语"
   },
   {
     "Id": "0000100c",
     "DisplayName": "Swiss French",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "瑞士法语"
   },
   {
     "Id": "00000807",
     "DisplayName": "Swiss German",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "瑞士德语"
   },
   {
     "Id": "0000045a",
     "DisplayName": "Syriac",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "叙利亚语"
   },
   {
     "Id": "0001045a",
     "DisplayName": "Syriac Phonetic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "叙利亚语拼音"
   },
   {
     "Id": "00030c00",
     "DisplayName": "Tai Le",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "德宏傣文"
   },
   {
     "Id": "00000428",
     "DisplayName": "Tajik",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "塔吉克语"
   },
   {
     "Id": "00000449",
     "DisplayName": "Tamil",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰米尔语"
   },
   {
     "Id": "00020449",
     "DisplayName": "Tamil 99",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰米尔语 99"
   },
   {
     "Id": "00030449",
     "DisplayName": "Tamil Anjal",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰米尔语 Anjal"
   },
   {
     "Id": "00010444",
     "DisplayName": "Tatar",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "鞑靼语"
   },
   {
     "Id": "00000444",
     "DisplayName": "Tatar (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "鞑靼语 (旧版)"
   },
   {
     "Id": "0000044a",
     "DisplayName": "Telugu",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰卢固语"
   },
   {
     "Id": "0000041e",
     "DisplayName": "Thai Kedmanee",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰语 Kedmanee"
   },
   {
     "Id": "0002041e",
     "DisplayName": "Thai Kedmanee (non-ShiftLock)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰语 Kedmanee (非 ShiftLock)"
   },
   {
     "Id": "0001041e",
     "DisplayName": "Thai Pattachote",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰语 Pattachote"
   },
   {
     "Id": "0003041e",
     "DisplayName": "Thai Pattachote (non-ShiftLock)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "泰语 Pattachote (非 ShiftLock)"
   },
   {
     "Id": "00000451",
     "DisplayName": "Tibetan (PRC)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "藏语 (中国)"
   },
   {
     "Id": "00010451",
     "DisplayName": "Tibetan (PRC) - Updated",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "藏语 (中国) - 更新"
   },
   {
     "Id": "0000105f",
     "DisplayName": "Tifinagh (Basic)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "提夫纳语 (基本)"
   },
   {
     "Id": "0001105f",
     "DisplayName": "Tifinagh (Extended)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "提夫纳语 (扩展)"
   },
   {
     "Id": "00010850",
     "DisplayName": "Traditional Mongolian (Standard)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "传统蒙古语 (标准)"
   },
   {
     "Id": "0001041f",
     "DisplayName": "Turkish F",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "土耳其语 F"
   },
   {
     "Id": "0000041f",
     "DisplayName": "Turkish Q",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "土耳其语 Q"
   },
   {
     "Id": "00000442",
     "DisplayName": "Turkmen",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "土库曼语"
   },
   {
     "Id": "00000422",
     "DisplayName": "Ukrainian",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "乌克兰语"
   },
   {
     "Id": "00020422",
     "DisplayName": "Ukrainian (Enhanced)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "乌克兰语 (增强)"
   },
   {
     "Id": "00000809",
     "DisplayName": "United Kingdom",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "英国"
   },
   {
     "Id": "00000452",
     "DisplayName": "United Kingdom Extended",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "英国扩展"
   },
   {
     "Id": "00010409",
     "DisplayName": "United States-Dvorak",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "美国英语-Dvorak"
   },
   {
     "Id": "00030409",
     "DisplayName": "United States-Dvorak for left hand",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "美国英语-Dvorak (惯用左手)"
   },
   {
     "Id": "00040409",
     "DisplayName": "United States-Dvorak for right hand",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "美国英语-Dvorak (惯用右手)"
   },
   {
     "Id": "00020409",
     "DisplayName": "United States-International",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "美国英语-国际"
   },
   {
     "Id": "00000420",
     "DisplayName": "Urdu",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "乌尔都语"
   },
   {
     "Id": "00000409",
     "DisplayName": "US",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "美国"
   },
   {
     "Id": "00050409",
     "DisplayName": "US English Table for IBM Arabic 238_L",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "IBM 阿拉伯语 238_L 美国英语表"
   },
   {
     "Id": "00010480",
     "DisplayName": "Uyghur",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "维吾尔语"
   },
   {
     "Id": "00000480",
     "DisplayName": "Uyghur (Legacy)",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "维吾尔语 (旧版)"
   },
   {
     "Id": "00000843",
     "DisplayName": "Uzbek Cyrillic",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "乌兹别克语西里尔文"
   },
   {
     "Id": "0000042a",
     "DisplayName": "Vietnamese",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "越南语"
   },
   {
     "Id": "00000488",
     "DisplayName": "Wolof",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "沃洛夫语"
   },
   {
     "Id": "0000046a",
     "DisplayName": "Yoruba",
-    "Type": "Keyboard"
+    "Type": "Keyboard",
+    "DisplayName_zh": "约鲁巴语"
   },
   {
     "Id": "045e:{7c472071-36a7-4709-88cc-859513e583a9}{9a4e8fc7-76bf-4a63-980d-faddadf7e987}",
     "DisplayName": "Amharic (Ethiopia) IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "阿姆哈拉语输入法"
   },
   {
     "Id": "0445:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{c7f2f349-36a2-4f2e-977b-5c18baf1ae7d}",
     "DisplayName": "Bengali/Bangla (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "孟加拉语语音"
   },
   {
     "Id": "0404:{e429b25a-e5d3-4d1f-9be3-0c608477e3a1}{d38eff65-aa46-4fd5-91a7-67845fb02f5b}",
     "DisplayName": "Chinese (Traditional, Taiwan) Array IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (繁体) 行列输入法"
   },
   {
     "Id": "0404:{e429b25a-e5d3-4d1f-9be3-0c608477e3a1}{037b2c25-480c-4d7f-b027-d6ca6b69788a}",
     "DisplayName": "Chinese (Traditional, Taiwan) DaYi IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (繁体) 大易输入法"
   },
   {
     "Id": "0447:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{cdb41983-c911-4685-98cc-fc720bbf8fc8}",
     "DisplayName": "Gujarati (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "古吉拉特语语音"
   },
   {
     "Id": "0461:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{7912a487-286c-4825-a608-f676c630b733}",
     "DisplayName": "Nepali (Nepal) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "印地语语音"
   },
   {
     "Id": "0439:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{26fa8ebd-97db-4f65-bf35-5e219ebd0079}",
     "DisplayName": "Hindi (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "印地语语音"
   },
   {
     "Id": "044b:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{0f420707-90f7-4e1b-b9f2-91ff3ca9d990}",
     "DisplayName": "Kannada (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "埃纳德语语音"
   },
   {
     "Id": "044c:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{6346f0dc-2fe4-40e6-99d5-7362723c3780}",
     "DisplayName": "Malayalam (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "马拉雅拉姆语语音"
   },
   {
     "Id": "044e:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{dbeb227a-4ef6-45a6-85b5-b1a03d95bb66}",
     "DisplayName": "Marathi (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "马拉地语语音"
   },
   {
     "Id": "0404:{b115690a-ea02-48d5-a231-e3578d2fdf80}{b2f9c502-1742-11d4-9790-0080c882687e}",
     "DisplayName": "Chinese (Traditional, Taiwan) Microsoft Bopomofo IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (繁体) 微软注音输入法"
   },
   {
     "Id": "0404:{531fdebf-9b4c-4a43-a2aa-960e8fcdc732}{4bdf9f03-c7d3-11d4-b2ab-0080c882687e}",
     "DisplayName": "Chinese (Traditional, Taiwan) Microsoft Changjie IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (繁体) 微软仓颉输入法"
   },
   {
     "Id": "0412:{a028ae76-01b1-46c2-99c4-acd9858ae02f}{b5fe1f02-d5f2-4445-9c03-c568f23c99a1}",
     "DisplayName": "Korean (Korea) Microsoft IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "朝鲜语 微软输入法"
   },
   {
     "Id": "0411:{03b5835f-f03c-411b-9ce2-aa23e1171e36}{a76c93d9-5523-4e90-aafa-4db112f9ac76}",
     "DisplayName": "Japanese (Japan) Microsoft IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "日语 微软输入法"
   },
   {
     "Id": "0412:{a1e2b86b-924a-4d43-80f6-8a820df7190f}{b60af051-257a-46bc-b9d3-84dad819bafb}",
     "DisplayName": "Korean (Korea) Microsoft Old Hangul IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "朝鲜语 微软老式韩文输入法"
   },
   {
     "Id": "0804:{81d4e9c9-1d3b-41bc-9e6c-4b40bf79e35e}{fa550b04-5ad7-411f-a5ac-ca038ec515d7}",
     "DisplayName": "Chinese (Simplified, China) Microsoft Pinyin IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (简体) 微软拼音输入法"
   },
   {
     "Id": "0404:{531fdebf-9b4c-4a43-a2aa-960e8fcdc732}{6024b45f-5c54-11d4-b921-0080c882687e}",
     "DisplayName": "Chinese (Traditional, Taiwan) Microsoft Quick IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (繁体) 微软速成输入法"
   },
   {
     "Id": "0804:{6a498709-e00b-4c45-a018-8f9e4081ae40}{82590c13-f4dd-44f4-ba1d-8667246fdf8e}",
     "DisplayName": "Chinese (Simplified, China) Microsoft Wubi IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "中文 (简体) 微软五笔输入法"
   },
   {
     "Id": "0448:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{607ebd43-ea66-4cac-a0b1-40f1d147364b}",
     "DisplayName": "Odia (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "奥里亚语语音"
   },
   {
     "Id": "0446:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{59139512-9763-4e5d-b8e5-0ac1c3bae1ae}",
     "DisplayName": "Punjabi (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "旁遮普语语音"
   },
   {
     "Id": "0449:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{02e8fc61-6a42-4749-8124-68e28105c20e}",
     "DisplayName": "Tamil (India) Anjal IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "泰尔米语 Anjal"
   },
   {
     "Id": "0849:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{02e8fc61-6a42-4749-8124-68e28105c20e}",
     "DisplayName": "Tamil (Sri Lanka) Anjal IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "泰米尔语 Anjal"
   },
   {
     "Id": "0449:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{045cba61-4228-4f62-ac0c-f725470d7bfc}",
     "DisplayName": "Tamil (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "泰米尔语语音"
   },
   {
     "Id": "044a:{81ea0a17-aa39-455b-ba20-ea79a8f98966}{9f0cdc2b-12b2-4776-a144-f79901a9f8da}",
     "DisplayName": "Telugu (India) Phonetic IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "泰卢固语语音"
   },
   {
     "Id": "0473:{e429b25a-e5d3-4d1f-9be3-0c608477e3a1}{3cab88b7-cc3e-46a6-9765-b772ad7761ff}",
     "DisplayName": "Tigrinya (Ethiopia) IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "提格利尼亚语输入法"
   },
   {
     "Id": "042a:{c2cb2cf0-af47-413e-9780-8bc3a3c16068}{591ae943-56be-48f6-8966-06b43915cc5a}",
     "DisplayName": "Vietnamese (Vietnam) Number Key-Based IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "越南语号码键"
   },
   {
     "Id": "042a:{c2cb2cf0-af47-413e-9780-8bc3a3c16068}{5fb02ec5-0a77-4684-b4fa-def8a2195628}",
     "DisplayName": "Vietnamese (Vietnam) Telex IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "越南电传"
   },
   {
     "Id": "0478:{e429b25a-e5d3-4d1f-9be3-0c608477e3a1}{409c8376-007b-4357-ae8e-26316ee3fb0d}",
     "DisplayName": "Yi (China) IME",
-    "Type": "IME"
+    "Type": "IME",
+    "DisplayName_zh": "彝语输入法"
   }
 ]

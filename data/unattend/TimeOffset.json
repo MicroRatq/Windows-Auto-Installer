@@ -1,558 +1,707 @@
 [
   {
-    "Id": "Dateline Standard Time",
-    "DisplayName": "(UTC-12:00) International Date Line West"
-  },
-  {
-    "Id": "UTC-11",
-    "DisplayName": "(UTC-11:00) Coordinated Universal Time-11"
-  },
-  {
-    "Id": "Aleutian Standard Time",
-    "DisplayName": "(UTC-10:00) Aleutian Islands"
-  },
-  {
-    "Id": "Hawaiian Standard Time",
-    "DisplayName": "(UTC-10:00) Hawaii"
-  },
-  {
-    "Id": "Marquesas Standard Time",
-    "DisplayName": "(UTC-09:30) Marquesas Islands"
+    "Id": "Afghanistan Standard Time",
+    "DisplayName": "(UTC+04:30) Kabul",
+    "DisplayName_zh": "(UTC+04:30) 喀布尔"
   },
   {
     "Id": "Alaskan Standard Time",
-    "DisplayName": "(UTC-09:00) Alaska"
+    "DisplayName": "(UTC-09:00) Alaska",
+    "DisplayName_zh": "(UTC-09:00) 阿拉斯加"
   },
   {
-    "Id": "UTC-09",
-    "DisplayName": "(UTC-09:00) Coordinated Universal Time-09"
-  },
-  {
-    "Id": "Pacific Standard Time (Mexico)",
-    "DisplayName": "(UTC-08:00) Baja California"
-  },
-  {
-    "Id": "UTC-08",
-    "DisplayName": "(UTC-08:00) Coordinated Universal Time-08"
-  },
-  {
-    "Id": "Pacific Standard Time",
-    "DisplayName": "(UTC-08:00) Pacific Time (US & Canada)"
-  },
-  {
-    "Id": "US Mountain Standard Time",
-    "DisplayName": "(UTC-07:00) Arizona"
-  },
-  {
-    "Id": "Mountain Standard Time (Mexico)",
-    "DisplayName": "(UTC-07:00) La Paz, Mazatlan"
-  },
-  {
-    "Id": "Mountain Standard Time",
-    "DisplayName": "(UTC-07:00) Mountain Time (US & Canada)"
-  },
-  {
-    "Id": "Yukon Standard Time",
-    "DisplayName": "(UTC-07:00) Yukon"
-  },
-  {
-    "Id": "Central America Standard Time",
-    "DisplayName": "(UTC-06:00) Central America"
-  },
-  {
-    "Id": "Central Standard Time",
-    "DisplayName": "(UTC-06:00) Central Time (US & Canada)"
-  },
-  {
-    "Id": "Easter Island Standard Time",
-    "DisplayName": "(UTC-06:00) Easter Island"
-  },
-  {
-    "Id": "Central Standard Time (Mexico)",
-    "DisplayName": "(UTC-06:00) Guadalajara, Mexico City, Monterrey"
-  },
-  {
-    "Id": "Canada Central Standard Time",
-    "DisplayName": "(UTC-06:00) Saskatchewan"
-  },
-  {
-    "Id": "SA Pacific Standard Time",
-    "DisplayName": "(UTC-05:00) Bogota, Lima, Quito, Rio Branco"
-  },
-  {
-    "Id": "Eastern Standard Time (Mexico)",
-    "DisplayName": "(UTC-05:00) Chetumal"
-  },
-  {
-    "Id": "Eastern Standard Time",
-    "DisplayName": "(UTC-05:00) Eastern Time (US & Canada)"
-  },
-  {
-    "Id": "Haiti Standard Time",
-    "DisplayName": "(UTC-05:00) Haiti"
-  },
-  {
-    "Id": "Cuba Standard Time",
-    "DisplayName": "(UTC-05:00) Havana"
-  },
-  {
-    "Id": "US Eastern Standard Time",
-    "DisplayName": "(UTC-05:00) Indiana (East)"
-  },
-  {
-    "Id": "Turks And Caicos Standard Time",
-    "DisplayName": "(UTC-05:00) Turks and Caicos"
-  },
-  {
-    "Id": "Paraguay Standard Time",
-    "DisplayName": "(UTC-04:00) Asuncion"
-  },
-  {
-    "Id": "Atlantic Standard Time",
-    "DisplayName": "(UTC-04:00) Atlantic Time (Canada)"
-  },
-  {
-    "Id": "Venezuela Standard Time",
-    "DisplayName": "(UTC-04:00) Caracas"
-  },
-  {
-    "Id": "Central Brazilian Standard Time",
-    "DisplayName": "(UTC-04:00) Cuiaba"
-  },
-  {
-    "Id": "SA Western Standard Time",
-    "DisplayName": "(UTC-04:00) Georgetown, La Paz, Manaus, San Juan"
-  },
-  {
-    "Id": "Pacific SA Standard Time",
-    "DisplayName": "(UTC-04:00) Santiago"
-  },
-  {
-    "Id": "Newfoundland Standard Time",
-    "DisplayName": "(UTC-03:30) Newfoundland"
-  },
-  {
-    "Id": "Tocantins Standard Time",
-    "DisplayName": "(UTC-03:00) Araguaina"
-  },
-  {
-    "Id": "E. South America Standard Time",
-    "DisplayName": "(UTC-03:00) Brasilia"
-  },
-  {
-    "Id": "SA Eastern Standard Time",
-    "DisplayName": "(UTC-03:00) Cayenne, Fortaleza"
-  },
-  {
-    "Id": "Argentina Standard Time",
-    "DisplayName": "(UTC-03:00) City of Buenos Aires"
-  },
-  {
-    "Id": "Greenland Standard Time",
-    "DisplayName": "(UTC-03:00) Greenland"
-  },
-  {
-    "Id": "Montevideo Standard Time",
-    "DisplayName": "(UTC-03:00) Montevideo"
-  },
-  {
-    "Id": "Magallanes Standard Time",
-    "DisplayName": "(UTC-03:00) Punta Arenas"
-  },
-  {
-    "Id": "Saint Pierre Standard Time",
-    "DisplayName": "(UTC-03:00) Saint Pierre and Miquelon"
-  },
-  {
-    "Id": "Bahia Standard Time",
-    "DisplayName": "(UTC-03:00) Salvador"
-  },
-  {
-    "Id": "UTC-02",
-    "DisplayName": "(UTC-02:00) Coordinated Universal Time-02"
-  },
-  {
-    "Id": "Azores Standard Time",
-    "DisplayName": "(UTC-01:00) Azores"
-  },
-  {
-    "Id": "Cape Verde Standard Time",
-    "DisplayName": "(UTC-01:00) Cabo Verde Is."
-  },
-  {
-    "Id": "UTC",
-    "DisplayName": "(UTC) Coordinated Universal Time"
-  },
-  {
-    "Id": "GMT Standard Time",
-    "DisplayName": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London"
-  },
-  {
-    "Id": "Greenwich Standard Time",
-    "DisplayName": "(UTC+00:00) Monrovia, Reykjavik"
-  },
-  {
-    "Id": "Sao Tome Standard Time",
-    "DisplayName": "(UTC+00:00) Sao Tome"
-  },
-  {
-    "Id": "Morocco Standard Time",
-    "DisplayName": "(UTC+01:00) Casablanca"
-  },
-  {
-    "Id": "W. Europe Standard Time",
-    "DisplayName": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna"
-  },
-  {
-    "Id": "Central Europe Standard Time",
-    "DisplayName": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague"
-  },
-  {
-    "Id": "Romance Standard Time",
-    "DisplayName": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris"
-  },
-  {
-    "Id": "Central European Standard Time",
-    "DisplayName": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb"
-  },
-  {
-    "Id": "W. Central Africa Standard Time",
-    "DisplayName": "(UTC+01:00) West Central Africa"
-  },
-  {
-    "Id": "GTB Standard Time",
-    "DisplayName": "(UTC+02:00) Athens, Bucharest"
-  },
-  {
-    "Id": "Middle East Standard Time",
-    "DisplayName": "(UTC+02:00) Beirut"
-  },
-  {
-    "Id": "Egypt Standard Time",
-    "DisplayName": "(UTC+02:00) Cairo"
-  },
-  {
-    "Id": "E. Europe Standard Time",
-    "DisplayName": "(UTC+02:00) Chisinau"
-  },
-  {
-    "Id": "Syria Standard Time",
-    "DisplayName": "(UTC+02:00) Damascus"
-  },
-  {
-    "Id": "West Bank Standard Time",
-    "DisplayName": "(UTC+02:00) Gaza, Hebron"
-  },
-  {
-    "Id": "South Africa Standard Time",
-    "DisplayName": "(UTC+02:00) Harare, Pretoria"
-  },
-  {
-    "Id": "FLE Standard Time",
-    "DisplayName": "(UTC+02:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius"
-  },
-  {
-    "Id": "Israel Standard Time",
-    "DisplayName": "(UTC+02:00) Jerusalem"
-  },
-  {
-    "Id": "South Sudan Standard Time",
-    "DisplayName": "(UTC+02:00) Juba"
-  },
-  {
-    "Id": "Kaliningrad Standard Time",
-    "DisplayName": "(UTC+02:00) Kaliningrad"
-  },
-  {
-    "Id": "Sudan Standard Time",
-    "DisplayName": "(UTC+02:00) Khartoum"
-  },
-  {
-    "Id": "Libya Standard Time",
-    "DisplayName": "(UTC+02:00) Tripoli"
-  },
-  {
-    "Id": "Namibia Standard Time",
-    "DisplayName": "(UTC+02:00) Windhoek"
-  },
-  {
-    "Id": "Jordan Standard Time",
-    "DisplayName": "(UTC+03:00) Amman"
-  },
-  {
-    "Id": "Arabic Standard Time",
-    "DisplayName": "(UTC+03:00) Baghdad"
-  },
-  {
-    "Id": "Turkey Standard Time",
-    "DisplayName": "(UTC+03:00) Istanbul"
-  },
-  {
-    "Id": "Arab Standard Time",
-    "DisplayName": "(UTC+03:00) Kuwait, Riyadh"
-  },
-  {
-    "Id": "Belarus Standard Time",
-    "DisplayName": "(UTC+03:00) Minsk"
-  },
-  {
-    "Id": "Russian Standard Time",
-    "DisplayName": "(UTC+03:00) Moscow, St. Petersburg"
-  },
-  {
-    "Id": "E. Africa Standard Time",
-    "DisplayName": "(UTC+03:00) Nairobi"
-  },
-  {
-    "Id": "Volgograd Standard Time",
-    "DisplayName": "(UTC+03:00) Volgograd"
-  },
-  {
-    "Id": "Iran Standard Time",
-    "DisplayName": "(UTC+03:30) Tehran"
-  },
-  {
-    "Id": "Arabian Standard Time",
-    "DisplayName": "(UTC+04:00) Abu Dhabi, Muscat"
-  },
-  {
-    "Id": "Astrakhan Standard Time",
-    "DisplayName": "(UTC+04:00) Astrakhan, Ulyanovsk"
-  },
-  {
-    "Id": "Azerbaijan Standard Time",
-    "DisplayName": "(UTC+04:00) Baku"
-  },
-  {
-    "Id": "Russia Time Zone 3",
-    "DisplayName": "(UTC+04:00) Izhevsk, Samara"
-  },
-  {
-    "Id": "Mauritius Standard Time",
-    "DisplayName": "(UTC+04:00) Port Louis"
-  },
-  {
-    "Id": "Saratov Standard Time",
-    "DisplayName": "(UTC+04:00) Saratov"
-  },
-  {
-    "Id": "Georgian Standard Time",
-    "DisplayName": "(UTC+04:00) Tbilisi"
-  },
-  {
-    "Id": "Caucasus Standard Time",
-    "DisplayName": "(UTC+04:00) Yerevan"
-  },
-  {
-    "Id": "Afghanistan Standard Time",
-    "DisplayName": "(UTC+04:30) Kabul"
-  },
-  {
-    "Id": "West Asia Standard Time",
-    "DisplayName": "(UTC+05:00) Ashgabat, Tashkent"
-  },
-  {
-    "Id": "Ekaterinburg Standard Time",
-    "DisplayName": "(UTC+05:00) Ekaterinburg"
-  },
-  {
-    "Id": "Pakistan Standard Time",
-    "DisplayName": "(UTC+05:00) Islamabad, Karachi"
-  },
-  {
-    "Id": "Qyzylorda Standard Time",
-    "DisplayName": "(UTC+05:00) Qyzylorda"
-  },
-  {
-    "Id": "India Standard Time",
-    "DisplayName": "(UTC+05:30) Chennai, Kolkata, Mumbai, New Delhi"
-  },
-  {
-    "Id": "Sri Lanka Standard Time",
-    "DisplayName": "(UTC+05:30) Sri Jayawardenepura"
-  },
-  {
-    "Id": "Nepal Standard Time",
-    "DisplayName": "(UTC+05:45) Kathmandu"
-  },
-  {
-    "Id": "Central Asia Standard Time",
-    "DisplayName": "(UTC+06:00) Astana"
-  },
-  {
-    "Id": "Bangladesh Standard Time",
-    "DisplayName": "(UTC+06:00) Dhaka"
-  },
-  {
-    "Id": "Omsk Standard Time",
-    "DisplayName": "(UTC+06:00) Omsk"
-  },
-  {
-    "Id": "Myanmar Standard Time",
-    "DisplayName": "(UTC+06:30) Yangon (Rangoon)"
-  },
-  {
-    "Id": "SE Asia Standard Time",
-    "DisplayName": "(UTC+07:00) Bangkok, Hanoi, Jakarta"
+    "Id": "Aleutian Standard Time",
+    "DisplayName": "(UTC-10:00) Aleutian Islands",
+    "DisplayName_zh": "(UTC-10:00) 阿留申群岛"
   },
   {
     "Id": "Altai Standard Time",
-    "DisplayName": "(UTC+07:00) Barnaul, Gorno-Altaysk"
+    "DisplayName": "(UTC+07:00) Barnaul, Gorno-Altaysk",
+    "DisplayName_zh": "(UTC+07:00) 巴尔瑙尔，戈尔诺-阿尔泰斯克"
   },
   {
-    "Id": "W. Mongolia Standard Time",
-    "DisplayName": "(UTC+07:00) Hovd"
+    "Id": "Arab Standard Time",
+    "DisplayName": "(UTC+03:00) Kuwait, Riyadh",
+    "DisplayName_zh": "(UTC+03:00) 科威特，利雅得"
   },
   {
-    "Id": "North Asia Standard Time",
-    "DisplayName": "(UTC+07:00) Krasnoyarsk"
+    "Id": "Arabian Standard Time",
+    "DisplayName": "(UTC+04:00) Abu Dhabi, Muscat",
+    "DisplayName_zh": "(UTC+04:00) 阿布扎比，马斯喀特"
   },
   {
-    "Id": "N. Central Asia Standard Time",
-    "DisplayName": "(UTC+07:00) Novosibirsk"
+    "Id": "Arabic Standard Time",
+    "DisplayName": "(UTC+03:00) Baghdad",
+    "DisplayName_zh": "(UTC+03:00) 巴格达"
   },
   {
-    "Id": "Tomsk Standard Time",
-    "DisplayName": "(UTC+07:00) Tomsk"
+    "Id": "Argentina Standard Time",
+    "DisplayName": "(UTC-03:00) City of Buenos Aires",
+    "DisplayName_zh": "(UTC-03:00) 布宜诺斯艾利斯"
   },
   {
-    "Id": "China Standard Time",
-    "DisplayName": "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi"
+    "Id": "Astrakhan Standard Time",
+    "DisplayName": "(UTC+04:00) Astrakhan, Ulyanovsk",
+    "DisplayName_zh": "(UTC+04:00) 阿斯特拉罕，乌里扬诺夫斯克"
   },
   {
-    "Id": "North Asia East Standard Time",
-    "DisplayName": "(UTC+08:00) Irkutsk"
-  },
-  {
-    "Id": "Singapore Standard Time",
-    "DisplayName": "(UTC+08:00) Kuala Lumpur, Singapore"
-  },
-  {
-    "Id": "W. Australia Standard Time",
-    "DisplayName": "(UTC+08:00) Perth"
-  },
-  {
-    "Id": "Taipei Standard Time",
-    "DisplayName": "(UTC+08:00) Taipei"
-  },
-  {
-    "Id": "Ulaanbaatar Standard Time",
-    "DisplayName": "(UTC+08:00) Ulaanbaatar"
-  },
-  {
-    "Id": "Aus Central W. Standard Time",
-    "DisplayName": "(UTC+08:45) Eucla"
-  },
-  {
-    "Id": "Transbaikal Standard Time",
-    "DisplayName": "(UTC+09:00) Chita"
-  },
-  {
-    "Id": "Tokyo Standard Time",
-    "DisplayName": "(UTC+09:00) Osaka, Sapporo, Tokyo"
-  },
-  {
-    "Id": "North Korea Standard Time",
-    "DisplayName": "(UTC+09:00) Pyongyang"
-  },
-  {
-    "Id": "Korea Standard Time",
-    "DisplayName": "(UTC+09:00) Seoul"
-  },
-  {
-    "Id": "Yakutsk Standard Time",
-    "DisplayName": "(UTC+09:00) Yakutsk"
-  },
-  {
-    "Id": "Cen. Australia Standard Time",
-    "DisplayName": "(UTC+09:30) Adelaide"
+    "Id": "Atlantic Standard Time",
+    "DisplayName": "(UTC-04:00) Atlantic Time (Canada)",
+    "DisplayName_zh": "(UTC-04:00) 大西洋时间(加拿大)"
   },
   {
     "Id": "AUS Central Standard Time",
-    "DisplayName": "(UTC+09:30) Darwin"
+    "DisplayName": "(UTC+09:30) Darwin",
+    "DisplayName_zh": "(UTC+09:30) 达尔文"
   },
   {
-    "Id": "E. Australia Standard Time",
-    "DisplayName": "(UTC+10:00) Brisbane"
+    "Id": "Aus Central W. Standard Time",
+    "DisplayName": "(UTC+08:45) Eucla",
+    "DisplayName_zh": "(UTC+08:45) 尤克拉"
   },
   {
     "Id": "AUS Eastern Standard Time",
-    "DisplayName": "(UTC+10:00) Canberra, Melbourne, Sydney"
+    "DisplayName": "(UTC+10:00) Canberra, Melbourne, Sydney",
+    "DisplayName_zh": "(UTC+10:00) 堪培拉，墨尔本，悉尼"
   },
   {
-    "Id": "West Pacific Standard Time",
-    "DisplayName": "(UTC+10:00) Guam, Port Moresby"
+    "Id": "Azerbaijan Standard Time",
+    "DisplayName": "(UTC+04:00) Baku",
+    "DisplayName_zh": "(UTC+04:00) 巴库"
   },
   {
-    "Id": "Tasmania Standard Time",
-    "DisplayName": "(UTC+10:00) Hobart"
+    "Id": "Azores Standard Time",
+    "DisplayName": "(UTC-01:00) Azores",
+    "DisplayName_zh": "(UTC-01:00) 亚速尔群岛"
   },
   {
-    "Id": "Vladivostok Standard Time",
-    "DisplayName": "(UTC+10:00) Vladivostok"
+    "Id": "Bahia Standard Time",
+    "DisplayName": "(UTC-03:00) Salvador",
+    "DisplayName_zh": "(UTC-03:00) 萨尔瓦多"
   },
   {
-    "Id": "Lord Howe Standard Time",
-    "DisplayName": "(UTC+10:30) Lord Howe Island"
+    "Id": "Bangladesh Standard Time",
+    "DisplayName": "(UTC+06:00) Dhaka",
+    "DisplayName_zh": "(UTC+06:00) 达卡"
+  },
+  {
+    "Id": "Belarus Standard Time",
+    "DisplayName": "(UTC+03:00) Minsk",
+    "DisplayName_zh": "(UTC+03:00) 明斯克"
   },
   {
     "Id": "Bougainville Standard Time",
-    "DisplayName": "(UTC+11:00) Bougainville Island"
+    "DisplayName": "(UTC+11:00) Bougainville Island",
+    "DisplayName_zh": "(UTC+11:00) 布干维尔岛"
   },
   {
-    "Id": "Russia Time Zone 10",
-    "DisplayName": "(UTC+11:00) Chokurdakh"
+    "Id": "Canada Central Standard Time",
+    "DisplayName": "(UTC-06:00) Saskatchewan",
+    "DisplayName_zh": "(UTC-06:00) 萨斯喀彻温"
   },
   {
-    "Id": "Magadan Standard Time",
-    "DisplayName": "(UTC+11:00) Magadan"
+    "Id": "Cape Verde Standard Time",
+    "DisplayName": "(UTC-01:00) Cabo Verde Is.",
+    "DisplayName_zh": "(UTC-01:00) 佛得角群岛"
   },
   {
-    "Id": "Norfolk Standard Time",
-    "DisplayName": "(UTC+11:00) Norfolk Island"
+    "Id": "Caucasus Standard Time",
+    "DisplayName": "(UTC+04:00) Yerevan",
+    "DisplayName_zh": "(UTC+04:00) 埃里温"
   },
   {
-    "Id": "Sakhalin Standard Time",
-    "DisplayName": "(UTC+11:00) Sakhalin"
+    "Id": "Cen. Australia Standard Time",
+    "DisplayName": "(UTC+09:30) Adelaide",
+    "DisplayName_zh": "(UTC+09:30) 阿德莱德"
+  },
+  {
+    "Id": "Central America Standard Time",
+    "DisplayName": "(UTC-06:00) Central America",
+    "DisplayName_zh": "(UTC-06:00) 中美洲"
+  },
+  {
+    "Id": "Central Asia Standard Time",
+    "DisplayName": "(UTC+06:00) Astana",
+    "DisplayName_zh": "(UTC+06:00) 阿斯塔纳"
+  },
+  {
+    "Id": "Central Brazilian Standard Time",
+    "DisplayName": "(UTC-04:00) Cuiaba",
+    "DisplayName_zh": "(UTC-04:00) 库亚巴"
+  },
+  {
+    "Id": "Central Europe Standard Time",
+    "DisplayName": "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague",
+    "DisplayName_zh": "(UTC+01:00) 贝尔格莱德，布拉迪斯拉发，布达佩斯，卢布尔雅那，布拉格"
+  },
+  {
+    "Id": "Central European Standard Time",
+    "DisplayName": "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb",
+    "DisplayName_zh": "(UTC+01:00) 萨拉热窝，斯科普里，华沙，萨格勒布"
   },
   {
     "Id": "Central Pacific Standard Time",
-    "DisplayName": "(UTC+11:00) Solomon Is., New Caledonia"
+    "DisplayName": "(UTC+11:00) Solomon Is., New Caledonia",
+    "DisplayName_zh": "(UTC+11:00) 所罗门群岛，新喀里多尼亚"
   },
   {
-    "Id": "Russia Time Zone 11",
-    "DisplayName": "(UTC+12:00) Anadyr, Petropavlovsk-Kamchatsky"
+    "Id": "Central Standard Time",
+    "DisplayName": "(UTC-06:00) Central Time (US & Canada)",
+    "DisplayName_zh": "(UTC-06:00) 中部时间(美国和加拿大)"
   },
   {
-    "Id": "New Zealand Standard Time",
-    "DisplayName": "(UTC+12:00) Auckland, Wellington"
-  },
-  {
-    "Id": "UTC+12",
-    "DisplayName": "(UTC+12:00) Coordinated Universal Time+12"
-  },
-  {
-    "Id": "Fiji Standard Time",
-    "DisplayName": "(UTC+12:00) Fiji"
+    "Id": "Central Standard Time (Mexico)",
+    "DisplayName": "(UTC-06:00) Guadalajara, Mexico City, Monterrey",
+    "DisplayName_zh": "(UTC-06:00) 瓜达拉哈拉，墨西哥城，蒙特雷"
   },
   {
     "Id": "Chatham Islands Standard Time",
-    "DisplayName": "(UTC+12:45) Chatham Islands"
+    "DisplayName": "(UTC+12:45) Chatham Islands",
+    "DisplayName_zh": "(UTC+12:45) 查塔姆群岛"
   },
   {
-    "Id": "UTC+13",
-    "DisplayName": "(UTC+13:00) Coordinated Universal Time+13"
+    "Id": "China Standard Time",
+    "DisplayName": "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi",
+    "DisplayName_zh": "(UTC+08:00) 北京，重庆，香港特别行政区，乌鲁木齐"
   },
   {
-    "Id": "Tonga Standard Time",
-    "DisplayName": "(UTC+13:00) Nuku'alofa"
+    "Id": "Cuba Standard Time",
+    "DisplayName": "(UTC-05:00) Havana",
+    "DisplayName_zh": "(UTC-05:00) 哈瓦那"
   },
   {
-    "Id": "Samoa Standard Time",
-    "DisplayName": "(UTC+13:00) Samoa"
+    "Id": "Dateline Standard Time",
+    "DisplayName": "(UTC-12:00) International Date Line West",
+    "DisplayName_zh": "(UTC-12:00) 国际日期变更线西"
+  },
+  {
+    "Id": "E. Africa Standard Time",
+    "DisplayName": "(UTC+03:00) Nairobi",
+    "DisplayName_zh": "(UTC+03:00) 内罗毕"
+  },
+  {
+    "Id": "E. Australia Standard Time",
+    "DisplayName": "(UTC+10:00) Brisbane",
+    "DisplayName_zh": "(UTC+10:00) 布里斯班"
+  },
+  {
+    "Id": "E. Europe Standard Time",
+    "DisplayName": "(UTC+02:00) Chisinau",
+    "DisplayName_zh": "(UTC+02:00) 基希讷乌"
+  },
+  {
+    "Id": "E. South America Standard Time",
+    "DisplayName": "(UTC-03:00) Brasilia",
+    "DisplayName_zh": "(UTC-03:00) 巴西利亚"
+  },
+  {
+    "Id": "Easter Island Standard Time",
+    "DisplayName": "(UTC-06:00) Easter Island",
+    "DisplayName_zh": "(UTC-06:00) 复活节岛"
+  },
+  {
+    "Id": "Eastern Standard Time",
+    "DisplayName": "(UTC-05:00) Eastern Time (US & Canada)",
+    "DisplayName_zh": "(UTC-05:00) 东部时间(美国和加拿大)"
+  },
+  {
+    "Id": "Eastern Standard Time (Mexico)",
+    "DisplayName": "(UTC-05:00) Chetumal",
+    "DisplayName_zh": "(UTC-05:00) 切图马尔"
+  },
+  {
+    "Id": "Egypt Standard Time",
+    "DisplayName": "(UTC+02:00) Cairo",
+    "DisplayName_zh": "(UTC+02:00) 开罗"
+  },
+  {
+    "Id": "Ekaterinburg Standard Time",
+    "DisplayName": "(UTC+05:00) Ekaterinburg",
+    "DisplayName_zh": "(UTC+05:00) 叶卡捷琳堡"
+  },
+  {
+    "Id": "Fiji Standard Time",
+    "DisplayName": "(UTC+12:00) Fiji",
+    "DisplayName_zh": "(UTC+12:00) 斐济"
+  },
+  {
+    "Id": "FLE Standard Time",
+    "DisplayName": "(UTC+02:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius",
+    "DisplayName_zh": "(UTC+02:00) 赫尔辛基，基辅，里加，索非亚，塔林，维尔纽斯"
+  },
+  {
+    "Id": "Georgian Standard Time",
+    "DisplayName": "(UTC+04:00) Tbilisi",
+    "DisplayName_zh": "(UTC+04:00) 第比利斯"
+  },
+  {
+    "Id": "GMT Standard Time",
+    "DisplayName": "(UTC+00:00) Dublin, Edinburgh, Lisbon, London",
+    "DisplayName_zh": "(UTC+00:00) 都柏林，爱丁堡，里斯本，伦敦"
+  },
+  {
+    "Id": "Greenland Standard Time",
+    "DisplayName": "(UTC-03:00) Greenland",
+    "DisplayName_zh": "(UTC-02:00) 格陵兰"
+  },
+  {
+    "Id": "Greenwich Standard Time",
+    "DisplayName": "(UTC+00:00) Monrovia, Reykjavik",
+    "DisplayName_zh": "(UTC+00:00) 蒙罗维亚，雷克雅未克"
+  },
+  {
+    "Id": "GTB Standard Time",
+    "DisplayName": "(UTC+02:00) Athens, Bucharest",
+    "DisplayName_zh": "(UTC+02:00) 雅典，布加勒斯特"
+  },
+  {
+    "Id": "Haiti Standard Time",
+    "DisplayName": "(UTC-05:00) Haiti",
+    "DisplayName_zh": "(UTC-05:00) 海地"
+  },
+  {
+    "Id": "Hawaiian Standard Time",
+    "DisplayName": "(UTC-10:00) Hawaii",
+    "DisplayName_zh": "(UTC-10:00) 夏威夷"
+  },
+  {
+    "Id": "India Standard Time",
+    "DisplayName": "(UTC+05:30) Chennai, Kolkata, Mumbai, New Delhi",
+    "DisplayName_zh": "(UTC+05:30) 钦奈，加尔各答，孟买，新德里"
+  },
+  {
+    "Id": "Iran Standard Time",
+    "DisplayName": "(UTC+03:30) Tehran",
+    "DisplayName_zh": "(UTC+03:30) 德黑兰"
+  },
+  {
+    "Id": "Israel Standard Time",
+    "DisplayName": "(UTC+02:00) Jerusalem",
+    "DisplayName_zh": "(UTC+02:00) 耶路撒冷"
+  },
+  {
+    "Id": "Jordan Standard Time",
+    "DisplayName": "(UTC+03:00) Amman",
+    "DisplayName_zh": "(UTC+03:00) 安曼"
+  },
+  {
+    "Id": "Kaliningrad Standard Time",
+    "DisplayName": "(UTC+02:00) Kaliningrad",
+    "DisplayName_zh": "(UTC+02:00) 加里宁格勒"
+  },
+  {
+    "Id": "Kamchatka Standard Time",
+    "DisplayName": "(UTC+12:00) 彼得罗巴甫洛夫斯克-堪察加 - 旧用",
+    "DisplayName_zh": "(UTC+12:00) 彼得罗巴甫洛夫斯克-堪察加 - 旧用"
+  },
+  {
+    "Id": "Korea Standard Time",
+    "DisplayName": "(UTC+09:00) Seoul",
+    "DisplayName_zh": "(UTC+09:00) 首尔"
+  },
+  {
+    "Id": "Libya Standard Time",
+    "DisplayName": "(UTC+02:00) Tripoli",
+    "DisplayName_zh": "(UTC+02:00) 的黎波里"
   },
   {
     "Id": "Line Islands Standard Time",
-    "DisplayName": "(UTC+14:00) Kiritimati Island"
+    "DisplayName": "(UTC+14:00) Kiritimati Island",
+    "DisplayName_zh": "(UTC+14:00) 圣诞岛"
+  },
+  {
+    "Id": "Lord Howe Standard Time",
+    "DisplayName": "(UTC+10:30) Lord Howe Island",
+    "DisplayName_zh": "(UTC+10:30) 豪勋爵岛"
+  },
+  {
+    "Id": "Magadan Standard Time",
+    "DisplayName": "(UTC+11:00) Magadan",
+    "DisplayName_zh": "(UTC+11:00) 马加丹"
+  },
+  {
+    "Id": "Magallanes Standard Time",
+    "DisplayName": "(UTC-03:00) Punta Arenas",
+    "DisplayName_zh": "(UTC-03:00) 蓬塔阿雷纳斯"
+  },
+  {
+    "Id": "Marquesas Standard Time",
+    "DisplayName": "(UTC-09:30) Marquesas Islands",
+    "DisplayName_zh": "(UTC-09:30) 马克萨斯群岛"
+  },
+  {
+    "Id": "Mauritius Standard Time",
+    "DisplayName": "(UTC+04:00) Port Louis",
+    "DisplayName_zh": "(UTC+04:00) 路易港"
+  },
+  {
+    "Id": "Mid-Atlantic Standard Time",
+    "DisplayName": "(UTC-02:00) 中大西洋 - 旧用",
+    "DisplayName_zh": "(UTC-02:00) 中大西洋 - 旧用"
+  },
+  {
+    "Id": "Middle East Standard Time",
+    "DisplayName": "(UTC+02:00) Beirut",
+    "DisplayName_zh": "(UTC+02:00) 贝鲁特"
+  },
+  {
+    "Id": "Montevideo Standard Time",
+    "DisplayName": "(UTC-03:00) Montevideo",
+    "DisplayName_zh": "(UTC-03:00) 蒙得维的亚"
+  },
+  {
+    "Id": "Morocco Standard Time",
+    "DisplayName": "(UTC+01:00) Casablanca",
+    "DisplayName_zh": "(UTC+01:00) 卡萨布兰卡"
+  },
+  {
+    "Id": "Mountain Standard Time",
+    "DisplayName": "(UTC-07:00) Mountain Time (US & Canada)",
+    "DisplayName_zh": "(UTC-07:00) 山地时间(美国和加拿大)"
+  },
+  {
+    "Id": "Mountain Standard Time (Mexico)",
+    "DisplayName": "(UTC-07:00) La Paz, Mazatlan",
+    "DisplayName_zh": "(UTC-07:00) 拉巴斯、马扎特兰"
+  },
+  {
+    "Id": "Myanmar Standard Time",
+    "DisplayName": "(UTC+06:30) Yangon (Rangoon)",
+    "DisplayName_zh": "(UTC+06:30) 仰光"
+  },
+  {
+    "Id": "N. Central Asia Standard Time",
+    "DisplayName": "(UTC+07:00) Novosibirsk",
+    "DisplayName_zh": "(UTC+07:00) 新西伯利亚"
+  },
+  {
+    "Id": "Namibia Standard Time",
+    "DisplayName": "(UTC+02:00) Windhoek",
+    "DisplayName_zh": "(UTC+02:00) 温得和克"
+  },
+  {
+    "Id": "Nepal Standard Time",
+    "DisplayName": "(UTC+05:45) Kathmandu",
+    "DisplayName_zh": "(UTC+05:45) 加德满都"
+  },
+  {
+    "Id": "New Zealand Standard Time",
+    "DisplayName": "(UTC+12:00) Auckland, Wellington",
+    "DisplayName_zh": "(UTC+12:00) 奥克兰，惠灵顿"
+  },
+  {
+    "Id": "Newfoundland Standard Time",
+    "DisplayName": "(UTC-03:30) Newfoundland",
+    "DisplayName_zh": "(UTC-03:30) 纽芬兰"
+  },
+  {
+    "Id": "Norfolk Standard Time",
+    "DisplayName": "(UTC+11:00) Norfolk Island",
+    "DisplayName_zh": "(UTC+11:00) 诺福克岛"
+  },
+  {
+    "Id": "North Asia East Standard Time",
+    "DisplayName": "(UTC+08:00) Irkutsk",
+    "DisplayName_zh": "(UTC+08:00) 伊尔库茨克"
+  },
+  {
+    "Id": "North Asia Standard Time",
+    "DisplayName": "(UTC+07:00) Krasnoyarsk",
+    "DisplayName_zh": "(UTC+07:00) 克拉斯诺亚尔斯克"
+  },
+  {
+    "Id": "North Korea Standard Time",
+    "DisplayName": "(UTC+09:00) Pyongyang",
+    "DisplayName_zh": "(UTC+09:00) 平壤"
+  },
+  {
+    "Id": "Omsk Standard Time",
+    "DisplayName": "(UTC+06:00) Omsk",
+    "DisplayName_zh": "(UTC+06:00) 鄂木斯克"
+  },
+  {
+    "Id": "Pacific SA Standard Time",
+    "DisplayName": "(UTC-04:00) Santiago",
+    "DisplayName_zh": "(UTC-04:00) 圣地亚哥"
+  },
+  {
+    "Id": "Pacific Standard Time",
+    "DisplayName": "(UTC-08:00) Pacific Time (US & Canada)",
+    "DisplayName_zh": "(UTC-08:00) 太平洋时间(美国和加拿大)"
+  },
+  {
+    "Id": "Pacific Standard Time (Mexico)",
+    "DisplayName": "(UTC-08:00) Baja California",
+    "DisplayName_zh": "(UTC-08:00) 下加利福尼亚州"
+  },
+  {
+    "Id": "Pakistan Standard Time",
+    "DisplayName": "(UTC+05:00) Islamabad, Karachi",
+    "DisplayName_zh": "(UTC+05:00) 伊斯兰堡，卡拉奇"
+  },
+  {
+    "Id": "Paraguay Standard Time",
+    "DisplayName": "(UTC-04:00) Asuncion",
+    "DisplayName_zh": "(UTC-04:00) 亚松森"
+  },
+  {
+    "Id": "Qyzylorda Standard Time",
+    "DisplayName": "(UTC+05:00) Qyzylorda",
+    "DisplayName_zh": "(UTC+05:00) 克孜洛尔达"
+  },
+  {
+    "Id": "Romance Standard Time",
+    "DisplayName": "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris",
+    "DisplayName_zh": "(UTC+01:00) 布鲁塞尔，哥本哈根，马德里，巴黎"
+  },
+  {
+    "Id": "Russia Time Zone 10",
+    "DisplayName": "(UTC+11:00) Chokurdakh",
+    "DisplayName_zh": "(UTC+11:00) 乔库尔达赫"
+  },
+  {
+    "Id": "Russia Time Zone 11",
+    "DisplayName": "(UTC+12:00) Anadyr, Petropavlovsk-Kamchatsky",
+    "DisplayName_zh": "(UTC+12:00) 阿纳德尔，堪察加彼得罗巴甫洛夫斯克"
+  },
+  {
+    "Id": "Russia Time Zone 3",
+    "DisplayName": "(UTC+04:00) Izhevsk, Samara",
+    "DisplayName_zh": "(UTC+04:00) 伊热夫斯克，萨马拉"
+  },
+  {
+    "Id": "Russian Standard Time",
+    "DisplayName": "(UTC+03:00) Moscow, St. Petersburg",
+    "DisplayName_zh": "(UTC+03:00) 莫斯科，圣彼得堡"
+  },
+  {
+    "Id": "SA Eastern Standard Time",
+    "DisplayName": "(UTC-03:00) Cayenne, Fortaleza",
+    "DisplayName_zh": "(UTC-03:00) 卡宴，福塔雷萨"
+  },
+  {
+    "Id": "SA Pacific Standard Time",
+    "DisplayName": "(UTC-05:00) Bogota, Lima, Quito, Rio Branco",
+    "DisplayName_zh": "(UTC-05:00) 波哥大，利马，基多，里奥布朗库"
+  },
+  {
+    "Id": "SA Western Standard Time",
+    "DisplayName": "(UTC-04:00) Georgetown, La Paz, Manaus, San Juan",
+    "DisplayName_zh": "(UTC-04:00) 乔治敦，拉巴斯，马瑙斯，圣胡安"
+  },
+  {
+    "Id": "Saint Pierre Standard Time",
+    "DisplayName": "(UTC-03:00) Saint Pierre and Miquelon",
+    "DisplayName_zh": "(UTC-03:00) 圣皮埃尔和密克隆群岛"
+  },
+  {
+    "Id": "Sakhalin Standard Time",
+    "DisplayName": "(UTC+11:00) Sakhalin",
+    "DisplayName_zh": "(UTC+11:00) 萨哈林"
+  },
+  {
+    "Id": "Samoa Standard Time",
+    "DisplayName": "(UTC+13:00) Samoa",
+    "DisplayName_zh": "(UTC+13:00) 萨摩亚群岛"
+  },
+  {
+    "Id": "Sao Tome Standard Time",
+    "DisplayName": "(UTC+00:00) Sao Tome",
+    "DisplayName_zh": "(UTC+00:00) 圣多美"
+  },
+  {
+    "Id": "Saratov Standard Time",
+    "DisplayName": "(UTC+04:00) Saratov",
+    "DisplayName_zh": "(UTC+04:00) 萨拉托夫"
+  },
+  {
+    "Id": "SE Asia Standard Time",
+    "DisplayName": "(UTC+07:00) Bangkok, Hanoi, Jakarta",
+    "DisplayName_zh": "(UTC+07:00) 曼谷，河内，雅加达"
+  },
+  {
+    "Id": "Singapore Standard Time",
+    "DisplayName": "(UTC+08:00) Kuala Lumpur, Singapore",
+    "DisplayName_zh": "(UTC+08:00) 吉隆坡，新加坡"
+  },
+  {
+    "Id": "South Africa Standard Time",
+    "DisplayName": "(UTC+02:00) Harare, Pretoria",
+    "DisplayName_zh": "(UTC+02:00) 哈拉雷，比勒陀利亚"
+  },
+  {
+    "Id": "South Sudan Standard Time",
+    "DisplayName": "(UTC+02:00) Juba",
+    "DisplayName_zh": "(UTC+02:00) 朱巴"
+  },
+  {
+    "Id": "Sri Lanka Standard Time",
+    "DisplayName": "(UTC+05:30) Sri Jayawardenepura",
+    "DisplayName_zh": "(UTC+05:30) 斯里加亚渥登普拉"
+  },
+  {
+    "Id": "Sudan Standard Time",
+    "DisplayName": "(UTC+02:00) Khartoum",
+    "DisplayName_zh": "(UTC+02:00) 喀土穆"
+  },
+  {
+    "Id": "Syria Standard Time",
+    "DisplayName": "(UTC+02:00) Damascus",
+    "DisplayName_zh": "(UTC+03:00) 大马士革"
+  },
+  {
+    "Id": "Taipei Standard Time",
+    "DisplayName": "(UTC+08:00) Taipei",
+    "DisplayName_zh": "(UTC+08:00) 台北"
+  },
+  {
+    "Id": "Tasmania Standard Time",
+    "DisplayName": "(UTC+10:00) Hobart",
+    "DisplayName_zh": "(UTC+10:00) 霍巴特"
+  },
+  {
+    "Id": "Tocantins Standard Time",
+    "DisplayName": "(UTC-03:00) Araguaina",
+    "DisplayName_zh": "(UTC-03:00) 阿拉瓜伊纳"
+  },
+  {
+    "Id": "Tokyo Standard Time",
+    "DisplayName": "(UTC+09:00) Osaka, Sapporo, Tokyo",
+    "DisplayName_zh": "(UTC+09:00) 大阪，札幌，东京"
+  },
+  {
+    "Id": "Tomsk Standard Time",
+    "DisplayName": "(UTC+07:00) Tomsk",
+    "DisplayName_zh": "(UTC+07:00) 托木斯克"
+  },
+  {
+    "Id": "Tonga Standard Time",
+    "DisplayName": "(UTC+13:00) Nuku'alofa",
+    "DisplayName_zh": "(UTC+13:00) 努库阿洛法"
+  },
+  {
+    "Id": "Transbaikal Standard Time",
+    "DisplayName": "(UTC+09:00) Chita",
+    "DisplayName_zh": "(UTC+09:00) 赤塔市"
+  },
+  {
+    "Id": "Turkey Standard Time",
+    "DisplayName": "(UTC+03:00) Istanbul",
+    "DisplayName_zh": "(UTC+03:00) 伊斯坦布尔"
+  },
+  {
+    "Id": "Turks And Caicos Standard Time",
+    "DisplayName": "(UTC-05:00) Turks and Caicos",
+    "DisplayName_zh": "(UTC-05:00) 特克斯和凯科斯群岛"
+  },
+  {
+    "Id": "Ulaanbaatar Standard Time",
+    "DisplayName": "(UTC+08:00) Ulaanbaatar",
+    "DisplayName_zh": "(UTC+08:00) 乌兰巴托"
+  },
+  {
+    "Id": "US Eastern Standard Time",
+    "DisplayName": "(UTC-05:00) Indiana (East)",
+    "DisplayName_zh": "(UTC-05:00) 印地安那州(东部)"
+  },
+  {
+    "Id": "US Mountain Standard Time",
+    "DisplayName": "(UTC-07:00) Arizona",
+    "DisplayName_zh": "(UTC-07:00) 亚利桑那"
+  },
+  {
+    "Id": "UTC",
+    "DisplayName": "(UTC) Coordinated Universal Time",
+    "DisplayName_zh": "(UTC) 协调世界时"
+  },
+  {
+    "Id": "UTC-02",
+    "DisplayName": "(UTC-02:00) Coordinated Universal Time-02",
+    "DisplayName_zh": "(UTC-02:00) 协调世界时-02"
+  },
+  {
+    "Id": "UTC-08",
+    "DisplayName": "(UTC-08:00) Coordinated Universal Time-08",
+    "DisplayName_zh": "(UTC-08:00) 协调世界时-08"
+  },
+  {
+    "Id": "UTC-09",
+    "DisplayName": "(UTC-09:00) Coordinated Universal Time-09",
+    "DisplayName_zh": "(UTC-09:00) 协调世界时-09"
+  },
+  {
+    "Id": "UTC-11",
+    "DisplayName": "(UTC-11:00) Coordinated Universal Time-11",
+    "DisplayName_zh": "(UTC-11:00) 协调世界时-11"
+  },
+  {
+    "Id": "UTC+12",
+    "DisplayName": "(UTC+12:00) Coordinated Universal Time+12",
+    "DisplayName_zh": "(UTC+12:00) 协调世界时+12"
+  },
+  {
+    "Id": "UTC+13",
+    "DisplayName": "(UTC+13:00) Coordinated Universal Time+13",
+    "DisplayName_zh": "(UTC+13:00) 协调世界时+13"
+  },
+  {
+    "Id": "Venezuela Standard Time",
+    "DisplayName": "(UTC-04:00) Caracas",
+    "DisplayName_zh": "(UTC-04:00) 加拉加斯"
+  },
+  {
+    "Id": "Vladivostok Standard Time",
+    "DisplayName": "(UTC+10:00) Vladivostok",
+    "DisplayName_zh": "(UTC+10:00) 符拉迪沃斯托克"
+  },
+  {
+    "Id": "Volgograd Standard Time",
+    "DisplayName": "(UTC+03:00) Volgograd",
+    "DisplayName_zh": "(UTC+03:00) 伏尔加格勒"
+  },
+  {
+    "Id": "W. Australia Standard Time",
+    "DisplayName": "(UTC+08:00) Perth",
+    "DisplayName_zh": "(UTC+08:00) 珀斯"
+  },
+  {
+    "Id": "W. Central Africa Standard Time",
+    "DisplayName": "(UTC+01:00) West Central Africa",
+    "DisplayName_zh": "(UTC+01:00) 中非西部"
+  },
+  {
+    "Id": "W. Europe Standard Time",
+    "DisplayName": "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna",
+    "DisplayName_zh": "(UTC+01:00) 阿姆斯特丹，柏林，伯尔尼，罗马，斯德哥尔摩，维也纳"
+  },
+  {
+    "Id": "W. Mongolia Standard Time",
+    "DisplayName": "(UTC+07:00) Hovd",
+    "DisplayName_zh": "(UTC+07:00) 科布多"
+  },
+  {
+    "Id": "West Asia Standard Time",
+    "DisplayName": "(UTC+05:00) Ashgabat, Tashkent",
+    "DisplayName_zh": "(UTC+05:00) 阿什哈巴德，塔什干"
+  },
+  {
+    "Id": "West Bank Standard Time",
+    "DisplayName": "(UTC+02:00) Gaza, Hebron",
+    "DisplayName_zh": "(UTC+02:00) 加沙，希伯伦"
+  },
+  {
+    "Id": "West Pacific Standard Time",
+    "DisplayName": "(UTC+10:00) Guam, Port Moresby",
+    "DisplayName_zh": "(UTC+10:00) 关岛，莫尔兹比港"
+  },
+  {
+    "Id": "Yakutsk Standard Time",
+    "DisplayName": "(UTC+09:00) Yakutsk",
+    "DisplayName_zh": "(UTC+09:00) 雅库茨克"
+  },
+  {
+    "Id": "Yukon Standard Time",
+    "DisplayName": "(UTC-07:00) Yukon",
+    "DisplayName_zh": "(UTC-07:00) 育空"
   }
 ]

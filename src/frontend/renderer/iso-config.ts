@@ -724,12 +724,14 @@ class UnattendConfigManager {
         name: k.name || k.id || '',
         type: k.type
       }))
+      const sortByName = (a: { name: string }, b: { name: string }) =>
+        a.name.localeCompare(b.name, 'zh-CN')
       const preset: PresetData = {
-        languages: result.languages || [],
-        locales: result.locales || [],
-        keyboards,
-        timeZones: result.timeZones || [],
-        geoLocations: result.geoLocations || [],
+        languages: (result.languages || []).sort(sortByName),
+        locales: (result.locales || []).sort(sortByName),
+        keyboards: keyboards.sort(sortByName),
+        timeZones: (result.timeZones || []).sort(sortByName),
+        geoLocations: (result.geoLocations || []).sort(sortByName),
         windowsEditions: result.windowsEditions || [],
         bloatwareItems: result.bloatwareItems || []
       }
