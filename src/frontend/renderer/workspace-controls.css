@@ -209,6 +209,9 @@
 .workspace fluent-select::part(listbox) {
     background-color: var(--workspace-option-fill);
     border-color: var(--border-color);
+    max-height: 200px;
+    overflow-y: auto;
+    padding-block: 4px;
 }
 
 /* Option 样式 */
@@ -1324,11 +1327,7 @@
     margin: 0;
     min-width: 150px;
     max-width: none;
-    /* 移除最大宽度限制 */
-    width: auto;
-    /* 允许自适应内容宽度 */
-    flex-shrink: 1;
-    /* 允许在必要时收缩 */
+    flex-shrink: 0;
 }
 
 /* ComboCard 内的 text-field 控件样式调整 */
@@ -1419,6 +1418,7 @@
     margin: 0;
     min-width: 150px;
     max-width: none;
+    flex-shrink: 0;
 }
 
 .workspace .combo-card-borderless fluent-text-field {

@@ -602,6 +602,18 @@ export function setupComboContainer(
 // ComboCard控件（单个card，右侧控件，支持Checkbox/Select/Switch/Text）
 // ========================================
 
+let _measureSpan: HTMLSpanElement | null = null
+
+function measureOptionWidth(text: string): number {
+  if (!_measureSpan) {
+    _measureSpan = document.createElement('span')
+    _measureSpan.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-size:14px;pointer-events:none;'
+    document.body.appendChild(_measureSpan)
+  }
+  _measureSpan.textContent = text
+  return _measureSpan.getBoundingClientRect().width
+}
+
 /**
  * 创建ComboCard HTML
  */
@@ -641,10 +653,13 @@ export function createComboCard(config: ComboCardConfig): string {
     controlHtml = `<fluent-switch id="${id}-control" ${isChecked ? 'checked' : ''}></fluent-switch>`
   } else if (controlType === 'select') {
     const selectedVal = typeof value === 'string' ? value : ''
-    const selectOptionsHtml = (options || []).map(selOpt =>
+    const selectOptions = options || []
+    const selectOptionsHtml = selectOptions.map(selOpt =>
       `<fluent-option value="${selOpt.value}" ${selectedVal === selOpt.value ? 'selected' : ''}>${selOpt.label}</fluent-option>`
     ).join('')
-    controlHtml = `<fluent-select id="${id}-control" style="min-width: 150px; max-width: none; width: auto;">${selectOptionsHtml}</fluent-select>`
+    const maxTextWidth = selectOptions.reduce((max, o) => Math.max(max, measureOptionWidth(o.label)), 0)
+    const fixedWidth = Math.max(Math.ceil(maxTextWidth + 52), 150)
+    controlHtml = `<fluent-select id="${id}-control" position="below" style="width: ${fixedWidth}px; min-width: ${fixedWidth}px; max-width: none; flex-shrink: 0;">${selectOptionsHtml}</fluent-select>`
   } else if (controlType === 'text') {
     const textVal = typeof value === 'string' ? value : ''
     controlHtml = `<fluent-text-field id="${id}-control" value="${textVal}" placeholder="${placeholder}" style="min-width: 150px; max-width: 300px; width: auto;"></fluent-text-field>`
@@ -701,6 +716,42 @@ export function createComboCard(config: ComboCardConfig): string {
   `
 }
 
+function injectFluentSelectScrollbar(select: HTMLElement): void {
+  const shadowRoot = (select as any).shadowRoot as ShadowRoot | null
+  if (!shadowRoot) return
+  if (shadowRoot.querySelector('style[data-fluent-scrollbar]')) return
+
+  const style = document.createElement('style')
+  style.setAttribute('data-fluent-scrollbar', 'true')
+  style.textContent = `
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+      margin-block: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      min-height: 24px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background-color: var(--scrollbar-thumb);
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
+    }
+    ::-webkit-scrollbar-thumb:active {
+      background-color: var(--scrollbar-thumb-active);
+    }
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+  `
+  shadowRoot.appendChild(style)
+}
+
 /**
  * 设置ComboCard事件监听
  */
@@ -736,6 +787,7 @@ export function setupComboCard(
       onValueChange(target.checked)
     })
   } else if (controlType === 'fluent-select') {
+    injectFluentSelectScrollbar(control)
     control.addEventListener('change', (e: any) => {
       const target = e.target as any
       onValueChange(target.value || '')
