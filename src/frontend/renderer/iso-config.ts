@@ -394,6 +394,7 @@ type PresetData = {
   languages: Array<{ id: string; name: string }>
   locales: Array<{ id: string; name: string }>
   keyboards: Array<{ id: string; name: string; type?: string }>
+  defaultInputProfiles: Array<{ id: string; name: string; primaryInputProfile: string; allowedInputProfiles: string[] }>
   timeZones: Array<{ id: string; name: string }>
   geoLocations: Array<{ id: string; name: string }>
   windowsEditions: Array<{ id: string; name: string; key?: string; index?: number | null }>
@@ -404,6 +405,7 @@ const EMPTY_PRESET: PresetData = {
   languages: [],
   locales: [],
   keyboards: [],
+  defaultInputProfiles: [],
   timeZones: [],
   geoLocations: [],
   windowsEditions: [],
@@ -703,6 +705,17 @@ class UnattendConfigManager {
     return this.presetData || EMPTY_PRESET
   }
 
+  private getAutoUiLanguage(): string {
+    const preset = this.getPresetData()
+    const preferred = ['zh-CN', 'en-US']
+    return preferred.find(id => preset.languages.some(l => l.id === id)) || preset.languages[0]?.id || ''
+  }
+
+  private getDefaultSystemLocale(uiLanguage: string): string {
+    const preset = this.getPresetData()
+    return preset.locales.find(l => l.id === uiLanguage)?.id || preset.locales[0]?.id || uiLanguage
+  }
+
   // 异步加载预设数据（从后端获取完整数据）
   private async loadPresetData(triggerRender: boolean = false) {
     if (!window.electronAPI?.sendToBackend) {
@@ -730,6 +743,7 @@ class UnattendConfigManager {
         languages: (result.languages || []).sort(sortByName),
         locales: (result.locales || []).sort(sortByName),
         keyboards: keyboards.sort(sortByName),
+        defaultInputProfiles: result.defaultInputProfiles || [],
         timeZones: (result.timeZones || []).sort(sortByName),
         geoLocations: (result.geoLocations || []).sort(sortByName),
         windowsEditions: result.windowsEditions || [],
@@ -793,12 +807,21 @@ class UnattendConfigManager {
     }
 
     try {
+      const config = this.cloneConfig(this.config)
+      if (config.languageSettings.mode === 'unattended') {
+        const uiLanguage = this.getAutoUiLanguage()
+        config.languageSettings.uiLanguage = uiLanguage
+        config.languageSettings.systemLocale = this.getDefaultSystemLocale(uiLanguage)
+        if (config.timeZone.mode === 'implicit') {
+          delete config.languageSettings.geoLocation
+        }
+      }
       const request = {
         jsonrpc: '2.0',
         id: 1,
         method: 'unattend_export_xml',
         params: {
-          config: this.config
+          config
         }
       }
 
@@ -1130,18 +1153,33 @@ class UnattendConfigManager {
     const tz = this.config.timeZone
 
     const normalizeKeyboardId = (id?: string) => (id || '').toUpperCase()
-    const defaultUiLanguage = preset.languages[0]?.id || ''
-    const defaultSystemLocale = preset.locales[0]?.id || defaultUiLanguage
+    const defaultUiLanguage = this.getAutoUiLanguage()
+    const defaultSystemLocale = this.getDefaultSystemLocale(defaultUiLanguage)
     const defaultKeyboard = normalizeKeyboardId(preset.keyboards[0]?.id || '')
     const defaultGeo = preset.geoLocations[0]?.id || defaultSystemLocale
     const defaultTimeZone = preset.timeZones[0]?.id || ''
 
-    const uiLanguageValue = lang.uiLanguage || defaultUiLanguage
-    const firstLanguageValue = lang.systemLocale || uiLanguageValue || defaultSystemLocale
-    const firstKeyboardValue = normalizeKeyboardId(lang.inputLocale || defaultKeyboard)
+    const uiLanguageValue = defaultUiLanguage
+    const firstLanguageValue = uiLanguageValue || defaultSystemLocale
     const homeRegionValue = lang.geoLocation || defaultGeo
 
     const getOptionLabel = (_type: string, _id: string, backendName: string): string => backendName
+    const uiLanguageName = preset.languages.find(l => l.id === uiLanguageValue)?.name || uiLanguageValue
+    const firstLanguageName = preset.locales.find(l => l.id === firstLanguageValue)?.name || uiLanguageName || firstLanguageValue
+    const inputProfileMap = new Map(preset.defaultInputProfiles.map(profile => [profile.id, profile]))
+    const allowedProfiles = inputProfileMap.get(firstLanguageValue)?.allowedInputProfiles || []
+    const isAllowedKeyboard = (keyboardId: string) => {
+      if (!allowedProfiles.length) return true
+      const normalizedKeyboardId = normalizeKeyboardId(keyboardId)
+      return allowedProfiles.some(profile => {
+        const normalizedProfile = normalizeKeyboardId(profile)
+        return normalizedProfile === normalizedKeyboardId || normalizedProfile.endsWith(`:${normalizedKeyboardId}`)
+      })
+    }
+    const filteredKeyboards = preset.keyboards.filter(k => isAllowedKeyboard(k.id))
+    const firstKeyboardValue = filteredKeyboards.some(k => normalizeKeyboardId(k.id) === normalizeKeyboardId(lang.inputLocale || ''))
+      ? normalizeKeyboardId(lang.inputLocale || '')
+      : normalizeKeyboardId(filteredKeyboards[0]?.id || defaultKeyboard)
 
     // 语言模式 Switch ComboCard
     const languageModeCardHtml = createComboCard({
@@ -1153,25 +1191,23 @@ class UnattendConfigManager {
       value: lang.mode === 'interactive'
     })
 
-    // Windows display language ComboCard（始终生成，通过容器控制显隐）
     const uiLanguageCardHtml = createComboCard({
       id: 'config-ui-language-card',
       title: t('isoConfig.regionLanguage.uiLanguageTitle'),
       description: t('isoConfig.regionLanguage.uiLanguageDesc'),
       icon: 'globe',
       controlType: 'select',
-      options: preset.languages.map(l => ({ value: l.id, label: getOptionLabel('language', l.id, l.name) })),
-      value: lang.uiLanguage || ''
+      options: uiLanguageValue ? [{ value: uiLanguageValue, label: uiLanguageName }] : [],
+      value: uiLanguageValue
     })
 
-    // First language ComboCard
     const firstLanguageCardHtml = createComboCard({
       id: 'config-first-language-card',
       title: t('isoConfig.regionLanguage.firstLanguageTitle'),
       description: t('isoConfig.regionLanguage.firstLanguageDesc'),
       icon: 'languages',
       controlType: 'select',
-      options: preset.locales.map(l => ({ value: l.id, label: getOptionLabel('locale', l.id, l.name) })),
+      options: firstLanguageValue ? [{ value: firstLanguageValue, label: firstLanguageName }] : [],
       value: firstLanguageValue
     })
 
@@ -1182,7 +1218,7 @@ class UnattendConfigManager {
       description: '',
       icon: 'keyboard',
       controlType: 'select',
-      options: preset.keyboards.filter(k => k.type !== 'IME').map(k => ({ value: k.id, label: getOptionLabel('keyboard', k.id, k.name) })),
+      options: filteredKeyboards.map(k => ({ value: k.id, label: getOptionLabel('keyboard', k.id, k.name) })),
       value: firstKeyboardValue
     })
 
@@ -1230,9 +1266,11 @@ class UnattendConfigManager {
         ${uiLanguageCardHtml}
         ${firstLanguageCardHtml}
         ${firstKeyboardCardHtml}
-        ${homeRegionCardHtml}
       </div>
       ${timezoneModeCardHtml}
+      <div id="config-region-explicit-group" style="display: ${explicitVisible ? 'block' : 'none'};">
+        ${homeRegionCardHtml}
+      </div>
       <div id="config-timezone-explicit-group" style="display: ${explicitVisible ? 'block' : 'none'};">
         ${timezoneSelectCardHtml}
       </div>
@@ -1249,7 +1287,7 @@ class UnattendConfigManager {
           uiLanguage: uiLanguageValue || defaultUiLanguage,
           systemLocale: firstLanguageValue || defaultSystemLocale,
           inputLocale: normalizeKeyboardId(firstKeyboardValue || defaultKeyboard),
-          geoLocation: homeRegionValue || defaultGeo
+          geoLocation: tz.mode === 'explicit' ? (homeRegionValue || defaultGeo) : undefined
         })
       }
       if (langGroup) {
@@ -1258,11 +1296,11 @@ class UnattendConfigManager {
     })
 
     // 语言子卡片事件监听（始终绑定，因为卡片始终存在）
-    setupComboCard('config-ui-language-card', (value) => {
-      this.updateModule('languageSettings', { uiLanguage: value as string })
+    setupComboCard('config-ui-language-card', () => {
+      this.updateModule('languageSettings', { uiLanguage: uiLanguageValue || defaultUiLanguage })
     })
-    setupComboCard('config-first-language-card', (value) => {
-      this.updateModule('languageSettings', { systemLocale: value as string })
+    setupComboCard('config-first-language-card', () => {
+      this.updateModule('languageSettings', { systemLocale: firstLanguageValue || defaultSystemLocale })
     })
     setupComboCard('config-first-keyboard-card', (value) => {
       this.updateModule('languageSettings', { inputLocale: normalizeKeyboardId(value as string) })
@@ -1273,12 +1311,23 @@ class UnattendConfigManager {
 
     // 时区模式 Switch 事件监听（仅切换显隐，不重新渲染）
     const tzGroup = contentDiv.querySelector('#config-timezone-explicit-group') as HTMLElement
+    const regionGroup = contentDiv.querySelector('#config-region-explicit-group') as HTMLElement
     setupComboCard('config-timezone-mode-card', (value) => {
+      const implicit = Boolean(value)
       this.updateModule('timeZone', {
-        mode: value ? 'implicit' : 'explicit'
+        mode: implicit ? 'implicit' : 'explicit',
+        timeZone: implicit ? undefined : (tz.timeZone || defaultTimeZone)
+      })
+      this.updateModule('languageSettings', {
+        uiLanguage: uiLanguageValue || defaultUiLanguage,
+        systemLocale: firstLanguageValue || defaultSystemLocale,
+        geoLocation: implicit ? undefined : (homeRegionValue || defaultGeo)
       })
       if (tzGroup) {
-        tzGroup.style.display = value ? 'none' : 'block'
+        tzGroup.style.display = implicit ? 'none' : 'block'
+      }
+      if (regionGroup) {
+        regionGroup.style.display = implicit ? 'none' : 'block'
       }
     })
 

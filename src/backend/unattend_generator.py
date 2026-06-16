@@ -139,6 +139,13 @@ class WindowsEdition(IKeyed):
 
 
 @dataclass
+class DefaultInputProfile(IKeyed):
+    """显示语言到官方第一键盘布局映射"""
+    primary_input_profile: str = ""
+    allowed_input_profiles: List[str] = field(default_factory=list)
+
+
+@dataclass
 class Component(IKeyed):
     """组件"""
     passes: List[str] = field(default_factory=list)
@@ -208,7 +215,7 @@ class UnattendedLanguageSettings(ILanguageSettings):
     locale_and_keyboard2: Optional[LocaleAndKeyboard] = None
     locale_and_keyboard3: Optional[LocaleAndKeyboard] = None
     geo_location: Optional[GeoLocation] = None
-    has_winpe: bool = True  # 是否在 WinPE pass 中创建 component（默认 True，保持向后兼容）
+    has_winpe: bool = False  # 旧配置兼容字段；不再生成 WinPE 阶段语言/区域/键盘设置
 
 
 class ITimeZoneSettings:
@@ -2257,22 +2264,13 @@ class LocalesModifier(Modifier):
         if isinstance(lang_settings, UnattendedLanguageSettings):
             # 无人值守模式
             settings = lang_settings
-            
-            # 只有在 has_winpe 为 True 时才创建 WinPE component
-            component_pe = None
-            if settings.has_winpe:
-                component_pe = get_or_create_element(
-                    self.root,
-                    Pass.windowsPE,
-                    "Microsoft-Windows-International-Core-WinPE"
-                )
-            else:
-                # 如果 has_winpe 为 False，移除模板中可能已存在的 WinPE component
-                existing_pe = self.root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core-WinPE']")
-                if existing_pe is not None:
-                    parent_pe = self._find_parent(self.root, existing_pe)
-                    if parent_pe is not None:
-                        parent_pe.remove(existing_pe)
+
+            # PE 阶段的区域/键盘选择不进入安装后系统，避免生成会误导用户的 WinPE 国际化配置。
+            existing_pe = self.root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-International-Core-WinPE']")
+            if existing_pe is not None:
+                parent_pe = self._find_parent(self.root, existing_pe)
+                if parent_pe is not None:
+                    parent_pe.remove(existing_pe)
             
             # 总是创建 OOBE component
             component_oobe = get_or_create_element(
@@ -2314,14 +2312,7 @@ class LocalesModifier(Modifier):
             
             keyboards = ";".join(keyboard_strings)
             
-            # 设置 WinPE 组件（如果存在）
-            if component_pe is not None:
-                ui_lang_pe = component_pe.find(f"{{{ns_uri}}}UILanguage")
-                if ui_lang_pe is None:
-                    ui_lang_pe = ET.SubElement(component_pe, f"{{{ns_uri}}}UILanguage")
-                ui_lang_pe.text = settings.image_language.id
-            
-            # 设置 OOBE 组件（按照原始 XML 的顺序：InputLocale, SystemLocale, UILanguage, UserLocale）
+            # 设置 OOBE 组件。UserLocale 不写入，让 Windows 使用“推荐的项目”区域格式。
             # 先查找或创建所有元素
             input_locale = component_oobe.find(f"{{{ns_uri}}}InputLocale")
             system_locale = component_oobe.find(f"{{{ns_uri}}}SystemLocale")
@@ -2341,28 +2332,26 @@ class LocalesModifier(Modifier):
                 ui_lang_oobe = ET.SubElement(component_oobe, f"{{{ns_uri}}}UILanguage")
             ui_lang_oobe.text = settings.image_language.id
             
-            if user_locale is None:
-                user_locale = ET.SubElement(component_oobe, f"{{{ns_uri}}}UserLocale")
-            user_locale.text = settings.locale_and_keyboard.locale.id
+            if user_locale is not None:
+                component_oobe.remove(user_locale)
             
-            # 确保元素顺序正确：InputLocale, SystemLocale, UILanguage, UserLocale
+            # 确保元素顺序正确：InputLocale, SystemLocale, UILanguage
             # 收集所有子元素
             all_children = list(component_oobe)
             # 移除这些元素
-            for elem in [input_locale, system_locale, ui_lang_oobe, user_locale]:
+            for elem in [input_locale, system_locale, ui_lang_oobe]:
                 if elem in all_children:
                     component_oobe.remove(elem)
             # 按正确顺序重新添加
             component_oobe.append(input_locale)
             component_oobe.append(system_locale)
             component_oobe.append(ui_lang_oobe)
-            component_oobe.append(user_locale)
             
             # 如果地理位置不同，添加到脚本
-            if settings.geo_location and settings.locale_and_keyboard.locale.geo_location:
-                if settings.geo_location.id != settings.locale_and_keyboard.locale.geo_location.id:
-                    # 添加到 UserOnceScript（将在脚本序列实现后完成）
-                    if self.context.user_once_script:
+            if settings.geo_location:
+                default_geo = settings.locale_and_keyboard.locale.geo_location
+                if default_geo is None or settings.geo_location.id != default_geo.id:
+                    if self.context.user_once_script is not None:
                         self.context.user_once_script.append(f"Set-WinHomeLocation -GeoId {settings.geo_location.id};")
         
         elif isinstance(lang_settings, InteractiveLanguageSettings):
@@ -2482,9 +2471,6 @@ class LocalesModifier(Modifier):
             )
         # GeoLocation 从脚本检测（包括 Extensions 中的 UserOnce.ps1）
         geo_loc = None
-        # 提取 WinPE 键盘布局（SetKeyboardLayout 参数）
-        winpe_keyboard_layout = None
-        
         # 收集所有命令和 Extensions 文件内容
         all_script_texts = list(self.generator._collect_all_commands(self.root))
         s_uri = "https://schneegans.de/windows/unattend-generator/"
@@ -2548,36 +2534,6 @@ class LocalesModifier(Modifier):
                     logger.info(f"LocalesModifier.parse: Found GeoId {geo_id} (multi-line match)")
                     break
         
-        # 然后查找 SetKeyboardLayout（如果还没有找到）
-        if winpe_keyboard_layout is None:
-            for cmd_text in all_script_texts:
-                if not cmd_text:
-                    continue
-                lower = cmd_text.lower()
-                # 提取 SetKeyboardLayout 命令中的完整键盘布局字符串
-                if 'setkeyboardlayout' in lower:
-                    import re
-                    # 匹配 SetKeyboardLayout 后面的内容
-                    # 格式可能是: SetKeyboardLayout 1000:0804:{guid}{guid}
-                    # 需要匹配到 &echo: 或 & 或 " 或换行之前
-                    # 使用更精确的模式：匹配 SetKeyboardLayout 后面的所有内容，直到遇到 &echo: 或单独的 & 或 "
-                    # 注意：需要匹配完整的布局字符串，包括 1000: 前缀
-                    # 首先尝试匹配到 &echo: 之前的所有内容（这是最常见的格式）
-                    m = re.search(r'SetKeyboardLayout\s+([^&]+?)(?=&echo:)', cmd_text, re.IGNORECASE)
-                    if not m:
-                        # 如果上面的模式不匹配，尝试匹配到 & 或 " 之前
-                        m = re.search(r'SetKeyboardLayout\s+([^&"]+?)(?=&[^a-zA-Z]|"|$)', cmd_text, re.IGNORECASE)
-                    if not m:
-                        # 如果上面的模式不匹配，尝试更简单的模式（匹配到空格或 & 或 " 之前）
-                        m = re.search(r'SetKeyboardLayout\s+([^\s&"]+)', cmd_text, re.IGNORECASE)
-                    if m:
-                        winpe_keyboard_layout = m.group(1).strip()
-                        # 处理可能的转义字符
-                        winpe_keyboard_layout = winpe_keyboard_layout.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
-                        # 确保提取的值包含完整的布局字符串（包括 1000: 前缀，如果存在）
-                        # 如果提取的值不包含 1000: 前缀，但原始命令中有，说明正则表达式有问题
-                        # 这里我们直接使用提取的值，因为正则表达式应该已经匹配了完整字符串
-                        break  # 找到后立即退出循环
         lang_settings = UnattendedLanguageSettings(
             image_language=image_lang or ImageLanguage(id="en-US", display_name="en-US"),
             locale_and_keyboard=locale_and_keyboard,
@@ -2586,9 +2542,6 @@ class LocalesModifier(Modifier):
             geo_location=geo_loc,
             has_winpe=component_pe is not None
         )
-        # 如果提取到了 winpe_keyboard_layout，保存到 language_settings
-        if winpe_keyboard_layout:
-            setattr(lang_settings, 'winpe_keyboard_layout', winpe_keyboard_layout)
         self.configuration.language_settings = lang_settings
 
     def _get_replacement_for_unspecified_locale(self, image_language_id: str, locale: UserLocale) -> UserLocale:
@@ -4996,14 +4949,6 @@ class DiskModifier(Modifier):
             if not self.configuration.disable_defender:
                 self.configuration.disable_defender = True
         
-        # 如果缺少 geo_location，但希望写入设备区域，提供默认值（原始 XML 为 244）
-        if isinstance(self.configuration.language_settings, UnattendedLanguageSettings):
-            if self.configuration.language_settings.geo_location is None:
-                try:
-                    self.configuration.language_settings.geo_location = GeoLocation(id="244", display_name="China")
-                except Exception:
-                    pass
-        
         # 检查是否使用了 Microsoft-Windows-PnpCustomizationsWinPE 组件
         ns_uri = '{urn:schemas-microsoft-com:unattend}'
         comp = "Microsoft-Windows-PnpCustomizationsWinPE"
@@ -5015,16 +4960,6 @@ class DiskModifier(Modifier):
         for (component_name, pass_), _ in self.configuration.components.items():
             if pass_ == Pass.windowsPE:
                 raise ValueError("Cannot create .cmd script when custom component with pass 'windowsPE' is used.")
-        
-        # 添加键盘布局设置
-        if isinstance(self.configuration.language_settings, UnattendedLanguageSettings):
-            pair = self.configuration.language_settings.locale_and_keyboard
-            custom_layout = getattr(self.configuration.language_settings, 'winpe_keyboard_layout', None)
-            writer.write("rem Set keyboard layout\n")
-            if custom_layout:
-                writer.write(f"wpeutil.exe SetKeyboardLayout {custom_layout}\n")
-            else:
-                writer.write(f"wpeutil.exe SetKeyboardLayout {pair.locale.lcid}:{pair.keyboard.id}\n")
         
         # 添加查找安装镜像文件的逻辑
         available_letters = [d for d in letters if d not in skipped_drives + [boot_drive, windows_drive, recovery_drive]]
@@ -7920,6 +7855,23 @@ class UnattendGenerator:
             self.keyboard_identifiers = to_keyed_dictionary(keyboard_data, KeyboardIdentifier)
         else:
             self.keyboard_identifiers = {}
+
+        # 4.1 加载 DefaultInputProfile
+        default_input_profile_file = self.data_dir / 'DefaultInputProfile.json'
+        if default_input_profile_file.exists():
+            default_input_profile_data = load_data_with_i18n(default_input_profile_file, self.lang)
+            self.default_input_profiles = {}
+            for item in default_input_profile_data:
+                key = item.get('Id', '')
+                if key:
+                    self.default_input_profiles[key] = DefaultInputProfile(
+                        id=key,
+                        display_name=item.get('DisplayName', ''),
+                        primary_input_profile=item.get('PrimaryInputProfile', ''),
+                        allowed_input_profiles=item.get('AllowedInputProfiles', [])
+                    )
+        else:
+            self.default_input_profiles = {}
         
         # 5. 加载 GeoLocation
         geoid_file = self.data_dir / 'GeoId.json'
@@ -8401,8 +8353,6 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 image_lang_id = lang.get('uiLanguage', 'en-US')
                 locale_id = lang.get('systemLocale', 'en-US')
                 input_locale_str = lang.get('inputLocale', '00000409')  # 可能是完整格式 "LCID:KeyboardId" 或只是 KeyboardId
-                has_winpe = lang.get('hasWinPE', True)  # 默认 True 保持向后兼容
-                
                 # 从 inputLocale 提取 LCID 和键盘 ID
                 extracted_lcid = None
                 keyboard_id = input_locale_str
@@ -8440,26 +8390,22 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     # 解析键盘 ID（可能是 "{guid}{guid}" 格式）
                     keyboard = KeyboardIdentifier(id=keyboard_id, display_name=keyboard_id, type=InputType.Keyboard)
                 
-                    locale_and_keyboard = LocaleAndKeyboard(
-                        locale=user_locale,
-                        keyboard=keyboard
-                    )
-                    
-                    geo_location = None
-                    if 'geoLocation' in lang and lang['geoLocation']:
-                        geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
-                    if geo_location is None and 'geoLocation' in lang and lang['geoLocation']:
-                        geo_location = GeoLocation(id=lang['geoLocation'], display_name=lang['geoLocation'])
-                    
-                    config.language_settings = UnattendedLanguageSettings(
-                        image_language=image_language,
-                        locale_and_keyboard=locale_and_keyboard,
-                        geo_location=geo_location,
-                        has_winpe=has_winpe
-                    )
-                # 保留 WinPE 键盘布局（如果解析阶段提取到）
-                if 'winPEKeyboardLayout' in lang:
-                    setattr(config.language_settings, 'winpe_keyboard_layout', lang['winPEKeyboardLayout'])
+                locale_and_keyboard = LocaleAndKeyboard(
+                    locale=user_locale,
+                    keyboard=keyboard
+                )
+
+                geo_location = None
+                if 'geoLocation' in lang and lang['geoLocation']:
+                    geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
+                if geo_location is None and 'geoLocation' in lang and lang['geoLocation']:
+                    geo_location = GeoLocation(id=lang['geoLocation'], display_name=lang['geoLocation'])
+
+                config.language_settings = UnattendedLanguageSettings(
+                    image_language=image_language,
+                    locale_and_keyboard=locale_and_keyboard,
+                    geo_location=geo_location
+                )
     
     # 转换时区设置
     if 'timeZone' in config_dict:
@@ -9515,14 +9461,8 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
                 'uiLanguage': settings.image_language.id,
                 'systemLocale': settings.locale_and_keyboard.locale.id,
                 'inputLocale': final_input_locale,
-                'geoLocation': settings.geo_location.id if settings.geo_location else None,
-                'hasWinPE': settings.has_winpe  # 保存 has_winpe 标志
+                'geoLocation': settings.geo_location.id if settings.geo_location else None
             }
-            
-            # 保存 WinPE 键盘布局（如果存在）
-            winpe_layout = getattr(settings, 'winpe_keyboard_layout', None)
-            if winpe_layout:
-                lang_dict['winPEKeyboardLayout'] = winpe_layout
             
             config_dict['languageSettings'] = lang_dict
     

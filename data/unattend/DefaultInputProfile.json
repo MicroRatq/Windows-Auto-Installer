@@ -1,0 +1,350 @@
+[
+  {
+    "Id": "ar-SA",
+    "DisplayName": "Arabic",
+    "DisplayName_zh": "阿拉伯语",
+    "PrimaryInputProfile": "0401:00000401",
+    "AllowedInputProfiles": [
+      "0401:00000401"
+    ]
+  },
+  {
+    "Id": "pt-BR",
+    "DisplayName": "Brazilian Portuguese",
+    "DisplayName_zh": "巴西葡萄牙语",
+    "PrimaryInputProfile": "0416:00000416",
+    "AllowedInputProfiles": [
+      "0416:00000416"
+    ]
+  },
+  {
+    "Id": "bg-BG",
+    "DisplayName": "Bulgarian",
+    "DisplayName_zh": "保加利亚语",
+    "PrimaryInputProfile": "0402:00030402",
+    "AllowedInputProfiles": [
+      "0402:00030402"
+    ]
+  },
+  {
+    "Id": "zh-CN",
+    "DisplayName": "Chinese Simplified",
+    "DisplayName_zh": "中文 (简体)",
+    "PrimaryInputProfile": "0804:{81D4E9C9-1D3B-41BC-9E6C-4B40BF79E35E}{FA550B04-5AD7-411F-A5AC-CA038EC515D7}",
+    "AllowedInputProfiles": [
+      "0804:{81D4E9C9-1D3B-41BC-9E6C-4B40BF79E35E}{FA550B04-5AD7-411F-A5AC-CA038EC515D7}",
+      "0804:{6A498709-E00B-4C45-A018-8F9E4081AE40}{82590C13-F4DD-44F4-BA1D-8667246FDF8E}"
+    ]
+  },
+  {
+    "Id": "zh-TW",
+    "DisplayName": "Chinese Traditional",
+    "DisplayName_zh": "中文 (繁体)",
+    "PrimaryInputProfile": "0404:{531FDEBF-9B4C-4A43-A2AA-960E8FCDC732}{6024B45F-5C54-11D4-B921-0080C882687E}",
+    "AllowedInputProfiles": [
+      "0404:{531FDEBF-9B4C-4A43-A2AA-960E8FCDC732}{6024B45F-5C54-11D4-B921-0080C882687E}",
+      "0404:{B115690A-EA02-48D5-A231-E3578D2FDF80}{B2F9C502-1742-11D4-9790-0080C882687E}",
+      "0404:{531FDEBF-9B4C-4A43-A2AA-960E8FCDC732}{4BDF9F03-C7D3-11D4-B2AB-0080C882687E}",
+      "0404:{E429B25A-E5D3-4D1F-9BE3-0C608477E3A1}{037B2C25-480C-4D7F-B027-D6CA6B69788A}",
+      "0404:{E429B25A-E5D3-4D1F-9BE3-0C608477E3A1}{D38EFF65-AA46-4FD5-91A7-67845FB02F5B}"
+    ]
+  },
+  {
+    "Id": "hr-HR",
+    "DisplayName": "Croatian",
+    "DisplayName_zh": "克罗地亚语",
+    "PrimaryInputProfile": "041A:0000041A",
+    "AllowedInputProfiles": [
+      "041A:0000041A"
+    ]
+  },
+  {
+    "Id": "cs-CZ",
+    "DisplayName": "Czech",
+    "DisplayName_zh": "捷克语",
+    "PrimaryInputProfile": "0405:00000405",
+    "AllowedInputProfiles": [
+      "0405:00000405"
+    ]
+  },
+  {
+    "Id": "da-DK",
+    "DisplayName": "Danish",
+    "DisplayName_zh": "丹麦语",
+    "PrimaryInputProfile": "0406:00000406",
+    "AllowedInputProfiles": [
+      "0406:00000406"
+    ]
+  },
+  {
+    "Id": "nl-NL",
+    "DisplayName": "Dutch",
+    "DisplayName_zh": "荷兰语",
+    "PrimaryInputProfile": "0413:00020409",
+    "AllowedInputProfiles": [
+      "0413:00020409"
+    ]
+  },
+  {
+    "Id": "en-US",
+    "DisplayName": "English",
+    "DisplayName_zh": "英语",
+    "PrimaryInputProfile": "0409:00000409",
+    "AllowedInputProfiles": [
+      "0409:00000409"
+    ]
+  },
+  {
+    "Id": "en-GB",
+    "DisplayName": "English International",
+    "DisplayName_zh": "英语 (国际)",
+    "PrimaryInputProfile": "0809:00000809",
+    "AllowedInputProfiles": [
+      "0809:00000809"
+    ]
+  },
+  {
+    "Id": "et-EE",
+    "DisplayName": "Estonian",
+    "DisplayName_zh": "爱沙尼亚语",
+    "PrimaryInputProfile": "0425:00000425",
+    "AllowedInputProfiles": [
+      "0425:00000425"
+    ]
+  },
+  {
+    "Id": "fi-FI",
+    "DisplayName": "Finnish",
+    "DisplayName_zh": "芬兰语",
+    "PrimaryInputProfile": "040B:0000040B",
+    "AllowedInputProfiles": [
+      "040B:0000040B"
+    ]
+  },
+  {
+    "Id": "fr-FR",
+    "DisplayName": "French",
+    "DisplayName_zh": "法语",
+    "PrimaryInputProfile": "040C:0000040C",
+    "AllowedInputProfiles": [
+      "040C:0000040C"
+    ]
+  },
+  {
+    "Id": "fr-CA",
+    "DisplayName": "French Canadian",
+    "DisplayName_zh": "法语 (加拿大)",
+    "PrimaryInputProfile": "0C0C:00001009",
+    "AllowedInputProfiles": [
+      "0C0C:00001009"
+    ]
+  },
+  {
+    "Id": "de-DE",
+    "DisplayName": "German",
+    "DisplayName_zh": "德语",
+    "PrimaryInputProfile": "0407:00000407",
+    "AllowedInputProfiles": [
+      "0407:00000407"
+    ]
+  },
+  {
+    "Id": "el-GR",
+    "DisplayName": "Greek",
+    "DisplayName_zh": "希腊语",
+    "PrimaryInputProfile": "0408:00000408",
+    "AllowedInputProfiles": [
+      "0408:00000408"
+    ]
+  },
+  {
+    "Id": "he-IL",
+    "DisplayName": "Hebrew",
+    "DisplayName_zh": "希伯来语",
+    "PrimaryInputProfile": "040D:0002040D",
+    "AllowedInputProfiles": [
+      "040D:0002040D"
+    ]
+  },
+  {
+    "Id": "hu-HU",
+    "DisplayName": "Hungarian",
+    "DisplayName_zh": "匈牙利语",
+    "PrimaryInputProfile": "040E:0000040E",
+    "AllowedInputProfiles": [
+      "040E:0000040E"
+    ]
+  },
+  {
+    "Id": "it-IT",
+    "DisplayName": "Italian",
+    "DisplayName_zh": "意大利语",
+    "PrimaryInputProfile": "0410:00000410",
+    "AllowedInputProfiles": [
+      "0410:00000410"
+    ]
+  },
+  {
+    "Id": "ja-JP",
+    "DisplayName": "Japanese",
+    "DisplayName_zh": "日语",
+    "PrimaryInputProfile": "0411:{03B5835F-F03C-411B-9CE2-AA23E1171E36}{A76C93D9-5523-4E90-AAFA-4DB112F9AC76}",
+    "AllowedInputProfiles": [
+      "0411:{03B5835F-F03C-411B-9CE2-AA23E1171E36}{A76C93D9-5523-4E90-AAFA-4DB112F9AC76}"
+    ]
+  },
+  {
+    "Id": "ko-KR",
+    "DisplayName": "Korean",
+    "DisplayName_zh": "韩语",
+    "PrimaryInputProfile": "0412:{A028AE76-01B1-46C2-99C4-ACD9858AE02F}{B5FE1F02-D5F2-4445-9C03-C568F23C99A1}",
+    "AllowedInputProfiles": [
+      "0412:{A028AE76-01B1-46C2-99C4-ACD9858AE02F}{B5FE1F02-D5F2-4445-9C03-C568F23C99A1}",
+      "0412:{A1E2B86B-924A-4D43-80F6-8A820DF7190F}{B60AF051-257A-46BC-B9D3-84DAD819BAFB}"
+    ]
+  },
+  {
+    "Id": "lv-LV",
+    "DisplayName": "Latvian",
+    "DisplayName_zh": "拉脱维亚语",
+    "PrimaryInputProfile": "0426:00020426",
+    "AllowedInputProfiles": [
+      "0426:00020426"
+    ]
+  },
+  {
+    "Id": "lt-LT",
+    "DisplayName": "Lithuanian",
+    "DisplayName_zh": "立陶宛语",
+    "PrimaryInputProfile": "0427:00010427",
+    "AllowedInputProfiles": [
+      "0427:00010427"
+    ]
+  },
+  {
+    "Id": "nb-NO",
+    "DisplayName": "Norwegian",
+    "DisplayName_zh": "挪威语",
+    "PrimaryInputProfile": "0414:00000414",
+    "AllowedInputProfiles": [
+      "0414:00000414"
+    ]
+  },
+  {
+    "Id": "pl-PL",
+    "DisplayName": "Polish",
+    "DisplayName_zh": "波兰语",
+    "PrimaryInputProfile": "0415:00000415",
+    "AllowedInputProfiles": [
+      "0415:00000415"
+    ]
+  },
+  {
+    "Id": "pt-PT",
+    "DisplayName": "Portuguese",
+    "DisplayName_zh": "葡萄牙语",
+    "PrimaryInputProfile": "0816:00000816",
+    "AllowedInputProfiles": [
+      "0816:00000816"
+    ]
+  },
+  {
+    "Id": "ro-RO",
+    "DisplayName": "Romanian",
+    "DisplayName_zh": "罗马尼亚语",
+    "PrimaryInputProfile": "0418:00010418",
+    "AllowedInputProfiles": [
+      "0418:00010418"
+    ]
+  },
+  {
+    "Id": "ru-RU",
+    "DisplayName": "Russian",
+    "DisplayName_zh": "俄语",
+    "PrimaryInputProfile": "0419:00000419",
+    "AllowedInputProfiles": [
+      "0419:00000419"
+    ]
+  },
+  {
+    "Id": "sr-Latn-RS",
+    "DisplayName": "Serbian Latin",
+    "DisplayName_zh": "塞尔维亚语 (拉丁)",
+    "PrimaryInputProfile": "241A:0000081A",
+    "AllowedInputProfiles": [
+      "241A:0000081A"
+    ]
+  },
+  {
+    "Id": "sk-SK",
+    "DisplayName": "Slovak",
+    "DisplayName_zh": "斯洛伐克语",
+    "PrimaryInputProfile": "041B:0000041B",
+    "AllowedInputProfiles": [
+      "041B:0000041B"
+    ]
+  },
+  {
+    "Id": "sl-SI",
+    "DisplayName": "Slovenian",
+    "DisplayName_zh": "斯洛文尼亚语",
+    "PrimaryInputProfile": "0424:00000424",
+    "AllowedInputProfiles": [
+      "0424:00000424"
+    ]
+  },
+  {
+    "Id": "es-ES",
+    "DisplayName": "Spanish",
+    "DisplayName_zh": "西班牙语",
+    "PrimaryInputProfile": "0C0A:0000040A",
+    "AllowedInputProfiles": [
+      "0C0A:0000040A"
+    ]
+  },
+  {
+    "Id": "es-MX",
+    "DisplayName": "Spanish (Mexico)",
+    "DisplayName_zh": "西班牙语 (墨西哥)",
+    "PrimaryInputProfile": "080A:0000080A",
+    "AllowedInputProfiles": [
+      "080A:0000080A"
+    ]
+  },
+  {
+    "Id": "sv-SE",
+    "DisplayName": "Swedish",
+    "DisplayName_zh": "瑞典语",
+    "PrimaryInputProfile": "041D:0000041D",
+    "AllowedInputProfiles": [
+      "041D:0000041D"
+    ]
+  },
+  {
+    "Id": "th-TH",
+    "DisplayName": "Thai",
+    "DisplayName_zh": "泰语",
+    "PrimaryInputProfile": "041E:0000041E",
+    "AllowedInputProfiles": [
+      "041E:0000041E"
+    ]
+  },
+  {
+    "Id": "tr-TR",
+    "DisplayName": "Turkish",
+    "DisplayName_zh": "土耳其语",
+    "PrimaryInputProfile": "041F:0000041F",
+    "AllowedInputProfiles": [
+      "041F:0000041F"
+    ]
+  },
+  {
+    "Id": "uk-UA",
+    "DisplayName": "Ukrainian",
+    "DisplayName_zh": "乌克兰语",
+    "PrimaryInputProfile": "0422:00020422",
+    "AllowedInputProfiles": [
+      "0422:00020422"
+    ]
+  }
+]

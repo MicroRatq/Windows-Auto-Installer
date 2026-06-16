@@ -1065,6 +1065,7 @@ class BackendServer:
                 "languages": [],
                 "locales": [],
                 "keyboards": [],
+                "defaultInputProfiles": [],
                 "timeZones": [],
                 "geoLocations": [],
                 "windowsEditions": [],
@@ -1091,6 +1092,15 @@ class BackendServer:
                     "id": kb_obj.id,
                     "name": kb_obj.display_name,
                     "type": kb_obj.type.value if hasattr(kb_obj.type, 'value') else str(kb_obj.type)
+                })
+
+            # 转换 DefaultInputProfile
+            for profile_id, profile_obj in self.unattend_generator.default_input_profiles.items():
+                result["defaultInputProfiles"].append({
+                    "id": profile_obj.id,
+                    "name": profile_obj.display_name,
+                    "primaryInputProfile": profile_obj.primary_input_profile,
+                    "allowedInputProfiles": profile_obj.allowed_input_profiles
                 })
             
             # 转换 TimeOffset
@@ -1124,8 +1134,8 @@ class BackendServer:
                 })
             
             try:
-                logger.info("[Unattend] get_data sizes - languages=%s locales=%s keyboards=%s timeZones=%s geoLocations=%s editions=%s bloatwares=%s",
-                            len(result["languages"]), len(result["locales"]), len(result["keyboards"]),
+                logger.info("[Unattend] get_data sizes - languages=%s locales=%s keyboards=%s defaultInputProfiles=%s timeZones=%s geoLocations=%s editions=%s bloatwares=%s",
+                            len(result["languages"]), len(result["locales"]), len(result["keyboards"]), len(result["defaultInputProfiles"]),
                             len(result["timeZones"]), len(result["geoLocations"]), len(result["windowsEditions"]),
                             len(result["bloatwareItems"]))
             except Exception:
