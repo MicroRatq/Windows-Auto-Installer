@@ -22,9 +22,6 @@
     },
     "regionLanguage": {
       "title": "区域、语言和时区",
-      "languageMode": "语言模式",
-      "selectInteractively": "在 Windows 安装过程中交互式选择语言设置",
-      "installWithSettings": "使用这些语言设置安装 Windows",
       "uiLanguageTitle": "Windows 显示语言",
       "uiLanguageDesc": "设置和文件资源管理器等 Windows 功能将以此语言显示。它必须与您的 Windows 10/11 .iso 文件的语言匹配。",
       "firstLanguageTitle": "第一语言",
@@ -34,12 +31,8 @@
       "homeRegionDesc": "用于在安装期间预选区域相关默认设置（例如商店和设备体验）。",
       "selectLanguageInSetup": "Windows安装中选择语言设置",
       "selectLanguageInSetupDesc": "如果启用，将在 Windows 安装过程中交互式选择语言设置。如果禁用，将使用下面的语言设置。",
-      "timeZoneTitle": "时区",
       "autoSetTimeZone": "自动设置时区",
       "autoSetTimeZoneDesc": "如果启用，Windows 将根据语言和区域设置确定您的时区。如果禁用，您可以在下面设置特定时区。",
-      "timeZoneImplicit": "让 Windows 根据语言和区域设置确定您的时区",
-      "timeZoneExplicit": "明确设置您的时区",
-      "timeZoneExplicitDesc": "当您的国家或地区跨越多个时区时（如澳大利亚或美国），这很有用。",
       "useThisTimeZone": "使用此时区"
     },
     "setupSettings": {

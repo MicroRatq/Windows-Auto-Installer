@@ -22,9 +22,6 @@
         },
         "regionLanguage": {
             "title": "Region, Language and Time Zone",
-            "languageMode": "Language mode",
-            "selectInteractively": "Select language settings interactively during Windows Setup",
-            "installWithSettings": "Install Windows using these language settings",
             "uiLanguageTitle": "Windows display language",
             "uiLanguageDesc": "Windows features like Settings and File Explorer will appear in this language. It must match the language of your Windows 10/11 .iso file.",
             "firstLanguageTitle": "First language",
@@ -34,12 +31,8 @@
             "homeRegionDesc": "Used by Windows setup to preselect region-specific defaults such as Store and device experience.",
             "selectLanguageInSetup": "Select language settings during Windows Setup",
             "selectLanguageInSetupDesc": "If enabled, language settings will be selected interactively during Windows Setup. If disabled, the language settings below will be used.",
-            "timeZoneTitle": "Time zone",
             "autoSetTimeZone": "Automatically set time zone",
             "autoSetTimeZoneDesc": "If enabled, Windows will determine your time zone based on language and region settings. If disabled, you can set a specific time zone below.",
-            "timeZoneImplicit": "Let Windows determine your time zone based on language and region settings",
-            "timeZoneExplicit": "Set your time zone explicitly",
-            "timeZoneExplicitDesc": "This is useful when your country or region spans multiple time zones, like Australia or the United States.",
             "useThisTimeZone": "Use this time zone"
         },
         "setupSettings": {

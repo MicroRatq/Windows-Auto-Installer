@@ -23,6 +23,7 @@ import {
   type ComboContainerConfig
 } from './workspace'
 import { t } from './i18n'
+import { templateManager } from './iso-burn'
 
 // ========================================
 // 配置数据结构定义
@@ -705,15 +706,79 @@ class UnattendConfigManager {
     return this.presetData || EMPTY_PRESET
   }
 
-  private getAutoUiLanguage(): string {
+  private getAutoUiLanguage(): string | null {
     const preset = this.getPresetData()
-    const preferred = ['zh-CN', 'en-US']
-    return preferred.find(id => preset.languages.some(l => l.id === id)) || preset.languages[0]?.id || ''
+    const templateLang = templateManager.getTemplate()?.language
+    if (templateLang) {
+      const normalized = templateLang.toLowerCase().replace(/^(\w+)-(\w+)$/, (_, a, b) => a.toLowerCase() + '-' + b.toUpperCase())
+      const found = preset.languages.find(l => l.id.toLowerCase() === normalized.toLowerCase())
+      if (found) return found.id
+    }
+    return null
+  }
+
+  private getFirstLanguageCandidates() {
+    const preset = this.getPresetData()
+    const localeForLanguage: Record<string, string> = {
+      'zh-CN': 'zh-Hans-CN',
+      'zh-TW': 'zh-Hant-TW',
+    }
+    const candidateIds = new Set<string>()
+    preset.languages.forEach(lang => {
+      const matched = preset.locales.find(l => l.id === lang.id)
+      if (matched) { candidateIds.add(matched.id); return }
+      const fallback = localeForLanguage[lang.id]
+      if (fallback && preset.locales.some(l => l.id === fallback)) { candidateIds.add(fallback); return }
+    })
+    return preset.locales.filter(l => candidateIds.has(l.id))
+  }
+
+  private localeForLanguageId(languageId: string): string {
+    const map: Record<string, string> = { 'zh-CN': 'zh-Hans-CN', 'zh-TW': 'zh-Hant-TW' }
+    return map[languageId] || languageId
+  }
+
+  private languageForLocaleId(localeId: string): string {
+    const map: Record<string, string> = { 'zh-Hans-CN': 'zh-CN', 'zh-Hant-TW': 'zh-TW' }
+    return map[localeId] || localeId
+  }
+
+  private getKeyboardsForLanguage(languageId: string) {
+    const preset = this.getPresetData()
+    const normalizeKeyboardId = (id?: string) => (id || '').toUpperCase()
+    const profileId = this.languageForLocaleId(languageId)
+    const profile = preset.defaultInputProfiles.find(p => p.id === profileId)
+    const allowedProfiles = profile?.allowedInputProfiles || []
+    if (!allowedProfiles.length) return preset.keyboards
+    return preset.keyboards.filter(k => {
+      const nk = normalizeKeyboardId(k.id)
+      return allowedProfiles.some(p => {
+        const np = normalizeKeyboardId(p)
+        return np === nk || np.endsWith(':' + nk)
+      })
+    })
+  }
+
+  private updateKeyboardSelectForLanguage(firstLanguageId: string) {
+    const normalizeKeyboardId = (id?: string) => (id || '').toUpperCase()
+    const keyboards = this.getKeyboardsForLanguage(firstLanguageId)
+    const select = document.querySelector('#config-first-keyboard-card-control') as any
+    if (!select) return
+    const currentValue = normalizeKeyboardId(this.config.languageSettings.inputLocale || '')
+    const fallback = normalizeKeyboardId(keyboards[0]?.id || '')
+    const newValue = keyboards.some(k => normalizeKeyboardId(k.id) === currentValue) ? currentValue : fallback
+    select.innerHTML = keyboards.map(k => {
+      const sel = normalizeKeyboardId(k.id) === newValue ? ' selected' : ''
+      return `<fluent-option value="${k.id}"${sel}>${k.name}</fluent-option>`
+    }).join('')
+    select.value = newValue
+    this.updateModule('languageSettings', { inputLocale: newValue })
   }
 
   private getDefaultSystemLocale(uiLanguage: string): string {
-    const preset = this.getPresetData()
-    return preset.locales.find(l => l.id === uiLanguage)?.id || preset.locales[0]?.id || uiLanguage
+    const localeId = this.localeForLanguageId(uiLanguage)
+    const candidates = this.getFirstLanguageCandidates()
+    return candidates.find(l => l.id === localeId)?.id || candidates[0]?.id || uiLanguage
   }
 
   // 异步加载预设数据（从后端获取完整数据）
@@ -750,9 +815,14 @@ class UnattendConfigManager {
         bloatwareItems: result.bloatwareItems || []
       }
       this.presetData = preset
-      // 重新渲染以应用最新的下拉选项
       if (triggerRender) {
         this.renderAllModules()
+      }
+      const curTemplate = templateManager.getTemplate()
+      if (curTemplate?.language) {
+        console.log('[iso-config] loaded preset data, re-checking template')
+        this.lastTemplateLang = null
+        this.onTemplateChanged(curTemplate)
       }
     } catch (error) {
       console.error('Load preset data failed:', error)
@@ -809,9 +879,8 @@ class UnattendConfigManager {
     try {
       const config = this.cloneConfig(this.config)
       if (config.languageSettings.mode === 'unattended') {
-        const uiLanguage = this.getAutoUiLanguage()
-        config.languageSettings.uiLanguage = uiLanguage
-        config.languageSettings.systemLocale = this.getDefaultSystemLocale(uiLanguage)
+        config.languageSettings.uiLanguage = config.languageSettings.uiLanguage || this.getFirstLanguageCandidates()[0]?.id || 'en-US'
+        config.languageSettings.systemLocale = config.languageSettings.systemLocale || config.languageSettings.uiLanguage
         if (config.timeZone.mode === 'implicit') {
           delete config.languageSettings.geoLocation
         }
@@ -850,11 +919,49 @@ class UnattendConfigManager {
       console.error(`Panel ${panelId} not found`)
       return
     }
-    // 更新 section 标题的 i18n 翻译
     this.updateSectionTitles()
     this.setupEventListeners()
-    // 异步加载后端预设数据，完成后再渲染，确保下拉选项来自后端
+    templateManager.addListener((template) => {
+      this.onTemplateChanged(template)
+    })
     this.loadPresetData(true)
+  }
+
+  private lastTemplateLang: string | null = null
+
+  private onTemplateChanged(template: { language?: string } | null) {
+    const newLang = template?.language || null
+    const preset = this.getPresetData()
+    console.log('[iso-config] template changed, language:', newLang, 'lastApplied:', this.lastTemplateLang, 'presetLanguages:', preset.languages.length)
+    if (!newLang) return
+    const normalized = newLang.toLowerCase().replace(/^(\w+)-(\w+)$/, (_, a, b) => a.toLowerCase() + '-' + b.toUpperCase())
+    const normalizedLower = normalized.toLowerCase()
+    console.log('[iso-config] normalized template language:', newLang, '->', normalized, 'lower:', normalizedLower)
+    const found = preset.languages.find(l => l.id.toLowerCase() === normalizedLower)
+    if (!found) {
+      console.log('[iso-config] template language not in preset. Available:', preset.languages.map(l => l.id).join(', '))
+      return
+    }
+    const uiSelect = document.querySelector('#config-ui-language-card-control') as any
+    const flSelect = document.querySelector('#config-first-language-card-control') as any
+    if (!uiSelect || !flSelect) { console.log('[iso-config] language selects not in DOM yet, skip'); return }
+    if (found.id === this.lastTemplateLang && uiSelect.value === found.id) return
+    console.log('[iso-config] applying template language:', found.id)
+    this.lastTemplateLang = found.id
+    const firstLangId = this.localeForLanguageId(found.id)
+    this.updateModule('languageSettings', { uiLanguage: found.id, systemLocale: firstLangId })
+    uiSelect.value = found.id
+    this.updateFirstLanguageOptions(flSelect, firstLangId)
+    this.updateKeyboardSelectForLanguage(firstLangId)
+  }
+
+  private updateFirstLanguageOptions(select: any, selectedId: string) {
+    const candidates = this.getFirstLanguageCandidates()
+    select.innerHTML = candidates.map(l => {
+      const sel = l.id === selectedId ? ' selected' : ''
+      return `<fluent-option value="${l.id}"${sel}>${l.name}</fluent-option>`
+    }).join('')
+    select.value = selectedId
   }
 
   // 渲染UI（已废弃，直接调用renderAllModules）
@@ -1153,30 +1260,20 @@ class UnattendConfigManager {
     const tz = this.config.timeZone
 
     const normalizeKeyboardId = (id?: string) => (id || '').toUpperCase()
-    const defaultUiLanguage = this.getAutoUiLanguage()
-    const defaultSystemLocale = this.getDefaultSystemLocale(defaultUiLanguage)
     const defaultKeyboard = normalizeKeyboardId(preset.keyboards[0]?.id || '')
-    const defaultGeo = preset.geoLocations[0]?.id || defaultSystemLocale
+    const firstLanguageCandidates = this.getFirstLanguageCandidates()
+
+    const templateLang = this.getAutoUiLanguage()
+    const savedUiLang = lang.uiLanguage
+    const savedFl = lang.systemLocale
+    const uiLanguageValue = savedUiLang || templateLang || preset.languages[0]?.id || ''
+    const firstLanguageValue = savedFl || firstLanguageCandidates.find(l => l.id === this.localeForLanguageId(uiLanguageValue))?.id || firstLanguageCandidates[0]?.id || uiLanguageValue
+    const defaultGeo = preset.geoLocations[0]?.id || firstLanguageValue
+    const homeRegionValue = lang.geoLocation || defaultGeo
     const defaultTimeZone = preset.timeZones[0]?.id || ''
 
-    const uiLanguageValue = defaultUiLanguage
-    const firstLanguageValue = uiLanguageValue || defaultSystemLocale
-    const homeRegionValue = lang.geoLocation || defaultGeo
-
     const getOptionLabel = (_type: string, _id: string, backendName: string): string => backendName
-    const uiLanguageName = preset.languages.find(l => l.id === uiLanguageValue)?.name || uiLanguageValue
-    const firstLanguageName = preset.locales.find(l => l.id === firstLanguageValue)?.name || uiLanguageName || firstLanguageValue
-    const inputProfileMap = new Map(preset.defaultInputProfiles.map(profile => [profile.id, profile]))
-    const allowedProfiles = inputProfileMap.get(firstLanguageValue)?.allowedInputProfiles || []
-    const isAllowedKeyboard = (keyboardId: string) => {
-      if (!allowedProfiles.length) return true
-      const normalizedKeyboardId = normalizeKeyboardId(keyboardId)
-      return allowedProfiles.some(profile => {
-        const normalizedProfile = normalizeKeyboardId(profile)
-        return normalizedProfile === normalizedKeyboardId || normalizedProfile.endsWith(`:${normalizedKeyboardId}`)
-      })
-    }
-    const filteredKeyboards = preset.keyboards.filter(k => isAllowedKeyboard(k.id))
+    const filteredKeyboards = this.getKeyboardsForLanguage(firstLanguageValue)
     const firstKeyboardValue = filteredKeyboards.some(k => normalizeKeyboardId(k.id) === normalizeKeyboardId(lang.inputLocale || ''))
       ? normalizeKeyboardId(lang.inputLocale || '')
       : normalizeKeyboardId(filteredKeyboards[0]?.id || defaultKeyboard)
@@ -1197,7 +1294,7 @@ class UnattendConfigManager {
       description: t('isoConfig.regionLanguage.uiLanguageDesc'),
       icon: 'globe',
       controlType: 'select',
-      options: uiLanguageValue ? [{ value: uiLanguageValue, label: uiLanguageName }] : [],
+      options: preset.languages.map(l => ({ value: l.id, label: getOptionLabel('language', l.id, l.name) })),
       value: uiLanguageValue
     })
 
@@ -1207,7 +1304,7 @@ class UnattendConfigManager {
       description: t('isoConfig.regionLanguage.firstLanguageDesc'),
       icon: 'languages',
       controlType: 'select',
-      options: firstLanguageValue ? [{ value: firstLanguageValue, label: firstLanguageName }] : [],
+      options: firstLanguageCandidates.map(l => ({ value: l.id, label: getOptionLabel('locale', l.id, l.name) })),
       value: firstLanguageValue
     })
 
@@ -1279,13 +1376,11 @@ class UnattendConfigManager {
     // 语言模式 Switch 事件监听（仅切换显隐，不重新渲染）
     const langGroup = contentDiv.querySelector('#config-lang-unattended-group') as HTMLElement
     setupComboCard('config-language-mode-card', (value) => {
-      this.updateModule('languageSettings', {
-        mode: value ? 'interactive' : 'unattended'
-      })
+      this.updateModule('languageSettings', { mode: value ? 'interactive' : 'unattended' })
       if (!value) {
         this.updateModule('languageSettings', {
-          uiLanguage: uiLanguageValue || defaultUiLanguage,
-          systemLocale: firstLanguageValue || defaultSystemLocale,
+          uiLanguage: uiLanguageValue,
+          systemLocale: firstLanguageValue,
           inputLocale: normalizeKeyboardId(firstKeyboardValue || defaultKeyboard),
           geoLocation: tz.mode === 'explicit' ? (homeRegionValue || defaultGeo) : undefined
         })
@@ -1295,12 +1390,22 @@ class UnattendConfigManager {
       }
     })
 
-    // 语言子卡片事件监听（始终绑定，因为卡片始终存在）
-    setupComboCard('config-ui-language-card', () => {
-      this.updateModule('languageSettings', { uiLanguage: uiLanguageValue || defaultUiLanguage })
+    // 语言子卡片事件监听
+    setupComboCard('config-ui-language-card', (value) => {
+      const newUiLang = (value as string) || uiLanguageValue
+      const firstLang = firstLanguageCandidates.find(l => l.id === this.localeForLanguageId(newUiLang))?.id || firstLanguageCandidates[0]?.id || newUiLang
+      this.updateModule('languageSettings', { uiLanguage: newUiLang, systemLocale: firstLang })
+      const flSelect = contentDiv.querySelector('#config-first-language-card-control') as any
+      if (flSelect) this.updateFirstLanguageOptions(flSelect, firstLang)
+      this.updateKeyboardSelectForLanguage(firstLang)
     })
-    setupComboCard('config-first-language-card', () => {
-      this.updateModule('languageSettings', { systemLocale: firstLanguageValue || defaultSystemLocale })
+    setupComboCard('config-first-language-card', (value) => {
+      const newFl = (value as string) || firstLanguageValue
+      const matchingUiLang = this.languageForLocaleId(newFl)
+      this.updateModule('languageSettings', { uiLanguage: matchingUiLang, systemLocale: newFl })
+      const uiSelect = contentDiv.querySelector('#config-ui-language-card-control') as any
+      if (uiSelect) uiSelect.value = matchingUiLang
+      this.updateKeyboardSelectForLanguage(newFl)
     })
     setupComboCard('config-first-keyboard-card', (value) => {
       this.updateModule('languageSettings', { inputLocale: normalizeKeyboardId(value as string) })
@@ -1319,8 +1424,8 @@ class UnattendConfigManager {
         timeZone: implicit ? undefined : (tz.timeZone || defaultTimeZone)
       })
       this.updateModule('languageSettings', {
-        uiLanguage: uiLanguageValue || defaultUiLanguage,
-        systemLocale: firstLanguageValue || defaultSystemLocale,
+        uiLanguage: uiLanguageValue,
+        systemLocale: firstLanguageValue,
         geoLocation: implicit ? undefined : (homeRegionValue || defaultGeo)
       })
       if (tzGroup) {

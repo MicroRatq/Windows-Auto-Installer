@@ -215,7 +215,6 @@ class UnattendedLanguageSettings(ILanguageSettings):
     locale_and_keyboard2: Optional[LocaleAndKeyboard] = None
     locale_and_keyboard3: Optional[LocaleAndKeyboard] = None
     geo_location: Optional[GeoLocation] = None
-    has_winpe: bool = False  # 旧配置兼容字段；不再生成 WinPE 阶段语言/区域/键盘设置
 
 
 class ITimeZoneSettings:
@@ -2539,8 +2538,7 @@ class LocalesModifier(Modifier):
             locale_and_keyboard=locale_and_keyboard,
             locale_and_keyboard2=locale_and_keyboard2,
             locale_and_keyboard3=locale_and_keyboard3,
-            geo_location=geo_loc,
-            has_winpe=component_pe is not None
+            geo_location=geo_loc
         )
         self.configuration.language_settings = lang_settings
 
@@ -8396,10 +8394,9 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 )
 
                 geo_location = None
-                if 'geoLocation' in lang and lang['geoLocation']:
-                    geo_location = generator.lookup(GeoLocation, lang['geoLocation'])
-                if geo_location is None and 'geoLocation' in lang and lang['geoLocation']:
-                    geo_location = GeoLocation(id=lang['geoLocation'], display_name=lang['geoLocation'])
+                geo_location_id = lang.get('geoLocation')
+                if geo_location_id:
+                    geo_location = generator.lookup(GeoLocation, geo_location_id) or GeoLocation(id=geo_location_id, display_name=geo_location_id)
 
                 config.language_settings = UnattendedLanguageSettings(
                     image_language=image_language,

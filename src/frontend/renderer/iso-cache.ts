@@ -1109,10 +1109,12 @@ class IsoCacheWorkspace {
         setTemplateItem.textContent = '设为模板'
         setTemplateItem.addEventListener('click', () => {
             menu.style.display = 'none'
+            console.log('[iso-cache] setting template, image:', image.name, 'language:', image.language)
             templateManager.setTemplate({
                 name: image.name,
                 path: image.url,
-                size: image.size
+                size: image.size,
+                language: image.language
             })
             // 刷新列表以显示徽章
             this.updateImageList()

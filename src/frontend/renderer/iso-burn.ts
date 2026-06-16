@@ -24,6 +24,7 @@ export interface IsoTemplate {
   name: string
   path: string
   size?: number
+  language?: string
 }
 
 class TemplateManager {
@@ -32,6 +33,8 @@ class TemplateManager {
 
   setTemplate(template: IsoTemplate) {
     this.currentTemplate = template
+    console.log('[templateManager] setTemplate, language:', template.language)
+    window.dispatchEvent(new CustomEvent('template-changed', { detail: template }))
     this.notify()
   }
 
