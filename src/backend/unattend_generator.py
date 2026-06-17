@@ -2587,11 +2587,6 @@ class BypassModifier(Modifier):
             self.specialize_script.append(
                 'reg.exe add "HKLM\\SYSTEM\\Setup\\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f;'
             )
-        
-        if self.configuration.bypass_network_check:
-            self.specialize_script.append(
-                'reg.exe add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\OOBE" /v BypassNRO /t REG_DWORD /d 1 /f;'
-            )
 
     def parse(self):
         """解析绕过检查设置"""
@@ -2632,6 +2627,15 @@ class BypassModifier(Modifier):
                             if 'bypassnro' in content_lower:
                                 bypass_network = True
                         break
+
+        # 3. 检查官方支持的 OOBE 网络跳过设置
+        oobe_component = self.root.find(f".//{{{ns_uri}}}component[@name='Microsoft-Windows-Shell-Setup']")
+        if oobe_component is not None:
+            oobe_elem = oobe_component.find(f"{{{ns_uri}}}OOBE")
+            if oobe_elem is not None:
+                hide_wireless = oobe_elem.find(f"{{{ns_uri}}}HideWirelessSetupInOOBE")
+                if hide_wireless is not None and hide_wireless.text and hide_wireless.text.strip().lower() == 'true':
+                    bypass_network = True
         
         self.configuration.bypass_requirements_check = bypass_requirements
         self.configuration.bypass_network_check = bypass_network
@@ -2669,6 +2673,13 @@ class DeleteModifier(Modifier):
             if 'unattend.xml' in lower and ('del' in lower or 'delete' in lower or 'remove' in lower):
                 keep_sensitive = False
                 break
+
+        if keep_sensitive:
+            for _, content in self.generator._collect_extension_files(self.root):
+                lower = content.lower()
+                if 'unattend.xml' in lower and ('remove-item' in lower or 'del ' in lower or 'delete' in lower):
+                    keep_sensitive = False
+                    break
         self.configuration.keep_sensitive_files = keep_sensitive
 
 
@@ -6171,6 +6182,19 @@ class ExpressSettingsModifier(Modifier):
             else:
                 hide_online.text = "false"
 
+        # 官方文档支持通过 OOBE 设置跳过网络相关页面。
+        if self.configuration.bypass_network_check:
+            hide_wireless = oobe_elem.find(f"{{{ns_uri}}}HideWirelessSetupInOOBE")
+            if hide_wireless is None:
+                self.new_simple_element("HideWirelessSetupInOOBE", oobe_elem, "true")
+            else:
+                hide_wireless.text = "true"
+
+            if hide_online is None:
+                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, "true")
+            else:
+                hide_online.text = "true"
+
     def parse(self):
         """解析快速设置（ProtectYourPC / 注册表）"""
         if not self.is_parse_mode:
@@ -7724,8 +7748,8 @@ class MergeOOBEModifier(Modifier):
                     
                     # 合并完成后，移除原始 XML 中不存在的元素（如 HideWirelessSetupInOOBE）
                     # 这些元素可能是从模板 XML 或其他 Modifier 添加的
-                    # 只保留标准的 OOBE 元素：ProtectYourPC, HideEULAPage, HideOnlineAccountScreens
-                    allowed_oobe_elements = {'ProtectYourPC', 'HideEULAPage', 'HideOnlineAccountScreens', 'FirstLogonCommands'}
+                    # 只保留当前生成器使用的标准 OOBE 元素。
+                    allowed_oobe_elements = {'ProtectYourPC', 'HideEULAPage', 'HideOnlineAccountScreens', 'HideWirelessSetupInOOBE', 'FirstLogonCommands'}
                     children_to_remove = []
                     for child in main_oobe:
                         child_tag_name = child.tag.split('}')[-1]
@@ -8098,6 +8122,24 @@ class UnattendGenerator:
         # 执行所有 Modifier（包括脚本序列 Modifier）
         for modifier in modifiers:
             modifier.process()
+
+        if config.hide_power_shell_windows:
+            s_uri = "https://schneegans.de/windows/unattend-generator/"
+            extensions = None
+            for child in root:
+                if child.tag == f"{{{s_uri}}}Extensions" or child.tag.endswith('Extensions'):
+                    extensions = child
+                    break
+            if extensions is None:
+                extensions = ET.Element(f"{{{s_uri}}}Extensions")
+                extensions.set("xmlns", s_uri)
+                root.append(extensions)
+
+            marker = extensions.find(f"{{{s_uri}}}HidePowerShellWindows")
+            if marker is None:
+                marker = ET.Element(f"{{{s_uri}}}HidePowerShellWindows")
+                extensions.append(marker)
+            marker.text = "true"
         
         # 序列化 XML
         return serialize_xml(tree)
@@ -8205,9 +8247,9 @@ class UnattendGenerator:
                     all_commands.append(path_elem.text)
         
         # 收集 FirstLogonCommands 中的 SynchronousCommand
-        first_logon_containers = root.findall(f".//{{{ns_uri}}}FirstLogonCommands")
+        first_logon_containers = root.findall(f".//{ns_uri}FirstLogonCommands")
         for container in first_logon_containers:
-            sync_commands = container.findall(f"{{{ns_uri}}}SynchronousCommand")
+            sync_commands = container.findall(f"{ns_uri}SynchronousCommand")
             for cmd in sync_commands:
                 command_line_elem = cmd.find(f"{ns_uri}CommandLine")
                 if command_line_elem is not None and command_line_elem.text:
@@ -8220,6 +8262,37 @@ class UnattendGenerator:
         # 注意：DefaultUserCommand 可能通过脚本文件调用，需要从脚本内容中提取
         
         return all_commands
+
+    def _collect_extension_files(self, root: ET.Element) -> List[Tuple[str, str]]:
+        """收集 Extensions 中的文件路径与正文。"""
+        files: List[Tuple[str, str]] = []
+        for elem in root.iter():
+            if not elem.tag.endswith('File'):
+                continue
+            path_attr = elem.get('path', '') or elem.get('Source', '')
+            content = ''.join(elem.itertext()).strip()
+            files.append((path_attr, content))
+        return files
+
+    def _detect_hide_power_shell_windows(self, root: ET.Element) -> bool:
+        """从生成器自己的 PowerShell 包装命令中推断 hidePowerShellWindows。"""
+        s_uri = "https://schneegans.de/windows/unattend-generator/"
+        marker = root.find(f".//{{{s_uri}}}HidePowerShellWindows")
+        if marker is not None and marker.text and marker.text.strip().lower() == 'true':
+            return True
+
+        command_sources = list(self._collect_all_commands(root))
+        command_sources.extend(content for _, content in self._collect_extension_files(root))
+
+        for cmd_text in command_sources:
+            lower = cmd_text.lower()
+            if 'powershell.exe' not in lower or '-windowstyle' not in lower:
+                continue
+            if 'c:\\windows\\setup\\scripts\\' not in lower and 'unattend-' not in lower:
+                continue
+            if '-windowstyle "hidden"' in lower or "-windowstyle 'hidden'" in lower:
+                return True
+        return False
     
     def _get_script_file_content(self, root: ET.Element, file_path: str) -> str | None:
         """从 XML 中获取脚本文件内容"""
@@ -8297,6 +8370,8 @@ class UnattendGenerator:
             parse_fn = getattr(modifier, "parse", None)
             if callable(parse_fn):
                 parse_fn()
+
+        config.hide_power_shell_windows = self._detect_hide_power_shell_windows(root)
         
         # 返回前端需要的配置字典
         return configuration_to_config_dict(config, self)
