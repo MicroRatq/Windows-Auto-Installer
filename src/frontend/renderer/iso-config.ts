@@ -436,7 +436,7 @@ function createDefaultConfig(): UnattendConfig {
       mode: 'default'
     },
     accountSettings: {
-      mode: 'interactive-microsoft',
+      mode: 'interactive-local',
       obscurePasswords: true
     },
     passwordExpiration: {
@@ -1634,6 +1634,16 @@ class UnattendConfigManager {
       icon: 'users',
       options: [
         {
+          value: 'interactive-local',
+          label: t('isoConfig.nameAccount.userAccountsInteractiveLocal'),
+          description: '',
+        },
+        {
+          value: 'interactive-microsoft',
+          label: t('isoConfig.nameAccount.userAccountsInteractiveMicrosoft'),
+          description: ''
+        },
+        {
           value: 'unattended',
           label: t('isoConfig.nameAccount.userAccountsUnattended'),
           description: '',
@@ -1669,16 +1679,6 @@ class UnattendConfigManager {
               borderless: true
             }
           ]
-        },
-        {
-          value: 'interactive-microsoft',
-          label: t('isoConfig.nameAccount.userAccountsInteractiveMicrosoft'),
-          description: ''
-        },
-        {
-          value: 'interactive-local',
-          label: t('isoConfig.nameAccount.userAccountsInteractiveLocal'),
-          description: ''
         }
       ],
       selectedValue: accounts.mode,
@@ -2904,9 +2904,9 @@ End If`,
           <div class="card-content">
             <div class="card-title">Account mode</div>
             <div class="radio-group" data-name="account-mode" style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-              <fluent-radio name="account-mode" value="interactive-microsoft" ${accounts.mode === 'interactive-microsoft' ? 'checked' : ''}>Select account settings interactively (Microsoft account)</fluent-radio>
-              <fluent-radio name="account-mode" value="interactive-local" ${accounts.mode === 'interactive-local' ? 'checked' : ''}>Select account settings interactively (Local account)</fluent-radio>
-              <fluent-radio name="account-mode" value="unattended" ${accounts.mode === 'unattended' ? 'checked' : ''}>Create user accounts unattended</fluent-radio>
+              <fluent-radio name="account-mode" value="interactive-local" ${accounts.mode === 'interactive-local' ? 'checked' : ''}>交互式添加离线账户</fluent-radio>
+              <fluent-radio name="account-mode" value="interactive-microsoft" ${accounts.mode === 'interactive-microsoft' ? 'checked' : ''}>交互式添加在线账户</fluent-radio>
+              <fluent-radio name="account-mode" value="unattended" ${accounts.mode === 'unattended' ? 'checked' : ''}>按账户列表创建账户</fluent-radio>
             </div>
           </div>
         </div>

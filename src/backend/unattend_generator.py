@@ -4112,7 +4112,17 @@ class ComputerNameModifier(Modifier):
             return
         value = computer_name_elem.text
         if value == "TEMPNAME":
-            self.configuration.computer_name_settings = ScriptComputerNameSettings(script="")
+            script_content = ""
+            for elem in self.root.iter():
+                if elem.tag.split('}')[-1] != "File":
+                    continue
+                path_attr = elem.get('path', '') or elem.get('Source', '')
+                normalized_path = path_attr.replace('/', '\\').lower()
+                if not normalized_path.endswith('\\getcomputername.ps1'):
+                    continue
+                script_content = ''.join(elem.itertext()).strip()
+                break
+            self.configuration.computer_name_settings = ScriptComputerNameSettings(script=script_content)
         else:
             try:
                 self.configuration.computer_name_settings = CustomComputerNameSettings(computer_name=value)
@@ -4176,20 +4186,6 @@ class UsersModifier(Modifier):
                 parent = self._find_parent(self.root, user_accounts)
                 if parent is not None:
                     parent.remove(user_accounts)
-            
-            if isinstance(settings, InteractiveLocalAccountSettings):
-                # 设置 HideOnlineAccountScreens
-                hide_online = self.root.find(".//{urn:schemas-microsoft-com:unattend}HideOnlineAccountScreens")
-                if hide_online is None:
-                    # 需要找到正确的组件
-                    component = get_or_create_element(
-                        self.root,
-                        Pass.oobeSystem,
-                        "Microsoft-Windows-Shell-Setup"
-                    )
-                    hide_online = self.new_simple_element("HideOnlineAccountScreens", component, "true")
-                else:
-                    hide_online.text = "true"
         else:
             raise ValueError(f"Unsupported account settings type: {type(settings)}")
     
@@ -5591,22 +5587,31 @@ class SpecializeModifier(Modifier):
                     specialize_file = file_elem
                     break
         
+        # 如果没有现成的 Specialize.ps1，但脚本序列不为空，先生成文件。
+        # 这样后续能正确检测到 Extensions，并先执行 ExtractScript 再运行脚本。
+        if specialize_file is None and not self.specialize_script.is_empty:
+            self.add_text_file("Specialize.ps1", self.specialize_script.get_script())
+            extensions = self.root.find(f".//{{{s_uri}}}Extensions")
+            has_extensions = extensions is not None and len(list(extensions.findall(f"{{{s_uri}}}File"))) > 0
+            if extensions is not None:
+                for file_elem in extensions.findall(f"{{{s_uri}}}File"):
+                    path_attr = file_elem.get('path', '')
+                    if path_attr and 'Specialize.ps1' in path_attr:
+                        specialize_file = file_elem
+                        break
+
         # 如果有 Extensions 或 specialize_script 不为空，需要创建 Microsoft-Windows-Deployment component
-        if has_extensions or not self.specialize_script.is_empty:
+        if has_extensions or specialize_file is not None:
             appender = self.get_appender(CommandConfig.specialize())
-            
+
             # 如果有 Extensions，首先添加 ExtractScript 执行命令
             if has_extensions:
                 extract_script_cmd = 'powershell.exe -WindowStyle "Normal" -NoProfile -Command "$xml = [xml]::new(); $xml.Load(\'C:\\Windows\\Panther\\unattend.xml\'); $sb = [scriptblock]::Create( $xml.unattend.Extensions.ExtractScript ); Invoke-Command -ScriptBlock $sb -ArgumentList $xml;"'
                 appender.append(extract_script_cmd)
-            
+
             # 如果 extensions 中已经有 Specialize.ps1，使用原始内容，不覆盖
             if specialize_file is not None:
                 ps1_file = r"C:\Windows\Setup\Scripts\Specialize.ps1"
-                appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
-            elif not self.specialize_script.is_empty:
-                # 如果脚本序列不为空，生成新文件
-                ps1_file = self.add_text_file("Specialize.ps1", self.specialize_script.get_script())
                 appender.append(self.command_builder.invoke_power_shell_script(ps1_file))
 
 
@@ -6167,21 +6172,6 @@ class ExpressSettingsModifier(Modifier):
             if express_settings != ExpressSettingsMode.Interactive:
                 self.new_simple_element("HideEULAPage", oobe_elem, "true")
         
-        # 设置 HideOnlineAccountScreens（根据账户设置模式）
-        hide_online = oobe_elem.find(f"{{{ns_uri}}}HideOnlineAccountScreens")
-        if isinstance(self.configuration.account_settings, InteractiveLocalAccountSettings):
-            # 交互式本地账户模式：设置为 true
-            if hide_online is None:
-                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, "true")
-            else:
-                hide_online.text = "true"
-        elif isinstance(self.configuration.account_settings, UnattendedAccountSettings):
-            # 无人值守模式：设置为 false
-            if hide_online is None:
-                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, "false")
-            else:
-                hide_online.text = "false"
-
         # 官方文档支持通过 OOBE 设置跳过网络相关页面。
         if self.configuration.bypass_network_check:
             hide_wireless = oobe_elem.find(f"{{{ns_uri}}}HideWirelessSetupInOOBE")
@@ -6190,10 +6180,28 @@ class ExpressSettingsModifier(Modifier):
             else:
                 hide_wireless.text = "true"
 
-            if hide_online is None:
-                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, "true")
+        # HideOnlineAccountScreens 必须只在 OOBE 下出现一次。
+        hide_online_value: str | None = None
+        if self.configuration.bypass_network_check:
+            hide_online_value = "true"
+        elif isinstance(self.configuration.account_settings, InteractiveLocalAccountSettings):
+            hide_online_value = "true"
+        elif isinstance(self.configuration.account_settings, UnattendedAccountSettings):
+            hide_online_value = "false"
+
+        hide_online_elems = list(oobe_elem.findall(f"{{{ns_uri}}}HideOnlineAccountScreens"))
+        for hide_online in hide_online_elems[1:]:
+            oobe_elem.remove(hide_online)
+        primary_hide_online = hide_online_elems[0] if hide_online_elems else None
+
+        if hide_online_value is None:
+            if primary_hide_online is not None:
+                oobe_elem.remove(primary_hide_online)
+        else:
+            if primary_hide_online is None:
+                self.new_simple_element("HideOnlineAccountScreens", oobe_elem, hide_online_value)
             else:
-                hide_online.text = "true"
+                primary_hide_online.text = hide_online_value
 
     def parse(self):
         """解析快速设置（ProtectYourPC / 注册表）"""
@@ -8580,9 +8588,9 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
         # 确保 accounts 是字典
         if not isinstance(accounts, dict):
             logger.warning(f"accountSettings is not a dict, got {type(accounts)}, using default")
-            config.account_settings = InteractiveMicrosoftAccountSettings()
+            config.account_settings = InteractiveLocalAccountSettings()
         else:
-            mode = accounts.get('mode', 'interactive-microsoft')
+            mode = accounts.get('mode', 'interactive-local')
             
             if mode == 'unattended':
                 # 创建账户列表
@@ -8617,10 +8625,12 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 )
             elif mode == 'interactive-local':
                 config.account_settings = InteractiveLocalAccountSettings()
-            else:
+            elif mode == 'interactive-microsoft':
                 config.account_settings = InteractiveMicrosoftAccountSettings()
+            else:
+                config.account_settings = InteractiveLocalAccountSettings()
     else:
-        config.account_settings = InteractiveMicrosoftAccountSettings()
+        config.account_settings = InteractiveLocalAccountSettings()
     
     # 转换密码过期设置
     if 'passwordExpiration' in config_dict:
@@ -9597,10 +9607,12 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
             }
         elif isinstance(config.account_settings, InteractiveLocalAccountSettings):
             config_dict['accountSettings'] = {'mode': 'interactive-local'}
-        else:
+        elif isinstance(config.account_settings, InteractiveMicrosoftAccountSettings):
             config_dict['accountSettings'] = {'mode': 'interactive-microsoft'}
+        else:
+            config_dict['accountSettings'] = {'mode': 'interactive-local'}
     else:
-        config_dict['accountSettings'] = {'mode': 'interactive-microsoft'}
+        config_dict['accountSettings'] = {'mode': 'interactive-local'}
     
     # 转换 Wi-Fi 设置
     wifi_settings = config.wifi_settings
