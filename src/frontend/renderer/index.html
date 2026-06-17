@@ -97,37 +97,33 @@
           <div id="workspace-iso-config" class="workspace-panel">
             <!-- 导入/导出卡片由 iso-config.ts 动态生成 -->
 
-            <!-- 1. Region, Language and Time Zone (合并模块1和6) -->
+            <!-- 1. Windows PE Stage (合并 PE 操作、分区和版本设置) -->
+            <div class="section" id="config-windows-pe-stage">
+              <div class="section-title">Windows PE Stage</div>
+              <div class="section-content" id="config-pe-operation"></div>
+              <div class="section-content" id="config-partitioning"></div>
+              <div class="section-content" id="config-windows-edition"></div>
+            </div>
+
+            <!-- 2. Region, Language and Time Zone (合并模块1和6) -->
             <div class="section" id="config-region-language">
               <div class="section-title">Region, Language and Time Zone</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 2. Setup settings -->
+            <!-- 3. Setup settings -->
             <div class="section" id="config-setup-settings">
               <div class="section-title">Setup settings</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 3. Name and Account (合并模块4、11、12、13) -->
+            <!-- 4. Name and Account (合并模块4、11、12、13) -->
             <div class="section" id="config-name-account">
               <div class="section-title">Name and Account</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 4. Partitioning and formatting -->
-            <div class="section" id="config-partitioning">
-              <div class="section-title">Partitioning and formatting</div>
-              <!-- 内容将在后续步骤中填充 -->
-            </div>
-
-            <!-- 5. Windows Edition and Source (合并模块8和9) -->
-            <div class="section" id="config-windows-edition">
-              <div class="section-title">Windows Edition and Source</div>
-              <!-- 内容将在后续步骤中填充 -->
-            </div>
-
-            <!-- 6. UI and Personalization (合并模块14、15、16、17、18、25) -->
+            <!-- 5. UI and Personalization (合并模块14、15、16、17、18、25) -->
             <div class="section" id="config-ui-personalization">
               <div class="section-title">UI and Personalization</div>
               <!-- 子模块容器 -->
@@ -139,13 +135,13 @@
               <div class="section-content" id="config-personalization"></div>
             </div>
 
-            <!-- 7. WLAN / Wi-Fi setup -->
+            <!-- 6. WLAN / Wi-Fi setup -->
             <div class="section" id="config-wifi">
               <div class="section-title">WLAN / Wi-Fi setup</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 8. Accessibility Settings (合并模块23、24) -->
+            <!-- 7. Accessibility Settings (合并模块23、24) -->
             <div class="section" id="config-accessibility">
               <div class="section-title">Accessibility Settings</div>
               <!-- 子模块容器 -->
@@ -153,25 +149,25 @@
               <div class="section-content" id="config-sticky-keys"></div>
             </div>
 
-            <!-- 9. System Optimization (合并模块16、22、26) -->
+            <!-- 8. System Optimization (合并模块16、22、26) -->
             <div class="section" id="config-system-optimization">
               <div class="section-title">System Optimization</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 10. Advanced Settings (合并模块5、10、20、28) -->
+            <!-- 9. Advanced Settings (合并模块5、20、28) -->
             <div class="section" id="config-advanced-settings">
               <div class="section-title">Advanced Settings</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 11. Run custom scripts -->
+            <!-- 10. Run custom scripts -->
             <div class="section" id="config-custom-scripts">
               <div class="section-title">Run custom scripts</div>
               <!-- 内容将在后续步骤中填充 -->
             </div>
 
-            <!-- 12. XML markup for more components -->
+            <!-- 11. XML markup for more components -->
             <div class="section" id="config-xml-markup">
               <div class="section-title">XML markup for more components</div>
               <!-- 内容将在后续步骤中填充 -->

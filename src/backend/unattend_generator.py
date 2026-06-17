@@ -486,35 +486,10 @@ class InteractivePartitionSettings(IPartitionSettings):
     pass
 
 
-class IInstallToSettings:
-    """安装目标设置接口"""
-    pass
-
-
-class AvailableInstallToSettings(IInstallToSettings):
-    """可用分区安装目标设置"""
-    pass
-
-
-@dataclass
-class CustomInstallToSettings(IInstallToSettings):
-    """自定义安装目标设置"""
-    install_to_disk: int
-    install_to_partition: int
-    
-    def __post_init__(self):
-        """验证安装目标"""
-        if self.install_to_disk < 0:
-            raise ValueError(f"InstallToDisk must be >= 0, got {self.install_to_disk}")
-        if self.install_to_partition < 1:
-            raise ValueError(f"InstallToPartition must be >= 1, got {self.install_to_partition}")
-
-
 @dataclass
 class CustomPartitionSettings(IPartitionSettings):
     """自定义分区设置"""
     script: str
-    install_to: IInstallToSettings
 
 
 @dataclass
@@ -522,8 +497,13 @@ class UnattendedPartitionSettings(IPartitionSettings):
     """无人值守分区设置"""
     partition_layout: PartitionLayout
     recovery_mode: RecoveryMode
+    target_disk: int = 0
     esp_size: int = Constants.EspDefaultSize
     recovery_size: int = Constants.RecoveryPartitionSize
+
+    def __post_init__(self):
+        if self.target_disk < 0:
+            raise ValueError(f"TargetDisk must be >= 0, got {self.target_disk}")
 
 
 class IDiskAssertionSettings:
@@ -1161,9 +1141,6 @@ class Configuration:
     
     # 分区设置
     partition_settings: Any = None  # Optional[IPartitionSettings]
-    
-    # 安装目标设置（在 partition_settings 中，如果是 CustomPartitionSettings）
-    # install_to_settings: Optional[IInstallToSettings] = None
     
     # 磁盘断言设置
     disk_assertion_settings: Any = None  # Optional[IDiskAssertionSettings]
@@ -4938,15 +4915,6 @@ class DiskModifier(Modifier):
         recovery_drive = 'R'
         skipped_drives = ['A', 'B', 'X']
         
-        # 如果配置中未显式启用 8dot3/Defender/重启提示，但模式为 generated，则使用默认值以匹配模板
-        if isinstance(pe_settings, GeneratePESettings):
-            if pe_settings.disable_8_dot3_names is False:
-                pe_settings.disable_8_dot3_names = True
-            if pe_settings.pause_before_reboot is False:
-                pe_settings.pause_before_reboot = True
-            if not self.configuration.disable_defender:
-                self.configuration.disable_defender = True
-        
         # 检查是否使用了 Microsoft-Windows-PnpCustomizationsWinPE 组件
         ns_uri = '{urn:schemas-microsoft-com:unattend}'
         comp = "Microsoft-Windows-PnpCustomizationsWinPE"
@@ -4989,6 +4957,7 @@ class DiskModifier(Modifier):
             partition_settings = UnattendedPartitionSettings(
                 partition_layout=PartitionLayout.GPT,
                 recovery_mode=RecoveryMode.Partition,
+                target_disk=0,
                 esp_size=Constants.EspDefaultSize,
                 recovery_size=Constants.RecoveryPartitionSize
             )
@@ -5002,6 +4971,7 @@ class DiskModifier(Modifier):
                 partition_settings = UnattendedPartitionSettings(
                     partition_layout=PartitionLayout.GPT,
                     recovery_mode=RecoveryMode.Partition,
+                    target_disk=0,
                     esp_size=Constants.EspDefaultSize,
                     recovery_size=Constants.RecoveryPartitionSize
                 )
@@ -5028,6 +4998,7 @@ class DiskModifier(Modifier):
             partition_settings = UnattendedPartitionSettings(
                 partition_layout=PartitionLayout.GPT,
                 recovery_mode=RecoveryMode.Partition,
+                target_disk=0,
                 esp_size=Constants.EspDefaultSize,
                 recovery_size=Constants.RecoveryPartitionSize
             )
@@ -5048,7 +5019,7 @@ class DiskModifier(Modifier):
         
         # 执行 diskpart
         writer.write(f'diskpart.exe /s X:\\diskpart.txt || ( echo diskpart.exe encountered an error. & pause & exit /b 1 )\n')
-        
+
         # 获取镜像索引或名称
         def get_index_or_name() -> str:
             """获取镜像索引或名称"""
@@ -5161,7 +5132,7 @@ class DiskModifier(Modifier):
         
         if settings.partition_layout == PartitionLayout.MBR:
             return [
-                "SELECT DISK=0",
+                f"SELECT DISK={settings.target_disk}",
                 "CLEAN",
                 "CREATE PARTITION PRIMARY SIZE=100",
                 'FORMAT QUICK FS=NTFS LABEL="System Reserved"',
@@ -5178,7 +5149,7 @@ class DiskModifier(Modifier):
             ]
         elif settings.partition_layout == PartitionLayout.GPT:
             return [
-                "SELECT DISK=0",
+                f"SELECT DISK={settings.target_disk}",
                 "CLEAN",
                 "CONVERT GPT",
                 f"CREATE PARTITION EFI SIZE={settings.esp_size}",
@@ -5273,24 +5244,15 @@ class DiskModifier(Modifier):
         partition_settings = self.configuration.partition_settings
         if partition_settings is None:
             return
+
+        self._clear_install_to_settings()
         
         if isinstance(partition_settings, InteractivePartitionSettings):
-            # 移除 InstallTo 元素
-            ns_uri = '{urn:schemas-microsoft-com:unattend}'
-            install_to = self.root.find(f".//{{{ns_uri}}}InstallTo")
-            if install_to is not None:
-                parent = self._find_parent(self.root, install_to)
-                if parent is not None:
-                    parent.remove(install_to)
+            return
         elif isinstance(partition_settings, UnattendedPartitionSettings):
-            # 写入 diskpart 脚本
             diskpart_lines = self._get_diskpart_script(partition_settings)
             self._write_diskpart_script(diskpart_lines)
-            
-            # 设置安装目标
-            partition = 2 if partition_settings.partition_layout == PartitionLayout.MBR else 3
-            self._install_to(disk=0, partition=partition)
-            
+
             # 如果恢复模式为 None，添加禁用恢复的命令
             if partition_settings.recovery_mode == RecoveryMode.None_:
                 self.specialize_script.append(
@@ -5298,34 +5260,23 @@ class DiskModifier(Modifier):
                     "Remove-Item -LiteralPath 'C:\\Windows\\System32\\Recovery\\Winre.wim' -Force -ErrorAction 'SilentlyContinue';"
                 )
         elif isinstance(partition_settings, CustomPartitionSettings):
-            # 写入自定义 diskpart 脚本
             diskpart_lines = [line.strip() for line in partition_settings.script.split('\n') if line.strip()]
             self._write_diskpart_script(diskpart_lines)
-            
-            # 设置安装目标
-            if isinstance(partition_settings.install_to, AvailableInstallToSettings):
-                # 移除 InstallTo 元素，添加 InstallToAvailablePartition
-                ns_uri = '{urn:schemas-microsoft-com:unattend}'
-                install_to = self.root.find(f".//{{{ns_uri}}}InstallTo")
-                if install_to is not None:
-                    parent = self._find_parent(self.root, install_to)
-                    if parent is not None:
-                        parent.remove(install_to)
-                
-                # 添加 InstallToAvailablePartition
-                os_image = self.root.find(f".//{{{ns_uri}}}OSImage")
-                if os_image is not None:
-                    install_to_available = self.new_simple_element("InstallToAvailablePartition", os_image, "true")
-            elif isinstance(partition_settings.install_to, CustomInstallToSettings):
-                self._install_to(
-                    disk=partition_settings.install_to.install_to_disk,
-                    partition=partition_settings.install_to.install_to_partition
-                )
-            else:
-                raise ValueError(f"Unsupported install to settings type: {type(partition_settings.install_to)}")
         else:
             raise ValueError(f"Unsupported partition settings type: {type(partition_settings)}")
-    
+
+    def _clear_install_to_settings(self):
+        ns_uri = '{urn:schemas-microsoft-com:unattend}'
+        for xpath in [
+            f".//{{{ns_uri}}}InstallTo",
+            f".//{{{ns_uri}}}InstallToAvailablePartition"
+        ]:
+            elem = self.root.find(xpath)
+            if elem is not None:
+                parent = self._find_parent(self.root, elem)
+                if parent is not None:
+                    parent.remove(elem)
+
     def _write_diskpart_script(self, lines: List[str]):
         """写入 diskpart 脚本（对应 C# 的 WriteScript 方法）"""
         diskpart_script = "X:\\diskpart.txt"
@@ -5337,56 +5288,102 @@ class DiskModifier(Modifier):
                 f'diskpart.exe /s "{diskpart_script}" >>"{diskpart_log}" || ( type "{diskpart_log}" & echo diskpart encountered an error. & pause & exit /b 1 )'
             )
         )
-    
-    def _install_to(self, disk: int, partition: int):
-        """设置安装目标（对应 C# 的 InstallTo 方法）"""
-        ns_uri = '{urn:schemas-microsoft-com:unattend}'
-        # 查找或创建 ImageInstall/OSImage/InstallTo 结构
-        setup_component = self.get_or_create_element(
-            Pass.windowsPE,
-            "Microsoft-Windows-Setup"
-        )
-        
-        # 查找或创建 ImageInstall
-        image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
-        if image_install is None:
-            image_install = self.new_element("ImageInstall", setup_component)
-        
-        # 查找或创建 OSImage
-        os_image = image_install.find(f"{{{ns_uri}}}OSImage")
-        if os_image is None:
-            os_image = self.new_element("OSImage", image_install)
-        
-        # 查找或创建 InstallTo
-        install_to = os_image.find(f"{{{ns_uri}}}InstallTo")
-        if install_to is None:
-            install_to = self.new_element("InstallTo", os_image)
-        
-        # 设置 DiskID 和 PartitionID
-        disk_id = install_to.find(f"{{{ns_uri}}}DiskID")
-        if disk_id is None:
-            disk_id = self.new_simple_element("DiskID", install_to, str(disk))
-        else:
-            disk_id.text = str(disk)
-        
-        partition_id = install_to.find(f"{{{ns_uri}}}PartitionID")
-        if partition_id is None:
-            partition_id = self.new_simple_element("PartitionID", install_to, str(partition))
-        else:
-            partition_id.text = str(partition)
 
     def parse(self):
         """解析分区、PE、磁盘断言、CompactOS 设置"""
         if not self.is_parse_mode:
             return
         import re
+        import logging
         ns_uri = get_namespace_map()['u']
+        logger = logging.getLogger('UnattendGenerator')
+
+        def decode_pe_echo_text(text: str) -> str:
+            decoded: List[str] = []
+            i = 0
+            while i < len(text):
+                if text[i] == '^' and i + 1 < len(text):
+                    decoded.append(text[i + 1])
+                    i += 2
+                else:
+                    decoded.append(text[i])
+                    i += 1
+            return ''.join(decoded)
+
+        def extract_echo_segments(command_text: str) -> List[str]:
+            segments: List[str] = []
+            start = 0
+            needle = '(echo:'
+
+            def split_echo_group(group_text: str) -> List[str]:
+                parts: List[str] = []
+                current: List[str] = []
+                i = 0
+                while i < len(group_text):
+                    if group_text.startswith('&echo:', i):
+                        parts.append(''.join(current))
+                        current = []
+                        i += len('&echo:')
+                        continue
+                    current.append(group_text[i])
+                    i += 1
+                parts.append(''.join(current))
+                return parts
+
+            while True:
+                idx = command_text.find(needle, start)
+                if idx == -1:
+                    break
+
+                cursor = idx + len(needle)
+                buffer: List[str] = []
+                while cursor < len(command_text):
+                    char = command_text[cursor]
+                    if char == '^' and cursor + 1 < len(command_text):
+                        buffer.append(char)
+                        buffer.append(command_text[cursor + 1])
+                        cursor += 2
+                        continue
+                    if char == ')':
+                        break
+                    buffer.append(char)
+                    cursor += 1
+
+                raw_group = ''.join(buffer)
+                for part in split_echo_group(raw_group):
+                    part = part.strip()
+                    if part:
+                        segments.append(decode_pe_echo_text(part))
+                start = cursor + 1
+
+            return segments
+
+        def extract_written_file_lines(file_name: str) -> List[str]:
+            lines: List[str] = []
+            file_name_lower = file_name.lower()
+            target_pattern = re.compile(r'>>"[^\"]*' + re.escape(file_name_lower) + r'"', re.IGNORECASE)
+            for cmd in run_sync_commands:
+                path_elem = cmd.find(f"{{{ns_uri}}}Path")
+                if path_elem is None or not path_elem.text:
+                    continue
+                cmd_text = path_elem.text
+                lower = cmd_text.lower()
+                if file_name_lower not in lower or 'echo:' not in lower:
+                    continue
+                if not target_pattern.search(lower):
+                    continue
+                lines.extend(extract_echo_segments(cmd_text))
+            return lines
+
+        def normalized_lines(lines: List[str]) -> List[str]:
+            return [line.strip().upper() for line in lines if line.strip()]
 
         # 收集 RunSynchronousCommand
         run_sync_commands = self.root.findall(f".//{{{ns_uri}}}RunSynchronousCommand")
 
         # ----- 解析分区与布局 -----
-        has_diskpart_write = False
+        diskpart_lines = extract_written_file_lines('diskpart.txt')
+        has_diskpart_write = bool(diskpart_lines)
         has_diskpart_execute = False
         detected_diskpart: Dict[str, Any] = {}
         detected_compact = False
@@ -5400,26 +5397,6 @@ class DiskModifier(Modifier):
             cmd_text = path_elem.text
             lower = cmd_text.lower()
 
-            if 'diskpart.txt' in lower and ('>>' in cmd_text or 'echo:' in cmd_text):
-                has_diskpart_write = True
-                m = re.search(r'CREATE PARTITION EFI SIZE=(\d+)', cmd_text, re.IGNORECASE)
-                if m:
-                    detected_diskpart['esp_size'] = int(m.group(1))
-                    gpt_hint = True
-                m = re.search(r'SHRINK MINIMUM=(\d+)', cmd_text, re.IGNORECASE)
-                if m:
-                    detected_diskpart['recovery_size'] = int(m.group(1))
-                if 'convert gpt' in lower:
-                    detected_diskpart['layout'] = 'GPT'
-                    gpt_hint = True
-                elif 'convert mbr' in lower:
-                    detected_diskpart['layout'] = 'MBR'
-                    mbr_hint = True
-                if re.search(r'ASSIGN LETTER=R', cmd_text, re.IGNORECASE) or re.search(r'GPT ATTRIBUTES', cmd_text, re.IGNORECASE) or re.search(r'SET ID', cmd_text, re.IGNORECASE):
-                    detected_diskpart['recovery_mode'] = 'partition'
-                if 'active' in lower or 'system reserved' in lower:
-                    mbr_hint = True
-
             if 'diskpart.exe' in lower and '/s' in lower:
                 has_diskpart_execute = True
 
@@ -5427,9 +5404,72 @@ class DiskModifier(Modifier):
                 detected_compact = True
 
         install_to = self.root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}InstallTo")
+        install_to_available = self.root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}InstallToAvailablePartition")
+        pe_written_lines = extract_written_file_lines('pe.cmd')
+        pe_script_text = '\n'.join(pe_written_lines)
+
+        diskpart_script_text = '\n'.join(diskpart_lines)
+        diskpart_script_upper = diskpart_script_text.upper()
+        if has_diskpart_write:
+            m = re.search(r'CREATE PARTITION EFI SIZE=(\d+)', diskpart_script_text, re.IGNORECASE)
+            if m:
+                detected_diskpart['esp_size'] = int(m.group(1))
+                gpt_hint = True
+            m = re.search(r'SELECT\s+DISK(?:\s+|\s*=\s*)(\d+)', diskpart_script_text, re.IGNORECASE)
+            if m:
+                detected_diskpart['target_disk'] = int(m.group(1))
+            m = re.search(r'SHRINK MINIMUM=(\d+)', diskpart_script_text, re.IGNORECASE)
+            if m:
+                detected_diskpart['recovery_size'] = int(m.group(1))
+            if 'CONVERT GPT' in diskpart_script_upper:
+                detected_diskpart['layout'] = 'GPT'
+                gpt_hint = True
+            elif 'CONVERT MBR' in diskpart_script_upper or 'ACTIVE' in diskpart_script_upper or 'SYSTEM RESERVED' in diskpart_script_upper:
+                detected_diskpart['layout'] = 'MBR'
+                mbr_hint = True
+            if 'ASSIGN LETTER=R' in diskpart_script_upper or 'GPT ATTRIBUTES=' in diskpart_script_upper or 'SET ID=27' in diskpart_script_upper or 'SET ID="DE94BBA4-06D1-4D40-A16A-BFD50179D6AC"' in diskpart_script_upper:
+                detected_diskpart['recovery_mode'] = 'partition'
+            else:
+                detected_diskpart['recovery_mode'] = 'none'
+
+        def is_generated_diskpart(lines: List[str]) -> bool:
+            layout = detected_diskpart.get('layout')
+            if layout not in {'GPT', 'MBR'}:
+                return False
+
+            default_partition = 3 if layout == 'GPT' else 2
+            if install_to_available is not None and (install_to_available.text or '').strip().lower() == 'true':
+                return False
+            if install_to is not None:
+                disk_id_elem = install_to.find(f"{{{ns_uri}}}DiskID")
+                partition_id_elem = install_to.find(f"{{{ns_uri}}}PartitionID")
+                if disk_id_elem is not None and partition_id_elem is not None and disk_id_elem.text and partition_id_elem.text:
+                    try:
+                        disk_id = int(disk_id_elem.text.strip())
+                        partition_id = int(partition_id_elem.text.strip())
+                        expected_disk = detected_diskpart.get('target_disk', 0)
+                        if disk_id != expected_disk or partition_id != default_partition:
+                            return False
+                    except ValueError:
+                        return False
+
+            recovery_mode_key = str(detected_diskpart.get('recovery_mode', 'partition')).lower()
+            recovery_mode_map = {
+                'partition': RecoveryMode.Partition,
+                'folder': RecoveryMode.Folder,
+                'none': RecoveryMode.None_
+            }
+            settings = UnattendedPartitionSettings(
+                partition_layout=PartitionLayout.GPT if layout == 'GPT' else PartitionLayout.MBR,
+                recovery_mode=recovery_mode_map.get(recovery_mode_key, RecoveryMode.Partition),
+                target_disk=detected_diskpart.get('target_disk', 0),
+                esp_size=detected_diskpart.get('esp_size', Constants.EspDefaultSize),
+                recovery_size=detected_diskpart.get('recovery_size', Constants.RecoveryPartitionSize)
+            )
+            return normalized_lines(lines) == normalized_lines(self._get_diskpart_script(settings))
 
         # 设置 partition_settings
-        if has_diskpart_write:
+        if has_diskpart_write and is_generated_diskpart(diskpart_lines):
             layout = detected_diskpart.get('layout')
             if layout is None:
                 if gpt_hint:
@@ -5446,61 +5486,35 @@ class DiskModifier(Modifier):
             recovery_size = detected_diskpart.get('recovery_size', Constants.RecoveryPartitionSize)
             self.configuration.partition_settings = UnattendedPartitionSettings(
                 partition_layout=PartitionLayout.GPT if layout == 'GPT' else PartitionLayout.MBR,
-                recovery_mode=RecoveryMode.Partition if str(recovery_mode).lower() == 'partition' else RecoveryMode.Folder,
+                recovery_mode=(
+                    RecoveryMode.Partition if str(recovery_mode).lower() == 'partition'
+                    else RecoveryMode.Folder if str(recovery_mode).lower() == 'folder'
+                    else RecoveryMode.None_
+                ),
+                target_disk=detected_diskpart.get('target_disk', 0),
                 esp_size=esp_size,
                 recovery_size=recovery_size
             )
-        elif install_to is not None:
-            # 无写入脚本但有 InstallTo，视为自动（可用磁盘/分区）
-            self.configuration.partition_settings = UnattendedPartitionSettings(
-                partition_layout=PartitionLayout.GPT,
-                recovery_mode=RecoveryMode.Partition,
-                esp_size=Constants.EspDefaultSize,
-                recovery_size=Constants.RecoveryPartitionSize
+        elif has_diskpart_write or has_diskpart_execute:
+            self.configuration.partition_settings = CustomPartitionSettings(
+                script=diskpart_script_text
             )
-        elif has_diskpart_execute:
-            # 仅执行脚本，视为自定义
-            self.configuration.partition_settings = CustomPartitionSettings(script="", install_to=AvailableInstallToSettings())
         else:
             self.configuration.partition_settings = InteractivePartitionSettings()
 
         # ----- 解析磁盘断言 -----
-        import re
-        import logging
-        logger = logging.getLogger('UnattendGenerator')
-        has_assert_write = False
-        assert_script_content = ""
-        for cmd in run_sync_commands:
-            path_elem = cmd.find(f"{{{ns_uri}}}Path")
-            if path_elem is None or not path_elem.text:
-                continue
-            cmd_text = path_elem.text
-            lower = cmd_text.lower()
-            if 'assert.vbs' in lower:
-                if '>>' in cmd_text or 'echo:' in lower:
-                    has_assert_write = True
-                    # 提取 echo: 命令中的脚本内容
-                    # 格式可能是: cmd.exe /c ">>"X:\assert.vbs" (echo:content)"
-                    # 或者: cmd.exe /c ">>"X:\assert.vbs" (echo:line1) (echo:line2)"
-                    # 使用正则表达式匹配 (echo:...) 模式
-                    echo_matches = re.findall(r'\(echo:([^)]+)\)', cmd_text, re.IGNORECASE)
-                    if echo_matches:
-                        # 如果有多个 echo: 命令，将它们连接起来（每行一个）
-                        assert_script_content = '\n'.join(echo_matches)
-                        logger.debug(f"DiskModifier.parse: Extracted assert.vbs script content: {assert_script_content[:100]}")
-                    break
-                if 'cscript' in lower or 'wscript' in lower:
-                    has_assert_write = True
-                    # 如果只有执行命令没有写入命令，说明脚本内容无法提取
-                    break
-        if has_assert_write:
+        assert_lines = extract_written_file_lines('assert.vbs')
+        if assert_lines:
+            assert_script_content = '\n'.join(assert_lines)
+            logger.debug(f"DiskModifier.parse: Extracted assert.vbs script content: {assert_script_content[:100]}")
             self.configuration.disk_assertion_settings = ScriptDiskAssertionsSettings(script=assert_script_content)
         else:
             self.configuration.disk_assertion_settings = SkipDiskAssertionSettings()
 
         # ----- 解析 PE 设置 -----
+        pe_lines = extract_written_file_lines('pe.cmd')
         has_pe_script = False
-        has_pe_cmd_write = False
+        has_pe_cmd_write = bool(pe_lines)
         for cmd in run_sync_commands:
             path_elem = cmd.find(f"{{{ns_uri}}}Path")
             if path_elem is None or not path_elem.text:
@@ -5508,17 +5522,24 @@ class DiskModifier(Modifier):
             lower = path_elem.text.lower()
             if 'pe.cmd' in lower:
                 has_pe_script = True
-                if '>>"x:\\pe.cmd"' in lower or '>>"x:/pe.cmd"' in lower or '>>x:\\pe.cmd' in lower:
-                    has_pe_cmd_write = True
         if has_pe_script and has_pe_cmd_write:
-            # 生成模式
-            self.configuration.pe_settings = GeneratePESettings(
-                disable_8_dot3_names=True,
-                pause_before_formatting=False,
-                pause_before_reboot=True,
-            )
+            pe_text_upper = '\n'.join(pe_lines).upper()
+            generated_markers = [
+                'DISKPART.EXE /S X:\\DISKPART.TXT',
+                'DISM.EXE /APPLY-IMAGE',
+                'BCDBOOT.EXE',
+                'WPEUTIL.EXE REBOOT'
+            ]
+            if all(marker in pe_text_upper for marker in generated_markers):
+                self.configuration.pe_settings = GeneratePESettings(
+                    disable_8_dot3_names='FSUTIL.EXE 8DOT3NAME SET' in pe_text_upper,
+                    pause_before_formatting='DISKPART WILL NOW PARTITION AND FORMAT YOUR DISK' in pe_text_upper,
+                    pause_before_reboot='COMPUTER WILL NOW REBOOT' in pe_text_upper,
+                )
+            else:
+                self.configuration.pe_settings = ScriptPESettings(script='\n'.join(pe_lines))
         elif has_pe_script:
-            self.configuration.pe_settings = ScriptPESettings(script="")
+            self.configuration.pe_settings = ScriptPESettings(script='\n'.join(pe_lines))
         else:
             self.configuration.pe_settings = DefaultPESettings()
 
@@ -8595,22 +8616,13 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 config.partition_settings = UnattendedPartitionSettings(
                     partition_layout=PartitionLayout(partitioning.get('layout', 'GPT')),
                     recovery_mode=recovery_mode,
+                    target_disk=partitioning.get('targetDisk', partitioning.get('installToDisk', partitioning.get('installDisk', 0))),
                     esp_size=partitioning.get('espSize', Constants.EspDefaultSize),
                     recovery_size=partitioning.get('recoverySize', Constants.RecoveryPartitionSize)
                 )
             elif mode == 'custom':
-                install_to_mode = partitioning.get('installToMode', 'available')
-                if install_to_mode == 'custom':
-                    install_to = CustomInstallToSettings(
-                        install_to_disk=partitioning.get('installToDisk', 0),
-                        install_to_partition=partitioning.get('installToPartition', 1)
-                    )
-                else:
-                    install_to = AvailableInstallToSettings()
-                
                 config.partition_settings = CustomPartitionSettings(
-                    script=partitioning.get('diskpartScript', ''),
-                    install_to=install_to
+                    script=partitioning.get('diskpartScript', '')
                 )
             else:
                 config.partition_settings = InteractivePartitionSettings()
@@ -8679,7 +8691,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
     else:
         config.compact_os_mode = CompactOsModes.Default
     
-    # 转换模块 6: Windows Edition and Source
+    # 转换模块 6: Windows Edition
     # 转换版本设置
     if 'windowsEdition' in config_dict:
         edition = config_dict['windowsEdition']
@@ -8721,34 +8733,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
     else:
         config.edition_settings = InteractiveEditionSettings()
     
-    # 转换安装源设置
-    if 'sourceImage' in config_dict:
-        source = config_dict['sourceImage']
-        # 确保 source 是字典
-        if not isinstance(source, dict):
-            logger.warning(f"sourceImage is not a dict, got {type(source)}, using default")
-            config.install_from_settings = AutomaticInstallFromSettings()
-        else:
-            mode = source.get('mode', 'automatic')
-            
-            if mode == 'automatic':
-                detected_name = config_dict.get('detectedImageName') or source.get('name') or source.get('imageName')
-                config.install_from_settings = AutomaticInstallFromSettings()
-                if detected_name:
-                    setattr(config, "_detected_image_name", detected_name)
-            elif mode == 'index':
-                index = source.get('imageIndex', source.get('index', 1))
-                config.install_from_settings = IndexInstallFromSettings(index=index)
-            elif mode == 'name':
-                name = source.get('imageName', source.get('name', ''))
-                if name:
-                    config.install_from_settings = NameInstallFromSettings(name=name)
-                else:
-                    config.install_from_settings = AutomaticInstallFromSettings()
-            else:
-                config.install_from_settings = AutomaticInstallFromSettings()
-    else:
-        config.install_from_settings = AutomaticInstallFromSettings()
+    config.install_from_settings = AutomaticInstallFromSettings()
     
     # 转换模块 7: UI and Personalization
     # 转换 File Explorer 设置
@@ -9643,26 +9628,16 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
             
             config_dict['partitioning'] = {
                 'mode': 'automatic',
+                'targetDisk': config.partition_settings.target_disk,
                 'layout': config.partition_settings.partition_layout.value,
                 'recoveryMode': recovery_mode_str,
                 'espSize': config.partition_settings.esp_size,
                 'recoverySize': config.partition_settings.recovery_size
             }
         elif isinstance(config.partition_settings, CustomPartitionSettings):
-            install_to_mode = 'available'
-            install_to_disk = None
-            install_to_partition = None
-            if isinstance(config.partition_settings.install_to, CustomInstallToSettings):
-                install_to_mode = 'custom'
-                install_to_disk = config.partition_settings.install_to.install_to_disk
-                install_to_partition = config.partition_settings.install_to.install_to_partition
-            
             config_dict['partitioning'] = {
                 'mode': 'custom',
-                'diskpartScript': config.partition_settings.script,
-                'installToMode': install_to_mode,
-                'installToDisk': install_to_disk,
-                'installToPartition': install_to_partition
+                'diskpartScript': config.partition_settings.script
             }
         else:
             config_dict['partitioning'] = {'mode': 'interactive'}
@@ -9701,7 +9676,7 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
     else:
         config_dict['peSettings'] = {'mode': 'default'}
     
-    # 转换模块 6: Windows Edition and Source
+    # 转换模块 6: Windows Edition
     # 转换版本设置
     if config.edition_settings:
         if isinstance(config.edition_settings, InteractiveEditionSettings):
@@ -9722,25 +9697,6 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
             config_dict['windowsEdition'] = {'mode': 'interactive'}
     else:
         config_dict['windowsEdition'] = {'mode': 'interactive'}
-    
-    # 转换安装源设置
-    if config.install_from_settings:
-        if isinstance(config.install_from_settings, AutomaticInstallFromSettings):
-            config_dict['sourceImage'] = {'mode': 'automatic'}
-        elif isinstance(config.install_from_settings, IndexInstallFromSettings):
-            config_dict['sourceImage'] = {
-                'mode': 'index',
-                'imageIndex': config.install_from_settings.index
-            }
-        elif isinstance(config.install_from_settings, NameInstallFromSettings):
-            config_dict['sourceImage'] = {
-                'mode': 'name',
-                'imageName': config.install_from_settings.name
-            }
-        else:
-            config_dict['sourceImage'] = {'mode': 'automatic'}
-    else:
-        config_dict['sourceImage'] = {'mode': 'automatic'}
     
     # 转换 Compact OS 模式
     if config.compact_os_mode == CompactOsModes.Always:

@@ -1312,26 +1312,6 @@ class BackendServer:
                     raise ValueError(f"selected_wim_image_index {resolved_index} is out of range (1-{image_count})")
                 return resolved_index
 
-            source_image = config_dict.get("sourceImage") or {}
-            mode = source_image.get("mode", "automatic")
-
-            if mode == "index":
-                resolved_index = int(source_image.get("imageIndex") or 1)
-                if resolved_index < 1 or resolved_index > image_count:
-                    raise ValueError(f"sourceImage.imageIndex {resolved_index} is out of range (1-{image_count})")
-                return resolved_index
-
-            if mode == "name":
-                target_name = str(source_image.get("imageName") or "").strip()
-                if not target_name:
-                    raise ValueError("sourceImage.imageName cannot be empty when mode=name")
-
-                for index in range(1, image_count + 1):
-                    if handler.get_image_name(index) == target_name:
-                        return index
-
-                raise ValueError(f"sourceImage.imageName not found: {target_name}")
-
             return 1
 
     def _build_installer_payload(self, work_dir: Path) -> Path:

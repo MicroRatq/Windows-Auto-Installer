@@ -74,19 +74,14 @@ interface TimeZoneSettings {
 // 分区和格式化设置
 interface PartitionSettings {
   mode: 'interactive' | 'automatic' | 'custom'
+  targetDisk?: number // 目标磁盘索引（0-based）
   layout?: 'MBR' | 'GPT'
   espSize?: number // ESP分区大小 (MB)，默认300
   recoveryMode?: 'partition' | 'folder' | 'none'
   recoverySize?: number // Recovery分区大小 (MB)，默认1000
   diskpartScript?: string
-  installToMode?: 'available' | 'custom' // 安装到哪个分区
-  installToDisk?: number // 安装磁盘（0-based）
-  installToPartition?: number // 安装分区（1-based）
   diskAssertionMode?: 'skip' | 'script' // 磁盘断言模式
   diskAssertionScript?: string // 磁盘断言脚本
-  // 旧字段保留用于兼容
-  installDisk?: number
-  installPartition?: number
 }
 
 // Windows版本设置
@@ -97,17 +92,9 @@ interface EditionSettings {
   editionName?: string
 }
 
-// 源镜像设置
-interface SourceImageSettings {
-  mode?: 'automatic' | 'index' | 'name'
-  imageIndex?: number
-  imageName?: string
-  source?: string // 保留用于兼容
-}
-
 // Windows PE操作设置
 interface PESettings {
-  mode: 'default' | 'generated' | 'script' | 'custom' // 'custom'保留用于兼容
+  mode: 'default' | 'generated' | 'script' | 'custom' // 'custom' 仅用于导入兼容
   cmdScript?: string
   disable8Dot3Names?: boolean // Generated模式下的选项
   pauseBeforeFormatting?: boolean
@@ -364,7 +351,6 @@ interface UnattendConfig {
   timeZone: TimeZoneSettings
   partitioning: PartitionSettings
   windowsEdition: EditionSettings
-  sourceImage: SourceImageSettings
   peSettings: PESettings
   accountSettings: AccountSettings
   passwordExpiration: PasswordExpirationSettings
@@ -445,9 +431,6 @@ function createDefaultConfig(): UnattendConfig {
     },
     windowsEdition: {
       mode: 'interactive'
-    },
-    sourceImage: {
-      mode: 'automatic'
     },
     peSettings: {
       mode: 'default'
@@ -1016,20 +999,17 @@ class UnattendConfigManager {
     // 0. Import and Export cards (在最顶部)
     this.renderImportExport()
 
-    // 1. Region, Language and Time Zone (合并模块1和6)
+    // 1. Windows PE Stage (合并 PE 操作、分区和版本设置)
+    this.renderWindowsPEStage()
+
+    // 2. Region, Language and Time Zone (合并模块1和6)
     this.renderRegionLanguageTimeZone()
 
-    // 2. Setup settings
+    // 3. Setup settings
     this.renderSetupSettings()
 
     // 4. Name and Account (合并模块4、11、12、13)
     this.renderNameAndAccount()
-
-    // 5. Partitioning and formatting
-    this.renderPartitioning()
-
-    // 6. Windows Edition and Source (合并模块8和9)
-    this.renderWindowsEditionAndSource()
 
     // 7. UI and Personalization (合并模块14、15、16、17、18、25)
     this.renderFileExplorer()
@@ -1049,7 +1029,7 @@ class UnattendConfigManager {
     // 10. System Optimization (合并模块16、22、26)
     this.renderSystemOptimization()
 
-    // 11. Advanced Settings (合并模块5、10、20、28)
+    // 11. Advanced Settings (合并模块5、20、28)
     this.renderAdvancedSettings()
 
     // 12. Run custom scripts
@@ -1107,6 +1087,42 @@ class UnattendConfigManager {
         await showWorkspaceMessageDialog('导入失败', error.message || '未知错误')
         console.error('Import error:', error)
       }
+    }
+  }
+
+  private getRenderContent(targetId: string) {
+    const direct = this.panel?.querySelector(`#${targetId}`) as HTMLElement | null
+    if (direct && direct.classList.contains('section-content')) {
+      return direct
+    }
+
+    return this.getSectionContent(targetId)
+  }
+
+  private renderWindowsPEStage() {
+    const pe = this.config.peSettings
+    const partitionContent = this.getRenderContent('config-partitioning')
+    const editionContent = this.getRenderContent('config-windows-edition')
+
+    this.renderPEOperation('config-pe-operation')
+
+    if (partitionContent) {
+      partitionContent.style.display = pe.mode === 'generated' ? '' : 'none'
+      if (pe.mode !== 'generated') {
+        partitionContent.innerHTML = ''
+      }
+    }
+
+    if (editionContent) {
+      editionContent.style.display = pe.mode === 'generated' ? '' : 'none'
+      if (pe.mode !== 'generated') {
+        editionContent.innerHTML = ''
+      }
+    }
+
+    if (pe.mode === 'generated') {
+      this.renderPartitioning('config-partitioning')
+      this.renderWindowsEditionAndSource('config-windows-edition')
     }
   }
 
@@ -2120,13 +2136,12 @@ class UnattendConfigManager {
     }
   }
 
-  // 渲染模块11: Advanced Settings (合并Compact OS、PE operation、Virtual machine support、WDAC)
+  // 渲染模块11: Advanced Settings (合并 Compact OS、Virtual machine support、WDAC)
   private renderAdvancedSettings() {
     const contentDiv = this.getSectionContent('config-advanced-settings')
     if (!contentDiv) return
 
     const compactOS = this.config.compactOS
-    const pe = this.config.peSettings
     const vm = this.config.vmSupport
     const wdac = this.config.wdac
 
@@ -2158,77 +2173,7 @@ class UnattendConfigManager {
       expanded: false
     })
 
-    // 2. Windows PE operation - RadioContainer
-    const peOperationRadioHtml = createRadioContainer({
-      id: 'pe-operation-container',
-      name: 'pe-mode',
-      title: t('isoConfig.advancedSettings.peOperation'),
-      description: '',
-      icon: 'terminal',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.advancedSettings.peDefault'),
-          description: ''
-        },
-        {
-          value: 'generated',
-          label: t('isoConfig.advancedSettings.peGenerated'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'config-pe-disable-8dot3-card',
-              title: t('isoConfig.advancedSettings.disable8dot3'),
-              description: t('isoConfig.advancedSettings.disable8dot3Desc'),
-              controlType: 'checkbox',
-              value: pe.disable8Dot3Names || false,
-              borderless: true
-            },
-            {
-              id: 'config-pe-pause-formatting-card',
-              title: t('isoConfig.advancedSettings.pauseFormatting'),
-              description: '',
-              controlType: 'checkbox',
-              value: pe.pauseBeforeFormatting || false,
-              borderless: true
-            },
-            {
-              id: 'config-pe-pause-reboot-card',
-              title: t('isoConfig.advancedSettings.pauseReboot'),
-              description: '',
-              controlType: 'checkbox',
-              value: pe.pauseBeforeReboot || false,
-              borderless: true
-            }
-          ]
-        },
-        {
-          value: 'script',
-          label: t('isoConfig.advancedSettings.peScript'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'config-pe-custom-script-card',
-              title: t('isoConfig.advancedSettings.customPeScript'),
-              description: t('isoConfig.advancedSettings.customPeScriptDesc'),
-              icon: 'code',
-              value: pe.cmdScript || '',
-              placeholder: `@echo off
-echo Custom PE script
-pause`,
-              rows: 10,
-              borderless: true,
-              showImportExport: true
-            } as any
-          ]
-        }
-      ],
-      selectedValue: pe.mode,
-      expanded: false
-    })
-
-
-    // 3. Virtual machine support - ComboContainer (使用嵌套的 ComboCard)
+    // 2. Virtual machine support - ComboContainer (使用嵌套的 ComboCard)
     const vmSupportHtml = createComboContainer({
       id: 'vm-support-container',
       name: 'vm-support',
@@ -2268,7 +2213,7 @@ pause`,
       expanded: false
     })
 
-    // 4. WDAC - ComboCard Switch
+    // 3. WDAC - ComboCard Switch
     const wdacCardHtml = createComboCard({
       id: 'wdac-mode-card',
       title: t('isoConfig.advancedSettings.wdac'),
@@ -2278,7 +2223,7 @@ pause`,
       value: wdac.mode === 'configure'
     })
 
-    // 4.1 WDAC Configure模式 - Policy设置 (独立显示)
+    // 3.1 WDAC Configure模式 - Policy设置 (独立显示)
     const wdacEnforcementHtml = wdac.mode === 'configure'
       ? createRadioContainer({
         id: 'wdac-enforcement-container',
@@ -2334,7 +2279,6 @@ pause`,
 
     contentDiv.innerHTML = `
       ${compactOSRadioHtml}
-      ${peOperationRadioHtml}
       ${vmSupportHtml}
       ${wdacCardHtml}
       ${wdacEnforcementHtml}
@@ -2348,60 +2292,7 @@ pause`,
       this.updateConfig({ compactOS: value as CompactOSMode })
     }, true)
 
-    // 2. PE operation
-    setupRadioContainer('pe-operation-container', 'pe-mode', (value) => {
-      this.updateModule('peSettings', { mode: value as 'default' | 'generated' | 'script' })
-      this.renderAdvancedSettings()
-    }, true)
-
-    // 2.1 Generated 选项 (嵌套)
-    if (pe.mode === 'generated') {
-      setupComboCard('config-pe-disable-8dot3-card', (value) => {
-        this.updateModule('peSettings', { disable8Dot3Names: value as boolean })
-      })
-
-      setupComboCard('config-pe-pause-formatting-card', (value) => {
-        this.updateModule('peSettings', { pauseBeforeFormatting: value as boolean })
-      })
-
-      setupComboCard('config-pe-pause-reboot-card', (value) => {
-        this.updateModule('peSettings', { pauseBeforeReboot: value as boolean })
-      })
-    }
-
-    // 2.2 Custom script (嵌套)
-    if (pe.mode === 'script') {
-      setupTextCard('config-pe-custom-script-card', (value) => {
-        this.updateModule('peSettings', { cmdScript: value })
-      }, async () => {
-        // 导入脚本
-        if (window.electronAPI?.showOpenDialog) {
-          const result = await window.electronAPI.showOpenDialog({
-            filters: [{ name: 'Script Files', extensions: ['cmd', 'bat', 'txt'] }],
-            properties: ['openFile']
-          })
-          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
-            const content = await window.electronAPI.readFile(result.filePaths[0])
-            setTextCardValue('config-pe-custom-script-card', content)
-            this.updateModule('peSettings', { cmdScript: content })
-          }
-        }
-      }, async () => {
-        // 导出脚本
-        if (window.electronAPI?.showSaveDialog) {
-          const result = await window.electronAPI.showSaveDialog({
-            filters: [{ name: 'Batch Files', extensions: ['cmd', 'bat'] }],
-            defaultPath: 'pe-script.cmd'
-          })
-          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
-            const currentValue = getTextCardValue('config-pe-custom-script-card', true)
-            await window.electronAPI.writeFile(result.filePath, currentValue)
-          }
-        }
-      })
-    }
-
-    // 3. Virtual machine support
+    // 2. Virtual machine support
     setupComboContainer('vm-support-container', 'vm-support', (values) => {
       // 从嵌套卡片的值中提取各个选项
       const vboxKey = Object.keys(values).find(k => k.includes('vbox'))
@@ -2428,14 +2319,14 @@ pause`,
       ]
     })
 
-    // 4. WDAC Switch
+    // 3. WDAC Switch
     setupComboCard('wdac-mode-card', (value) => {
       const enabled = value as boolean
       this.updateModule('wdac', { mode: enabled ? 'configure' : 'skip' })
       this.renderAdvancedSettings()
     })
 
-    // 4.1 WDAC Configure (仅在启用时显示)
+    // 3.1 WDAC Configure (仅在启用时显示)
     if (wdac.mode === 'configure') {
       setupRadioContainer('wdac-enforcement-container', 'wdac-enforcement-mode', (value) => {
         this.updateModule('wdac', { enforcementMode: value as 'audit' | 'auditOnBootFailure' | 'enforcement' })
@@ -2452,12 +2343,165 @@ pause`,
     }
   }
 
-  // 渲染模块7: Partitioning and formatting
-  private renderPartitioning() {
-    const contentDiv = this.getSectionContent('config-partitioning')
+  private renderPEOperation(targetId = 'config-pe-operation') {
+    const contentDiv = this.getRenderContent(targetId)
+    if (!contentDiv) return
+
+    const pe = this.config.peSettings
+
+    const peModeCardHtml = createComboCard({
+      id: 'config-pe-mode-card',
+      title: t('isoConfig.peMode.title'),
+      description: t('isoConfig.peMode.description'),
+      icon: 'terminal',
+      controlType: 'select',
+      options: [
+        { value: 'default', label: t('isoConfig.peMode.interactive') },
+        { value: 'generated', label: t('isoConfig.peMode.generated') },
+        { value: 'script', label: t('isoConfig.peMode.script') }
+      ],
+      value: pe.mode
+    })
+
+    const generatedOptionsHtml = pe.mode === 'generated'
+      ? createComboContainer({
+        id: 'pe-generated-options-container',
+        name: 'pe-generated-options',
+        title: t('isoConfig.peMode.generatedOptions'),
+        description: '',
+        icon: 'settings-2',
+        nestedCards: [
+          {
+            id: 'config-pe-disable-8dot3-card',
+            field: 'disable8Dot3Names',
+            title: t('isoConfig.advancedSettings.disable8dot3'),
+            description: t('isoConfig.advancedSettings.disable8dot3Desc'),
+            controlType: 'checkbox',
+            value: pe.disable8Dot3Names || false,
+            borderless: true
+          },
+          {
+            id: 'config-pe-pause-formatting-card',
+            field: 'pauseBeforeFormatting',
+            title: t('isoConfig.advancedSettings.pauseFormatting'),
+            description: '',
+            controlType: 'checkbox',
+            value: pe.pauseBeforeFormatting || false,
+            borderless: true
+          },
+          {
+            id: 'config-pe-pause-reboot-card',
+            field: 'pauseBeforeReboot',
+            title: t('isoConfig.advancedSettings.pauseReboot'),
+            description: '',
+            controlType: 'checkbox',
+            value: pe.pauseBeforeReboot || false,
+            borderless: true
+          }
+        ],
+        expanded: false
+      })
+      : ''
+
+    const customScriptHtml = pe.mode === 'script'
+      ? createComboContainer({
+        id: 'pe-custom-script-container',
+        name: 'pe-custom-script',
+        title: t('isoConfig.peMode.scriptTitle'),
+        description: t('isoConfig.advancedSettings.customPeScriptDesc'),
+        icon: 'code',
+        nestedCards: [
+          {
+            id: 'config-pe-custom-script-card',
+            title: t('isoConfig.peMode.scriptTitle'),
+            description: '',
+            icon: 'code',
+            value: pe.cmdScript || '',
+            placeholder: `@echo off
+echo Custom PE script
+pause`,
+            rows: 10,
+            borderless: true,
+            showImportExport: true
+          } as any
+        ],
+        expanded: true
+      })
+      : ''
+
+    contentDiv.innerHTML = `
+      ${peModeCardHtml}
+      ${generatedOptionsHtml}
+      ${customScriptHtml}
+    `
+
+    setupComboCard('config-pe-mode-card', (value) => {
+      this.updateModule('peSettings', { mode: value as 'default' | 'generated' | 'script' })
+      this.renderWindowsPEStage()
+    })
+
+    if (pe.mode === 'generated') {
+      setupComboContainer('pe-generated-options-container', 'pe-generated-options', (values) => {
+        this.updateModule('peSettings', {
+          disable8Dot3Names: Boolean(values.disable8Dot3Names),
+          pauseBeforeFormatting: Boolean(values.pauseBeforeFormatting),
+          pauseBeforeReboot: Boolean(values.pauseBeforeReboot)
+        })
+      }, true, {
+        id: 'pe-generated-options-container',
+        name: 'pe-generated-options',
+        title: t('isoConfig.peMode.generatedOptions'),
+        description: '',
+        icon: 'settings-2',
+        nestedCards: [
+          { id: 'config-pe-disable-8dot3-card', field: 'disable8Dot3Names', title: '', controlType: 'checkbox', value: false, borderless: true },
+          { id: 'config-pe-pause-formatting-card', field: 'pauseBeforeFormatting', title: '', controlType: 'checkbox', value: false, borderless: true },
+          { id: 'config-pe-pause-reboot-card', field: 'pauseBeforeReboot', title: '', controlType: 'checkbox', value: false, borderless: true }
+        ]
+      })
+    }
+
+    if (pe.mode === 'script') {
+      setupTextCard('config-pe-custom-script-card', (value) => {
+        this.updateModule('peSettings', { cmdScript: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'Script Files', extensions: ['cmd', 'bat', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('config-pe-custom-script-card', content)
+            this.updateModule('peSettings', { cmdScript: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'Batch Files', extensions: ['cmd', 'bat'] }],
+            defaultPath: 'pe-script.cmd'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('config-pe-custom-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
+  // 渲染 Windows PE 子模块: Partitioning and formatting
+  private renderPartitioning(targetId = 'config-partitioning') {
+    const contentDiv = this.getRenderContent(targetId)
     if (!contentDiv) return
 
     const part = this.config.partitioning
+    const partitionLayout = part.layout || 'GPT'
 
     // 1. 主要分区模式 - RadioContainer (带嵌套)
     const partitionModeRadioHtml = createRadioContainer({
@@ -2479,12 +2523,21 @@ pause`,
           nestedCards: [
             // Partition Layout Select
             {
+              id: 'target-disk-card',
+              title: t('isoConfig.partitioning.targetDisk'),
+              description: t('isoConfig.partitioning.targetDiskDesc'),
+              controlType: 'text' as const,
+              value: String(part.targetDisk ?? 0),
+              placeholder: '0',
+              borderless: true
+            },
+            {
               id: 'partition-layout-card',
               title: t('isoConfig.partitioning.partitionLayout'),
               description: '',
               icon: 'layout',
               controlType: 'select',
-              value: part.layout || 'GPT',
+              value: partitionLayout,
               options: [
                 { value: 'GPT', label: t('isoConfig.partitioning.gpt') },
                 { value: 'MBR', label: t('isoConfig.partitioning.mbr') }
@@ -2492,7 +2545,7 @@ pause`,
               borderless: true
             },
             // ESP Size (仅GPT显示)
-            ...(part.layout === 'GPT' ? [{
+            ...(partitionLayout === 'GPT' ? [{
               id: 'esp-size-card',
               title: t('isoConfig.partitioning.espSize') + ' (MB)',
               description: t('isoConfig.partitioning.gptDesc'),
@@ -2559,40 +2612,6 @@ GPT ATTRIBUTES=0x8000000000000001`,
               rows: 18,
               borderless: true,
               showImportExport: true
-            },
-            // Install To Mode Select
-            {
-              id: 'install-to-mode-card',
-              title: t('isoConfig.partitioning.installTo'),
-              description: '',
-              icon: 'target',
-              controlType: 'select',
-              value: part.installToMode || 'available',
-              options: [
-                { value: 'available', label: t('isoConfig.partitioning.installToAvailable') },
-                { value: 'custom', label: t('isoConfig.partitioning.installToCustom') }
-              ],
-              borderless: true
-            },
-            // Install Disk (无条件显示)
-            {
-              id: 'install-to-disk-card',
-              title: t('isoConfig.partitioning.installDisk'),
-              description: t('isoConfig.partitioning.installDiskDesc'),
-              controlType: 'text' as const,
-              value: String(part.installToDisk || 0),
-              placeholder: '0',
-              borderless: true
-            },
-            // Install Partition (无条件显示)
-            {
-              id: 'install-to-partition-card',
-              title: t('isoConfig.partitioning.installPartition'),
-              description: t('isoConfig.partitioning.installPartitionDesc'),
-              controlType: 'text' as const,
-              value: String(part.installToPartition || 3),
-              placeholder: '3',
-              borderless: true
             }
           ] as any
         }
@@ -2659,17 +2678,21 @@ End If`,
     // 1. 主要分区模式
     setupRadioContainer('partitioning-mode-container', 'partition-mode', (value) => {
       this.updateModule('partitioning', { mode: value as 'interactive' | 'automatic' | 'custom' })
-      this.renderPartitioning()
+      this.renderPartitioning(targetId)
     }, true)
 
     // 2. Automatic 模式的嵌套卡片事件
     if (part.mode === 'automatic') {
-      setupComboCard('partition-layout-card', (value) => {
-        this.updateModule('partitioning', { layout: value as 'GPT' | 'MBR' })
-        this.renderPartitioning()
+      setupComboCard('target-disk-card', (value) => {
+        this.updateModule('partitioning', { targetDisk: parseInt(value as string) || 0 })
       })
 
-      if (part.layout === 'GPT') {
+      setupComboCard('partition-layout-card', (value) => {
+        this.updateModule('partitioning', { layout: value as 'GPT' | 'MBR' })
+        this.renderPartitioning(targetId)
+      })
+
+      if (partitionLayout === 'GPT') {
         setupComboCard('esp-size-card', (value) => {
           this.updateModule('partitioning', { espSize: parseInt(value as string) || 300 })
         })
@@ -2677,7 +2700,7 @@ End If`,
 
       setupComboCard('recovery-mode-card', (value) => {
         this.updateModule('partitioning', { recoveryMode: value as 'partition' | 'folder' | 'none' })
-        this.renderPartitioning()
+        this.renderPartitioning(targetId)
       })
 
       // Recovery Size (无条件设置)
@@ -2699,7 +2722,7 @@ End If`,
           if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
             const content = await window.electronAPI.readFile(result.filePaths[0])
             this.updateModule('partitioning', { diskpartScript: content })
-            this.renderPartitioning()
+            this.renderPartitioning(targetId)
           }
         }
       }, async () => {
@@ -2715,26 +2738,12 @@ End If`,
           }
         }
       })
-
-      setupComboCard('install-to-mode-card', (value) => {
-        this.updateModule('partitioning', { installToMode: value as 'available' | 'custom' })
-        this.renderPartitioning()
-      })
-
-      // Install Disk & Partition (无条件设置)
-      setupComboCard('install-to-disk-card', (value) => {
-        this.updateModule('partitioning', { installToDisk: parseInt(value as string) || 0 })
-      })
-
-      setupComboCard('install-to-partition-card', (value) => {
-        this.updateModule('partitioning', { installToPartition: parseInt(value as string) || 3 })
-      })
     }
 
     // 4. 磁盘断言事件（无条件设置）
     setupRadioContainer('disk-assertion-container', 'disk-assertion-mode', (value) => {
       this.updateModule('partitioning', { diskAssertionMode: value as 'skip' | 'script' })
-      this.renderPartitioning()
+      this.renderPartitioning(targetId)
     }, true)
 
     if (part.diskAssertionMode === 'script') {
@@ -2775,13 +2784,12 @@ End If`,
     }
   }
 
-  // 渲染模块8+9: Windows Edition and Source (合并)
-  private renderWindowsEditionAndSource() {
-    const contentDiv = this.getSectionContent('config-windows-edition')
+  // 渲染 Windows PE 子模块: Windows Edition
+  private renderWindowsEditionAndSource(targetId = 'config-windows-edition') {
+    const contentDiv = this.getRenderContent(targetId)
     if (!contentDiv) return
 
     const edition = this.config.windowsEdition
-    const source = this.config.sourceImage
     const preset = this.getPresetData()
 
     // 1. Windows Edition Mode - RadioContainer (带嵌套)
@@ -2803,7 +2811,7 @@ End If`,
               icon: 'package',
               controlType: 'select',
             options: preset.windowsEditions.map(e => ({
-              value: e.name || e.id,
+              value: e.id,
               label: e.name || e.id
             })),
               value: edition.editionName || 'pro',
@@ -2842,59 +2850,8 @@ End If`,
       expanded: false
     })
 
-    // 2. Source Image Mode - RadioContainer (带嵌套)
-    const sourceImageModeRadioHtml = createRadioContainer({
-      id: 'source-image-mode-container',
-      name: 'source-image-mode',
-      title: t('isoConfig.windowsEdition.sourceImage'),
-      description: t('isoConfig.windowsEdition.sourceImageDesc'),
-      icon: 'disc',
-      options: [
-        {
-          value: 'automatic',
-          label: t('isoConfig.windowsEdition.selectByKey'),
-          description: ''
-        },
-        {
-          value: 'index',
-          label: t('isoConfig.windowsEdition.selectByIndex'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'config-source-image-index-card',
-              title: t('isoConfig.windowsEdition.selectByIndex'),
-              description: '',
-              controlType: 'text',
-              value: String(source.imageIndex || 1),
-              placeholder: '1',
-              borderless: true
-            }
-          ]
-        },
-        {
-          value: 'name',
-          label: t('isoConfig.windowsEdition.selectByName'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'config-source-image-name-card',
-              title: t('isoConfig.windowsEdition.selectByName'),
-              description: '',
-              controlType: 'text',
-              value: source.imageName || '',
-              placeholder: 'Windows 11 Pro',
-              borderless: true
-            }
-          ]
-        }
-      ],
-      selectedValue: source.mode || 'automatic',
-      expanded: false
-    })
-
     contentDiv.innerHTML = `
       ${editionModeRadioHtml}
-      ${sourceImageModeRadioHtml}
     `
 
     // === 事件监听设置 ===
@@ -2911,7 +2868,7 @@ End If`,
         mode = value as 'interactive' | 'firmware'
       }
       this.updateModule('windowsEdition', { mode })
-      this.renderWindowsEditionAndSource()
+      this.renderWindowsEditionAndSource(targetId)
     }, true)
 
     // 2. Generic edition select (嵌套)
@@ -2925,26 +2882,6 @@ End If`,
     if (edition.mode === 'key') {
       setupComboCard('config-product-key-card', (value) => {
         this.updateModule('windowsEdition', { productKey: value as string })
-      })
-    }
-
-    // 4. Source image mode
-    setupRadioContainer('source-image-mode-container', 'source-image-mode', (value) => {
-      this.updateModule('sourceImage', { mode: value as 'automatic' | 'index' | 'name' })
-      this.renderWindowsEditionAndSource()
-    }, true)
-
-    // 5. Source image index (嵌套)
-    if (source.mode === 'index') {
-      setupComboCard('config-source-image-index-card', (value) => {
-        this.updateModule('sourceImage', { imageIndex: parseInt(value as string) || 1 })
-      })
-    }
-
-    // 6. Source image name (嵌套)
-    if (source.mode === 'name') {
-      setupComboCard('config-source-image-name-card', (value) => {
-        this.updateModule('sourceImage', { imageName: value as string })
       })
     }
 
