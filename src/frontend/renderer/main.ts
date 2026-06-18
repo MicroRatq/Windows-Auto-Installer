@@ -214,20 +214,21 @@ function finalizeSidebarAnimation(collapsed: boolean) {
 
 function runSidebarWidthTransition(collapsed: boolean) {
   if (!sidebarEl) return
+  const sidebar = sidebarEl
 
   const handleTransitionEnd = (event: TransitionEvent) => {
-    if (event.target !== sidebarEl || event.propertyName !== 'width') {
+    if (event.target !== sidebar || event.propertyName !== 'width') {
       return
     }
 
-    sidebarEl.removeEventListener('transitionend', handleTransitionEnd)
+    sidebar.removeEventListener('transitionend', handleTransitionEnd)
     finalizeSidebarAnimation(collapsed)
   }
 
   sidebarEl.addEventListener('transitionend', handleTransitionEnd)
 
-  sidebarAnimationTimeoutId = window.setTimeout(() => {
-    sidebarEl?.removeEventListener('transitionend', handleTransitionEnd)
+    sidebarAnimationTimeoutId = window.setTimeout(() => {
+    sidebar.removeEventListener('transitionend', handleTransitionEnd)
     finalizeSidebarAnimation(collapsed)
   }, 380)
 }
@@ -388,7 +389,7 @@ function selectSubMenu(id: string) {
     // 折叠状态：更新图标菜单
     if (iconMenuEl) {
       // 先清除其他listbox的选中状态
-      subMenuEls.forEach((subMenuEl, mainMenuId) => {
+      subMenuEls.forEach((subMenuEl) => {
         if ('selectedIndex' in subMenuEl) {
           (subMenuEl as any).selectedIndex = -1
         }
@@ -544,12 +545,6 @@ function startResize(e: PointerEvent) {
   window.addEventListener('blur', onWindowBlur)
 }
 
-// 打开设置
-function openSettings() {
-  console.log('打开设置')
-  selectSubMenu(settingsMenuItem.id)
-}
-
 // 切换侧边栏折叠状态
 function toggleCollapse() {
   if (!sidebarEl || !sidebarMenuGroups || !iconMenuEl || !collapseIcon) return
@@ -632,7 +627,7 @@ async function init() {
   })
 
   // 为每个二级菜单添加事件监听（仅监听点击事件）
-  subMenuEls.forEach((subMenuEl, mainMenuId) => {
+  subMenuEls.forEach((subMenuEl) => {
     // 只监听点击事件，不监听change事件
     // 这样可以避免程序设置value时触发change事件导致的递归调用
     subMenuEl.addEventListener('click', (event: MouseEvent) => {

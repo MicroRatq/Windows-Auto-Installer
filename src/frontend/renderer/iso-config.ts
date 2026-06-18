@@ -780,12 +780,6 @@ class UnattendConfigManager {
     this.updateModule('languageSettings', { inputLocale: newValue })
   }
 
-  private getDefaultSystemLocale(uiLanguage: string): string {
-    const localeId = this.localeForLanguageId(uiLanguage)
-    const candidates = this.getFirstLanguageCandidates()
-    return candidates.find(l => l.id === localeId)?.id || candidates[0]?.id || uiLanguage
-  }
-
   // 异步加载预设数据（从后端获取完整数据）
   private async loadPresetData(triggerRender: boolean = false) {
     if (!window.electronAPI?.sendToBackend) {
