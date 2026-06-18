@@ -1032,10 +1032,7 @@ class UnattendConfigManager {
     this.renderFoldersStart()
     this.renderPersonalization()
 
-    // 8. WLAN / Wi-Fi setup
-    this.renderWifi()
-
-    // 9. Accessibility Settings (合并模块23、24)
+    // 8. Accessibility Settings (合并模块23、24)
     this.renderLockKeys()
     this.renderStickyKeys()
 
@@ -1492,15 +1489,6 @@ class UnattendConfigManager {
       value: settings.bypassRequirementsCheck
     })
 
-    const bypassNetworkCardHtml = createComboCard({
-      id: 'config-bypass-network-card',
-      title: t('isoConfig.setupSettings.bypassNetwork'),
-      description: t('isoConfig.setupSettings.bypassNetworkDesc'),
-      icon: 'wifi-off',
-      controlType: 'switch',
-      value: settings.bypassNetworkCheck
-    })
-
     const disableOobePrivacyPromptsCardHtml = createComboCard({
       id: 'config-disable-oobe-privacy-prompts-card',
       title: t('isoConfig.setupSettings.disableOobePrivacyPrompts'),
@@ -1546,9 +1534,145 @@ class UnattendConfigManager {
       value: settings.useNarrator
     })
 
+    const express = this.config.expressSettings
+
+    const expressSettingsCardHtml = createComboCard({
+      id: 'config-express-settings-card',
+      title: t('isoConfig.setupSettings.expressSettings'),
+      description: t('isoConfig.setupSettings.expressSettingsDesc'),
+      icon: 'shield-check',
+      controlType: 'select',
+      options: [
+        { value: 'interactive', label: t('isoConfig.setupSettings.expressInteractive') },
+        { value: 'enableAll', label: t('isoConfig.setupSettings.expressEnableAll') },
+        { value: 'disableAll', label: t('isoConfig.setupSettings.expressDisableAll') }
+      ],
+      value: express || 'disableAll'
+    })
+
+    const wifi = this.config.wifi
+
+    const networkMode = settings.bypassNetworkCheck ? 'noInternet'
+      : wifi.mode === 'unattended' ? 'unattended'
+      : wifi.mode === 'fromProfile' ? 'fromProfile'
+      : 'interactive'
+
+    const networkRadioHtml = createRadioContainer({
+      id: 'network-mode-container',
+      name: 'network-mode',
+      title: t('isoConfig.setupSettings.networkTitle'),
+      description: t('isoConfig.setupSettings.networkDesc'),
+      icon: 'wifi',
+      options: [
+        {
+          value: 'noInternet',
+          label: t('isoConfig.setupSettings.networkNoInternet'),
+          description: t('isoConfig.setupSettings.networkNoInternetDesc')
+        },
+        {
+          value: 'interactive',
+          label: t('isoConfig.setupSettings.networkInteractive'),
+          description: t('isoConfig.setupSettings.networkInteractiveDesc')
+        },
+        {
+          value: 'unattended',
+          label: t('isoConfig.setupSettings.networkUnattended'),
+          description: `${t('isoConfig.wifi.wpa3Note')}\n${t('isoConfig.wifi.passwordNote')}`,
+          nestedCards: [
+            {
+              id: 'config-wifi-ssid-card',
+              title: t('isoConfig.wifi.ssid'),
+              description: '',
+              controlType: 'text',
+              value: wifi.ssid || '',
+              placeholder: 'WLAN-123456',
+              borderless: true
+            },
+            {
+              id: 'config-wifi-auth-card',
+              title: t('isoConfig.wifi.authentication'),
+              description: '',
+              controlType: 'select',
+              value: wifi.authentication || 'Open',
+              options: [
+                { value: 'Open', label: t('isoConfig.wifi.authOpen') },
+                { value: 'WPA2PSK', label: t('isoConfig.wifi.authWPA2') },
+                { value: 'WPA3SAE', label: t('isoConfig.wifi.authWPA3') }
+              ],
+              borderless: true
+            },
+            {
+              id: 'config-wifi-password-card',
+              title: t('isoConfig.nameAccount.password'),
+              description: '',
+              controlType: 'text',
+              value: wifi.password || '00000000',
+              placeholder: 'password',
+              borderless: true
+            },
+            {
+              id: 'config-wifi-non-broadcast-card',
+              title: t('isoConfig.wifi.nonBroadcast'),
+              description: '',
+              controlType: 'checkbox',
+              value: wifi.hidden || false,
+              borderless: true
+            }
+          ]
+        },
+        {
+          value: 'fromProfile',
+          label: t('isoConfig.setupSettings.networkFromProfile'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'config-wifi-profile-xml-card',
+              title: t('isoConfig.wifi.profileXml'),
+              description: '',
+              icon: 'code',
+              value: wifi.profileXml || '',
+              placeholder: `<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+  <name>WLAN-123456</name>
+  <SSIDConfig>
+    <SSID>
+      <hex>574C414E2D313233343536</hex>
+      <name>WLAN-123456</name>
+    </SSID>
+    <nonBroadcast>true</nonBroadcast>
+  </SSIDConfig>
+  <connectionType>ESS</connectionType>
+  <connectionMode>auto</connectionMode>
+  <MSM>
+    <security>
+      <authEncryption>
+        <authentication>WPA3SAE</authentication>
+        <encryption>AES</encryption>
+        <useOneX>false</useOneX>
+        <transitionMode xmlns="http://www.microsoft.com/networking/WLAN/profile/v4">true</transitionMode>
+      </authEncryption>
+      <sharedKey>
+        <keyType>passPhrase</keyType>
+        <protected>false</protected>
+        <keyMaterial>password</keyMaterial>
+      </sharedKey>
+    </security>
+  </MSM>
+</WLANProfile>`,
+              rows: 29,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: networkMode,
+      expanded: false
+    })
+
     contentDiv.innerHTML = `
+      ${networkRadioHtml}
+      ${expressSettingsCardHtml}
       ${bypassRequirementsCardHtml}
-      ${bypassNetworkCardHtml}
       ${disableOobePrivacyPromptsCardHtml}
       ${useConfigurationSetCardHtml}
       ${hidePowerShellWindowsCardHtml}
@@ -1559,10 +1683,6 @@ class UnattendConfigManager {
     // 设置每个 ComboCard 的事件监听
     setupComboCard('config-bypass-requirements-card', (value) => {
       this.updateModule('setupSettings', { bypassRequirementsCheck: value as boolean })
-    })
-
-    setupComboCard('config-bypass-network-card', (value) => {
-      this.updateModule('setupSettings', { bypassNetworkCheck: value as boolean })
     })
 
     setupComboCard('config-disable-oobe-privacy-prompts-card', (value) => {
@@ -1584,6 +1704,74 @@ class UnattendConfigManager {
     setupComboCard('config-use-narrator-card', (value) => {
       this.updateModule('setupSettings', { useNarrator: value as boolean })
     })
+
+    setupComboCard('config-express-settings-card', (value) => {
+      this.updateConfig({ expressSettings: value as ExpressSettingsMode })
+    })
+
+    setupRadioContainer('network-mode-container', 'network-mode', (value) => {
+      if (value === 'noInternet') {
+        this.updateModule('setupSettings', { bypassNetworkCheck: true })
+        this.updateModule('wifi', { mode: 'skip' })
+      } else if (value === 'interactive') {
+        this.updateModule('setupSettings', { bypassNetworkCheck: false })
+        this.updateModule('wifi', { mode: 'interactive' })
+      } else if (value === 'unattended') {
+        this.updateModule('setupSettings', { bypassNetworkCheck: false })
+        this.updateModule('wifi', { mode: 'unattended' })
+      } else if (value === 'fromProfile') {
+        this.updateModule('setupSettings', { bypassNetworkCheck: false })
+        this.updateModule('wifi', { mode: 'fromProfile' })
+      }
+      this.renderSetupSettings()
+    }, true)
+
+    if (networkMode === 'unattended') {
+      setupComboCard('config-wifi-ssid-card', (value) => {
+        this.updateModule('wifi', { ssid: value as string })
+      })
+
+      setupComboCard('config-wifi-auth-card', (value) => {
+        this.updateModule('wifi', { authentication: value as 'Open' | 'WPA2PSK' | 'WPA3SAE' })
+      })
+
+      setupComboCard('config-wifi-password-card', (value) => {
+        this.updateModule('wifi', { password: value as string })
+      })
+
+      setupComboCard('config-wifi-non-broadcast-card', (value) => {
+        this.updateModule('wifi', { hidden: value as boolean })
+      })
+    }
+
+    if (networkMode === 'fromProfile') {
+      setupTextCard('config-wifi-profile-xml-card', (value) => {
+        this.updateModule('wifi', { profileXml: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('config-wifi-profile-xml-card', content)
+            this.updateModule('wifi', { profileXml: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml'] }],
+            defaultPath: 'wlan-profile.xml'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('config-wifi-profile-xml-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
 
     // 初始化图标
     if (window.lucide) {
@@ -2163,15 +2351,75 @@ class UnattendConfigManager {
     }
   }
 
-  // 渲染模块11: Advanced Settings (合并 Virtual machine support、AppLocker)
+  // 渲染模块11: Advanced Settings (合并 System tweaks、Virtual machine support、AppLocker)
   private renderAdvancedSettings() {
     const contentDiv = this.getSectionContent('config-advanced-settings')
     if (!contentDiv) return
 
+    const tweaks = this.config.systemTweaks
     const vm = this.config.vmSupport
     const appLocker = this.config.appLocker
 
-    // 1. Virtual machine support - ComboContainer (使用嵌套的 ComboCard)
+    // 1. System Tweaks - MultiColumnCheckboxContainer
+    const systemTweaksHtml = createMultiColumnCheckboxContainer({
+      id: 'system-tweaks-container',
+      name: 'system-tweaks',
+      title: t('isoConfig.systemOptimization.systemTweaks'),
+      description: '',
+      icon: 'settings',
+      options: [
+        { value: 'enableLongPaths', label: t('isoConfig.systemOptimization.enableLongPaths') },
+        { value: 'enableRemoteDesktop', label: t('isoConfig.systemOptimization.enableRemoteDesktop') },
+        { value: 'hardenSystemDriveAcl', label: t('isoConfig.systemOptimization.hardenSystemDriveAcl') },
+        { value: 'deleteJunctions', label: t('isoConfig.systemOptimization.deleteJunctions') },
+        { value: 'allowPowerShellScripts', label: t('isoConfig.systemOptimization.allowPowerShellScripts') },
+        { value: 'disableLastAccess', label: t('isoConfig.systemOptimization.disableLastAccess') },
+        { value: 'preventAutomaticReboot', label: t('isoConfig.systemOptimization.preventAutomaticReboot') },
+        { value: 'disableDefender', label: t('isoConfig.systemOptimization.disableDefender') },
+        { value: 'disableSac', label: t('isoConfig.systemOptimization.disableSac') },
+        { value: 'disableUac', label: t('isoConfig.systemOptimization.disableUac') },
+        { value: 'disableSmartScreen', label: t('isoConfig.systemOptimization.disableSmartScreen') },
+        { value: 'disableSystemRestore', label: t('isoConfig.systemOptimization.disableSystemRestore') },
+        { value: 'disableFastStartup', label: t('isoConfig.systemOptimization.disableFastStartup') },
+        { value: 'turnOffSystemSounds', label: t('isoConfig.systemOptimization.turnOffSystemSounds') },
+        { value: 'disableAppSuggestions', label: t('isoConfig.systemOptimization.disableAppSuggestions') },
+        { value: 'disableWidgets', label: t('isoConfig.systemOptimization.disableWidgets') },
+        { value: 'preventDeviceEncryption', label: t('isoConfig.systemOptimization.preventDeviceEncryption') },
+        { value: 'disableWindowsUpdate', label: t('isoConfig.systemOptimization.disableWindowsUpdate') },
+        { value: 'disablePointerPrecision', label: t('isoConfig.systemOptimization.disablePointerPrecision') },
+        { value: 'deleteWindowsOld', label: t('isoConfig.systemOptimization.deleteWindowsOld') },
+        { value: 'disableCoreIsolation', label: t('isoConfig.systemOptimization.disableCoreIsolation') }
+      ],
+      values: {
+        enableLongPaths: tweaks.enableLongPaths || false,
+        enableRemoteDesktop: tweaks.enableRemoteDesktop || false,
+        hardenSystemDriveAcl: tweaks.hardenSystemDriveAcl || false,
+        deleteJunctions: tweaks.deleteJunctions || false,
+        allowPowerShellScripts: tweaks.allowPowerShellScripts || false,
+        disableLastAccess: tweaks.disableLastAccess || false,
+        preventAutomaticReboot: tweaks.preventAutomaticReboot || false,
+        disableDefender: tweaks.disableDefender || false,
+        disableSac: tweaks.disableSac || false,
+        disableUac: tweaks.disableUac || false,
+        disableSmartScreen: tweaks.disableSmartScreen || false,
+        disableSystemRestore: tweaks.disableSystemRestore || false,
+        disableFastStartup: tweaks.disableFastStartup || false,
+        turnOffSystemSounds: tweaks.turnOffSystemSounds || false,
+        disableAppSuggestions: tweaks.disableAppSuggestions || false,
+        disableWidgets: tweaks.disableWidgets || false,
+        preventDeviceEncryption: tweaks.preventDeviceEncryption || false,
+        disableWindowsUpdate: tweaks.disableWindowsUpdate || false,
+        disablePointerPrecision: tweaks.disablePointerPrecision || false,
+        deleteWindowsOld: tweaks.deleteWindowsOld || false,
+        disableCoreIsolation: tweaks.disableCoreIsolation || false
+      },
+      expanded: false,
+      showHeader: true,
+      minColumnWidth: 200,
+      maxColumns: 4
+    })
+
+    // 2. Virtual machine support - ComboContainer
     const vmSupportHtml = createComboContainer({
       id: 'vm-support-container',
       name: 'vm-support',
@@ -2211,7 +2459,7 @@ class UnattendConfigManager {
       expanded: false
     })
 
-    // 2. AppLocker - 参考磁盘断言的 RadioContainer
+    // 3. AppLocker - 参考磁盘断言的 RadioContainer
     const appLockerRadioHtml = createRadioContainer({
       id: 'app-locker-container',
       name: 'app-locker-mode',
@@ -2254,13 +2502,19 @@ class UnattendConfigManager {
     })
 
     contentDiv.innerHTML = `
+      ${systemTweaksHtml}
       ${vmSupportHtml}
       ${appLockerRadioHtml}
     `
 
     // === 事件监听设置 ===
 
-    // 1. Virtual machine support
+    // 1. System Tweaks
+    setupMultiColumnCheckboxContainer('system-tweaks-container', 'system-tweaks', (values) => {
+      this.updateModule('systemTweaks', values as Partial<SystemTweaks>)
+    }, true)
+
+    // 2. Virtual machine support
     setupComboContainer('vm-support-container', 'vm-support', (values) => {
       // 从嵌套卡片的值中提取各个选项
       const vboxKey = Object.keys(values).find(k => k.includes('vbox'))
@@ -2287,7 +2541,7 @@ class UnattendConfigManager {
       ]
     })
 
-    // 2. AppLocker
+    // 3. AppLocker
     setupRadioContainer('app-locker-container', 'app-locker-mode', (value) => {
       this.updateModule('appLocker', { mode: value as 'skip' | 'configure' })
       this.renderAdvancedSettings()
@@ -3584,76 +3838,15 @@ End If`,
   }
 
   // 渲染模块16: System tweaks
-  // 渲染模块10: System Optimization (合并System tweaks、Remove bloatware、Express settings)
+  // 渲染模块10: System Optimization (合并Remove bloatware)
   private renderSystemOptimization() {
     const contentDiv = this.getSectionContent('config-system-optimization')
     if (!contentDiv) return
 
-    const tweaks = this.config.systemTweaks
     const bloatware = this.config.bloatware
-    const express = this.config.expressSettings
     const preset = this.getPresetData()
 
-    // 1. System Tweaks - MultiColumnCheckboxContainer (非嵌入式，显示头部)
-    const systemTweaksHtml = createMultiColumnCheckboxContainer({
-      id: 'system-tweaks-container',
-      name: 'system-tweaks',
-      title: t('isoConfig.systemOptimization.systemTweaks'),
-      description: '',
-      icon: 'settings',
-      options: [
-        { value: 'enableLongPaths', label: t('isoConfig.systemOptimization.enableLongPaths') },
-        { value: 'enableRemoteDesktop', label: t('isoConfig.systemOptimization.enableRemoteDesktop') },
-        { value: 'hardenSystemDriveAcl', label: t('isoConfig.systemOptimization.hardenSystemDriveAcl') },
-        { value: 'deleteJunctions', label: t('isoConfig.systemOptimization.deleteJunctions') },
-        { value: 'allowPowerShellScripts', label: t('isoConfig.systemOptimization.allowPowerShellScripts') },
-        { value: 'disableLastAccess', label: t('isoConfig.systemOptimization.disableLastAccess') },
-        { value: 'preventAutomaticReboot', label: t('isoConfig.systemOptimization.preventAutomaticReboot') },
-        { value: 'disableDefender', label: t('isoConfig.systemOptimization.disableDefender') },
-        { value: 'disableSac', label: t('isoConfig.systemOptimization.disableSac') },
-        { value: 'disableUac', label: t('isoConfig.systemOptimization.disableUac') },
-        { value: 'disableSmartScreen', label: t('isoConfig.systemOptimization.disableSmartScreen') },
-        { value: 'disableSystemRestore', label: t('isoConfig.systemOptimization.disableSystemRestore') },
-        { value: 'disableFastStartup', label: t('isoConfig.systemOptimization.disableFastStartup') },
-        { value: 'turnOffSystemSounds', label: t('isoConfig.systemOptimization.turnOffSystemSounds') },
-        { value: 'disableAppSuggestions', label: t('isoConfig.systemOptimization.disableAppSuggestions') },
-        { value: 'disableWidgets', label: t('isoConfig.systemOptimization.disableWidgets') },
-        { value: 'preventDeviceEncryption', label: t('isoConfig.systemOptimization.preventDeviceEncryption') },
-        { value: 'disableWindowsUpdate', label: t('isoConfig.systemOptimization.disableWindowsUpdate') },
-        { value: 'disablePointerPrecision', label: t('isoConfig.systemOptimization.disablePointerPrecision') },
-        { value: 'deleteWindowsOld', label: t('isoConfig.systemOptimization.deleteWindowsOld') },
-        { value: 'disableCoreIsolation', label: t('isoConfig.systemOptimization.disableCoreIsolation') }
-      ],
-      values: {
-        enableLongPaths: tweaks.enableLongPaths || false,
-        enableRemoteDesktop: tweaks.enableRemoteDesktop || false,
-        hardenSystemDriveAcl: tweaks.hardenSystemDriveAcl || false,
-        deleteJunctions: tweaks.deleteJunctions || false,
-        allowPowerShellScripts: tweaks.allowPowerShellScripts || false,
-        disableLastAccess: tweaks.disableLastAccess || false,
-        preventAutomaticReboot: tweaks.preventAutomaticReboot || false,
-        disableDefender: tweaks.disableDefender || false,
-        disableSac: tweaks.disableSac || false,
-        disableUac: tweaks.disableUac || false,
-        disableSmartScreen: tweaks.disableSmartScreen || false,
-        disableSystemRestore: tweaks.disableSystemRestore || false,
-        disableFastStartup: tweaks.disableFastStartup || false,
-        turnOffSystemSounds: tweaks.turnOffSystemSounds || false,
-        disableAppSuggestions: tweaks.disableAppSuggestions || false,
-        disableWidgets: tweaks.disableWidgets || false,
-        preventDeviceEncryption: tweaks.preventDeviceEncryption || false,
-        disableWindowsUpdate: tweaks.disableWindowsUpdate || false,
-        disablePointerPrecision: tweaks.disablePointerPrecision || false,
-        deleteWindowsOld: tweaks.deleteWindowsOld || false,
-        disableCoreIsolation: tweaks.disableCoreIsolation || false
-      },
-      expanded: false,
-      showHeader: true, // 非嵌入式，显示头部
-      minColumnWidth: 200,
-      maxColumns: 4 // 限制最大列数，确保文本完整显示
-    })
-
-    // 2. Remove Bloatware - MultiColumnCheckboxContainer (非嵌入式，显示头部)
+    // 1. Remove Bloatware - MultiColumnCheckboxContainer (非嵌入式，显示头部)
     // 先构建选项和值
     const bloatwareOptions = preset.bloatwareItems.map(item => ({
       value: item.id || item.name,
@@ -3681,44 +3874,17 @@ End If`,
       maxColumns: 4 // 限制最大列数，确保文本完整显示
     })
 
-    // 3. Express Settings - ComboCard select
-    const expressSettingsCardHtml = createComboCard({
-      id: 'express-settings-card',
-      title: t('isoConfig.systemOptimization.expressSettings'),
-      description: '',
-      icon: 'shield-check',
-      controlType: 'select',
-      options: [
-        { value: 'interactive', label: t('isoConfig.systemOptimization.expressInteractive') },
-        { value: 'enableAll', label: t('isoConfig.systemOptimization.expressEnableAll') },
-        { value: 'disableAll', label: t('isoConfig.systemOptimization.expressDisableAll') }
-      ],
-      value: express || 'interactive'
-    })
-
     contentDiv.innerHTML = `
-      ${systemTweaksHtml}
       ${removeBloatwareHtml}
-      ${expressSettingsCardHtml}
     `
 
     // === 事件监听设置 ===
 
-    // 1. System Tweaks
-    setupMultiColumnCheckboxContainer('system-tweaks-container', 'system-tweaks', (values) => {
-      this.updateModule('systemTweaks', values as Partial<SystemTweaks>)
-    }, true)
-
-    // 2. Remove Bloatware
+    // 1. Remove Bloatware
     setupMultiColumnCheckboxContainer('remove-bloatware-container', 'remove-bloatware', (values) => {
       const items = Object.keys(values).filter(key => values[key] === true)
       this.updateModule('bloatware', { items })
     }, true)
-
-    // 3. Express Settings
-    setupComboCard('express-settings-card', (value) => {
-      this.updateConfig({ expressSettings: value as ExpressSettingsMode })
-    })
 
     // 初始化图标
     if (window.lucide) {
@@ -4052,195 +4218,6 @@ End If`,
         })
         this.updateModule('startFolders', { folders: foldersObj })
       }, false) // 不更新头部值（因为已隐藏头部）
-    }
-
-    // 初始化图标
-    if (window.lucide) {
-      window.lucide.createIcons()
-    }
-  }
-
-  // 渲染模块21: WLAN / Wi-Fi setup
-  private renderWifi() {
-    const contentDiv = this.getSectionContent('config-wifi')
-    if (!contentDiv) return
-
-    const wifi = this.config.wifi
-
-    // 1. Wi-Fi Mode - RadioContainer (带嵌套)
-    const wifiModeRadioHtml = createRadioContainer({
-      id: 'wifi-mode-container',
-      name: 'wifi-mode',
-      title: t('isoConfig.wifi.title'),
-      description: '',
-      icon: 'wifi',
-      options: [
-        {
-          value: 'interactive',
-          label: t('isoConfig.wifi.interactive'),
-          description: ''
-        },
-        {
-          value: 'skip',
-          label: t('isoConfig.wifi.skip'),
-          description: t('isoConfig.wifi.skipDesc')
-        },
-        {
-          value: 'unattended',
-          label: t('isoConfig.wifi.unattended'),
-          description: `${t('isoConfig.wifi.wpa3Note')}\n${t('isoConfig.wifi.passwordNote')}`,
-          nestedCards: [
-            {
-              id: 'config-wifi-ssid-card',
-              title: t('isoConfig.wifi.ssid'),
-              description: '',
-              controlType: 'text',
-              value: wifi.ssid || '',
-              placeholder: 'WLAN-123456',
-              borderless: true
-            },
-            {
-              id: 'config-wifi-auth-card',
-              title: t('isoConfig.wifi.authentication'),
-              description: '',
-              controlType: 'select',
-              value: wifi.authentication || 'Open',
-              options: [
-                { value: 'Open', label: t('isoConfig.wifi.authOpen') },
-                { value: 'WPA2PSK', label: t('isoConfig.wifi.authWPA2') },
-                { value: 'WPA3SAE', label: t('isoConfig.wifi.authWPA3') }
-              ],
-              borderless: true
-            },
-            {
-              id: 'config-wifi-password-card',
-              title: t('isoConfig.nameAccount.password'),
-              description: '',
-              controlType: 'text',
-              value: wifi.password || '00000000',
-              placeholder: 'password',
-              borderless: true
-            },
-            {
-              id: 'config-wifi-non-broadcast-card',
-              title: t('isoConfig.wifi.nonBroadcast'),
-              description: '',
-              controlType: 'checkbox',
-              value: wifi.hidden || false,
-              borderless: true
-            }
-          ]
-        },
-        {
-          value: 'fromProfile',
-          label: t('isoConfig.wifi.fromProfile'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'config-wifi-profile-xml-card',
-              title: t('isoConfig.wifi.profileXml'),
-              description: '',
-              icon: 'code',
-              value: wifi.profileXml || '',
-              placeholder: `<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-  <name>WLAN-123456</name>
-  <SSIDConfig>
-    <SSID>
-      <hex>574C414E2D313233343536</hex>
-      <name>WLAN-123456</name>
-    </SSID>
-    <nonBroadcast>true</nonBroadcast>
-  </SSIDConfig>
-  <connectionType>ESS</connectionType>
-  <connectionMode>auto</connectionMode>
-  <MSM>
-    <security>
-      <authEncryption>
-        <authentication>WPA3SAE</authentication>
-        <encryption>AES</encryption>
-        <useOneX>false</useOneX>
-        <transitionMode xmlns="http://www.microsoft.com/networking/WLAN/profile/v4">true</transitionMode>
-      </authEncryption>
-      <sharedKey>
-        <keyType>passPhrase</keyType>
-        <protected>false</protected>
-        <keyMaterial>password</keyMaterial>
-      </sharedKey>
-    </security>
-  </MSM>
-</WLANProfile>`,
-              rows: 29,
-              borderless: true,
-              showImportExport: true
-            } as any
-          ]
-        }
-      ],
-      selectedValue: wifi.mode || 'interactive',
-      expanded: false
-    })
-
-    contentDiv.innerHTML = `
-      ${wifiModeRadioHtml}
-    `
-
-    // === 事件监听设置 ===
-
-    // 1. Wi-Fi mode
-    setupRadioContainer('wifi-mode-container', 'wifi-mode', (value) => {
-      this.updateModule('wifi', { mode: value as 'interactive' | 'skip' | 'unattended' | 'fromProfile' })
-      this.renderWifi()
-    }, true)
-
-    // 2. Unattended 设置 (嵌套)
-    if (wifi.mode === 'unattended') {
-      setupComboCard('config-wifi-ssid-card', (value) => {
-        this.updateModule('wifi', { ssid: value as string })
-      })
-
-      setupComboCard('config-wifi-auth-card', (value) => {
-        this.updateModule('wifi', { authentication: value as 'Open' | 'WPA2PSK' | 'WPA3SAE' })
-      })
-
-      setupComboCard('config-wifi-password-card', (value) => {
-        this.updateModule('wifi', { password: value as string })
-      })
-
-      setupComboCard('config-wifi-non-broadcast-card', (value) => {
-        this.updateModule('wifi', { hidden: value as boolean })
-      })
-    }
-
-    // 3. FromProfile 设置 (嵌套)
-    if (wifi.mode === 'fromProfile') {
-      setupTextCard('config-wifi-profile-xml-card', (value) => {
-        this.updateModule('wifi', { profileXml: value })
-      }, async () => {
-        // 导入 XML
-        if (window.electronAPI?.showOpenDialog) {
-          const result = await window.electronAPI.showOpenDialog({
-            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
-            properties: ['openFile']
-          })
-          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
-            const content = await window.electronAPI.readFile(result.filePaths[0])
-            setTextCardValue('config-wifi-profile-xml-card', content)
-            this.updateModule('wifi', { profileXml: content })
-          }
-        }
-      }, async () => {
-        // 导出 XML
-        if (window.electronAPI?.showSaveDialog) {
-          const result = await window.electronAPI.showSaveDialog({
-            filters: [{ name: 'XML Files', extensions: ['xml'] }],
-            defaultPath: 'wlan-profile.xml'
-          })
-          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
-            const currentValue = getTextCardValue('config-wifi-profile-xml-card', true)
-            await window.electronAPI.writeFile(result.filePath, currentValue)
-          }
-        }
-      })
     }
 
     // 初始化图标

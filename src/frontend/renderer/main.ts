@@ -777,7 +777,6 @@ function updateSectionTitles() {
     'config-name-account': t('isoConfig.nameAccount.title'),
     'config-windows-pe-stage': t('isoConfig.windowsPEStage.title'),
     'config-ui-personalization': t('isoConfig.uiPersonalization.title'),
-    'config-wifi': t('isoConfig.wifi.title'),
     'config-accessibility': t('isoConfig.accessibility.title'),
     'config-system-optimization': t('isoConfig.systemOptimization.title'),
     'config-advanced-settings': t('isoConfig.advancedSettings.title')

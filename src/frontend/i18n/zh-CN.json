@@ -39,8 +39,14 @@
       "title": "安装设置",
       "bypassRequirements": "绕过 Windows 11 要求检查",
       "bypassRequirementsDesc": "绕过 Windows 11 安装的 TPM、安全启动、RAM 和 CPU 要求。",
-      "bypassNetwork": "允许没有互联网连接的 Windows 11",
-      "bypassNetworkDesc": "仅当您的计算机确实没有互联网访问时才选中此项。在安装过程中，您仍需要点击'我没有互联网'。如果您只想创建本地账户，请改用用户账户部分。",
+      "networkTitle": "网络设置",
+      "networkDesc": "选择安装过程中的网络处理策略。",
+      "networkNoInternet": "允许没有互联网连接",
+      "networkNoInternetDesc": "跳过网络连接检测和在线账户页面。仅当计算机确实没有互联网访问时选择此项。如需创建本地账户，请使用用户账户部分。",
+      "networkInteractive": "使用交互式网络配置",
+      "networkInteractiveDesc": "完全交给安装程序处理，安装过程中会显示网络连接页面供您选择。",
+      "networkUnattended": "自动连接到此无线局域网",
+      "networkFromProfile": "导入无线局域网的配置文件 (XML)",
       "disableOobePrivacyPrompts": "禁用所有 OOBE 隐私及合规弹窗",
       "disableOobePrivacyPromptsDesc": "在 specialize 阶段预写入相关注册表，跳过 OOBE 中的隐私体验和合规同意弹窗。",
       "useConfigurationSet": "使用分发共享 / 配置集",
@@ -50,7 +56,12 @@
       "keepSensitiveFiles": "保留敏感文件",
       "keepSensitiveFilesDesc": "默认情况下，Windows 安装完成后将删除可能包含敏感数据的文件（如 unattend.xml 和 Wifi.xml）。启用此选项以保留这些文件。",
       "useNarrator": "自动启动讲述人",
-      "useNarratorDesc": "讲述人是一个内置的屏幕阅读器，它会大声朗读屏幕上的内容。它将在 Windows 安装期间和登录后启动。"
+      "useNarratorDesc": "讲述人是一个内置的屏幕阅读器，它会大声朗读屏幕上的内容。它将在 Windows 安装期间和登录后启动。",
+      "expressSettings": "隐私设置",
+      "expressSettingsDesc": "控制 OOBE 阶段的快速设置隐私选项。交互式将保留 OOBE 隐私选择页面让用户自行决定；启用全部将自动接受所有隐私选项；禁用全部将拒绝所有隐私选项。",
+      "expressInteractive": "交互式",
+      "expressEnableAll": "启用全部",
+      "expressDisableAll": "禁用全部"
     },
     "nameAccount": {
       "title": "名称和账户",
@@ -233,11 +244,7 @@
       "deleteWindowsOld": "删除 Windows.old",
       "disableCoreIsolation": "禁用内核隔离",
       "showEndTask": "显示结束任务",
-      "removeBloatware": "移除预装软件",
-      "expressSettings": "快速设置",
-      "expressInteractive": "交互式",
-      "expressEnableAll": "启用全部",
-      "expressDisableAll": "禁用全部"
+      "removeBloatware": "移除预装软件"
     },
     "uiPersonalization": {
       "title": "界面和个性化",

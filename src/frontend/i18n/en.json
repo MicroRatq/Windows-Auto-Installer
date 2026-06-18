@@ -39,8 +39,14 @@
             "title": "Setup settings",
             "bypassRequirements": "Bypass Windows 11 requirements check",
             "bypassRequirementsDesc": "Bypass TPM, Secure Boot, RAM, and CPU requirements for Windows 11 installation.",
-            "bypassNetwork": "Allow Windows 11 without internet connection",
-            "bypassNetworkDesc": "Only check this if your computer really does not have internet access. You will still need to click \"I don't have internet\" during Setup. If you just want to create local accounts, use the User accounts section instead.",
+            "networkTitle": "Network Settings",
+            "networkDesc": "Choose how to handle network connectivity during Windows Setup.",
+            "networkNoInternet": "Allow without internet connection",
+            "networkNoInternetDesc": "Skips network connectivity detection and online account pages. Only choose this if your computer really does not have internet access. For local accounts, use the User accounts section instead.",
+            "networkInteractive": "Interactive network configuration",
+            "networkInteractiveDesc": "Let Windows Setup handle network configuration. The network connection page will be shown during setup.",
+            "networkUnattended": "Connect to this wireless network automatically",
+            "networkFromProfile": "Import a wireless network profile (XML)",
             "disableOobePrivacyPrompts": "Disable all OOBE privacy and compliance prompts",
             "disableOobePrivacyPromptsDesc": "Writes the related registry values during specialize to skip OOBE privacy experience and consent prompts.",
             "useConfigurationSet": "Use a distribution share / configuration set",
@@ -50,7 +56,12 @@
             "keepSensitiveFiles": "Keep sensitive files",
             "keepSensitiveFilesDesc": "By default, files like unattend.xml and Wifi.xml which may contain sensitive data will be deleted once Windows Setup finishes. Enable this to keep those files.",
             "useNarrator": "Automatically start Narrator",
-            "useNarratorDesc": "Narrator is a built-in screen reader that speaks out loud what is on your screen. It will start during Windows Setup and after logon."
+            "useNarratorDesc": "Narrator is a built-in screen reader that speaks out loud what is on your screen. It will start during Windows Setup and after logon.",
+            "expressSettings": "Privacy Settings",
+            "expressSettingsDesc": "Controls the OOBE express privacy settings. Interactive preserves the OOBE privacy choice screen for the user to decide. Enable All automatically accepts all privacy options. Disable All rejects all privacy options.",
+            "expressInteractive": "Interactive",
+            "expressEnableAll": "Enable All",
+            "expressDisableAll": "Disable All"
         },
         "nameAccount": {
             "title": "Name and Account",
@@ -233,11 +244,7 @@
             "deleteWindowsOld": "Delete Windows.old",
             "disableCoreIsolation": "Disable Core Isolation",
             "showEndTask": "Show End Task",
-            "removeBloatware": "Remove bloatware",
-            "expressSettings": "Express settings",
-            "expressInteractive": "Interactive",
-            "expressEnableAll": "Enable all",
-            "expressDisableAll": "Disable all"
+            "removeBloatware": "Remove bloatware"
         },
         "uiPersonalization": {
             "title": "UI and Personalization",
