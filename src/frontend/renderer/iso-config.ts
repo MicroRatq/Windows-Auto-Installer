@@ -63,9 +63,6 @@ interface ComputerNameSettings {
   script?: string
 }
 
-// 紧凑操作系统
-type CompactOSMode = 'default' | 'enabled' | 'disabled'
-
 // 时区设置
 interface TimeZoneSettings {
   mode: 'implicit' | 'explicit'
@@ -100,6 +97,7 @@ interface PESettings {
   disable8Dot3Names?: boolean // Generated模式下的选项
   pauseBeforeFormatting?: boolean
   pauseBeforeReboot?: boolean
+  compactOs?: boolean
 }
 
 // 用户账户设置
@@ -323,11 +321,10 @@ interface ScriptSettings {
   restartExplorer: boolean
 }
 
-// Windows Defender应用程序控制
-interface WdacSettings {
+// AppLocker
+interface AppLockerSettings {
   mode: 'skip' | 'configure'
-  enforcementMode?: 'audit' | 'auditOnBootFailure' | 'enforcement'
-  scriptEnforcement?: 'restricted' | 'unrestricted'
+  policyXml?: string
 }
 
 // XML标记
@@ -348,7 +345,6 @@ interface UnattendConfig {
   processorArchitectures: ProcessorArchitecture[]
   setupSettings: SetupSettings
   computerName: ComputerNameSettings
-  compactOS: CompactOSMode
   timeZone: TimeZoneSettings
   partitioning: PartitionSettings
   windowsEdition: EditionSettings
@@ -370,7 +366,7 @@ interface UnattendConfig {
   personalization: PersonalizationSettings
   bloatware: BloatwareSettings
   scripts: ScriptSettings
-  wdac: WdacSettings
+  appLocker: AppLockerSettings
   xmlMarkup: XmlMarkupSettings
 }
 
@@ -424,7 +420,6 @@ function createDefaultConfig(): UnattendConfig {
     computerName: {
       mode: 'random'
     },
-    compactOS: 'default',
     timeZone: {
       mode: 'implicit'
     },
@@ -435,7 +430,8 @@ function createDefaultConfig(): UnattendConfig {
       mode: 'interactive'
     },
     peSettings: {
-      mode: 'default'
+      mode: 'default',
+      compactOs: false
     },
     accountSettings: {
       mode: 'interactive-local',
@@ -534,7 +530,7 @@ function createDefaultConfig(): UnattendConfig {
       userOnce: [],
       restartExplorer: false
     },
-    wdac: {
+    appLocker: {
       mode: 'skip'
     },
     xmlMarkup: {
@@ -594,6 +590,21 @@ class UnattendConfigManager {
 
   private normalizeConfig(config: Partial<UnattendConfig> | null | undefined): UnattendConfig {
     const merged = this.deepMerge(createDefaultConfig(), this.cloneConfig(config || {})) as UnattendConfig
+
+    const legacyCompactOS = (config as { compactOS?: unknown } | null | undefined)?.compactOS
+    if (typeof legacyCompactOS === 'string') {
+      merged.peSettings.compactOs = legacyCompactOS === 'enabled'
+    }
+
+    const legacyWdac = (config as { wdac?: Partial<AppLockerSettings> | null } | null | undefined)?.wdac
+    if (legacyWdac && typeof legacyWdac === 'object' && typeof legacyWdac.policyXml === 'string' && legacyWdac.policyXml.trim()) {
+      merged.appLocker.mode = 'configure'
+      merged.appLocker.policyXml = legacyWdac.policyXml
+    }
+
+    merged.appLocker.mode = merged.appLocker.mode || 'skip'
+
+    merged.peSettings.compactOs = Boolean(merged.peSettings.compactOs)
 
     merged.accountSettings.accounts = Array.isArray(merged.accountSettings.accounts)
       ? merged.accountSettings.accounts.map(account => this.normalizeAccount(account))
@@ -2152,44 +2163,15 @@ class UnattendConfigManager {
     }
   }
 
-  // 渲染模块11: Advanced Settings (合并 Compact OS、Virtual machine support、WDAC)
+  // 渲染模块11: Advanced Settings (合并 Virtual machine support、AppLocker)
   private renderAdvancedSettings() {
     const contentDiv = this.getSectionContent('config-advanced-settings')
     if (!contentDiv) return
 
-    const compactOS = this.config.compactOS
     const vm = this.config.vmSupport
-    const wdac = this.config.wdac
+    const appLocker = this.config.appLocker
 
-    // 1. Compact OS - RadioContainer
-    const compactOSRadioHtml = createRadioContainer({
-      id: 'compact-os-container',
-      name: 'compact-os-mode',
-      title: t('isoConfig.advancedSettings.compactOS'),
-      description: '',
-      icon: 'archive',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.advancedSettings.compactOSDefault'),
-          description: ''
-        },
-        {
-          value: 'enabled',
-          label: t('isoConfig.advancedSettings.compactOSEnabled'),
-          description: ''
-        },
-        {
-          value: 'disabled',
-          label: t('isoConfig.advancedSettings.compactOSDisabled'),
-          description: ''
-        }
-      ],
-      selectedValue: compactOS,
-      expanded: false
-    })
-
-    // 2. Virtual machine support - ComboContainer (使用嵌套的 ComboCard)
+    // 1. Virtual machine support - ComboContainer (使用嵌套的 ComboCard)
     const vmSupportHtml = createComboContainer({
       id: 'vm-support-container',
       name: 'vm-support',
@@ -2229,86 +2211,56 @@ class UnattendConfigManager {
       expanded: false
     })
 
-    // 3. WDAC - ComboCard Switch
-    const wdacCardHtml = createComboCard({
-      id: 'wdac-mode-card',
-      title: t('isoConfig.advancedSettings.wdac'),
-      description: t('isoConfig.advancedSettings.wdacDesc'),
-      icon: 'shield-alert',
-      controlType: 'switch',
-      value: wdac.mode === 'configure'
+    // 2. AppLocker - 参考磁盘断言的 RadioContainer
+    const appLockerRadioHtml = createRadioContainer({
+      id: 'app-locker-container',
+      name: 'app-locker-mode',
+      title: t('isoConfig.advancedSettings.appLocker'),
+      description: t('isoConfig.advancedSettings.appLockerDesc'),
+      icon: 'shield',
+      options: [
+        {
+          value: 'skip',
+          label: t('isoConfig.advancedSettings.appLockerSkip'),
+          description: ''
+        },
+        {
+          value: 'configure',
+          label: t('isoConfig.advancedSettings.appLockerConfigure'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'app-locker-policy-card',
+              title: t('isoConfig.advancedSettings.appLockerPolicyXml'),
+              description: '',
+              icon: 'code',
+              value: appLocker.policyXml || '',
+              placeholder: `<AppLockerPolicy Version="1">
+  <RuleCollection Type="Exe" EnforcementMode="Enabled" />
+  <RuleCollection Type="Msi" EnforcementMode="Enabled" />
+  <RuleCollection Type="Script" EnforcementMode="Enabled" />
+  <RuleCollection Type="Dll" EnforcementMode="NotConfigured" />
+  <RuleCollection Type="Appx" EnforcementMode="Enabled" />
+</AppLockerPolicy>`,
+              rows: 12,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: appLocker.mode || 'skip',
+      expanded: false
     })
 
-    // 3.1 WDAC Configure模式 - Policy设置 (独立显示)
-    const wdacEnforcementHtml = wdac.mode === 'configure'
-      ? createRadioContainer({
-        id: 'wdac-enforcement-container',
-        name: 'wdac-enforcement-mode',
-        title: t('isoConfig.advancedSettings.wdacEnforcement'),
-        description: '',
-        icon: 'shield',
-        options: [
-          {
-            value: 'audit',
-            label: t('isoConfig.advancedSettings.wdacAudit'),
-            description: t('isoConfig.advancedSettings.wdacAuditDesc')
-          },
-          {
-            value: 'auditOnBootFailure',
-            label: t('isoConfig.advancedSettings.wdacAuditBootFailure'),
-            description: t('isoConfig.advancedSettings.wdacAuditBootFailureDesc')
-          },
-          {
-            value: 'enforcement',
-            label: t('isoConfig.advancedSettings.wdacEnforcementMode'),
-            description: t('isoConfig.advancedSettings.wdacEnforcementDesc')
-          }
-        ],
-        selectedValue: wdac.enforcementMode || 'auditOnBootFailure',
-        expanded: false
-      })
-      : ''
-
-    const wdacScriptHtml = wdac.mode === 'configure'
-      ? createRadioContainer({
-        id: 'wdac-script-enforcement-container',
-        name: 'wdac-script-mode',
-        title: t('isoConfig.advancedSettings.wdacScriptEnforcement'),
-        description: '',
-        icon: 'file-code',
-        options: [
-          {
-            value: 'restricted',
-            label: t('isoConfig.advancedSettings.wdacScriptRestricted'),
-            description: t('isoConfig.advancedSettings.wdacScriptRestrictedDesc')
-          },
-          {
-            value: 'unrestricted',
-            label: t('isoConfig.advancedSettings.wdacScriptUnrestricted'),
-            description: ''
-          }
-        ],
-        selectedValue: wdac.scriptEnforcement || 'restricted',
-        expanded: false
-      })
-      : ''
-
     contentDiv.innerHTML = `
-      ${compactOSRadioHtml}
       ${vmSupportHtml}
-      ${wdacCardHtml}
-      ${wdacEnforcementHtml}
-      ${wdacScriptHtml}
+      ${appLockerRadioHtml}
     `
 
     // === 事件监听设置 ===
 
-    // 1. Compact OS
-    setupRadioContainer('compact-os-container', 'compact-os-mode', (value) => {
-      this.updateConfig({ compactOS: value as CompactOSMode })
-    }, true)
-
-    // 2. Virtual machine support
+    // 1. Virtual machine support
     setupComboContainer('vm-support-container', 'vm-support', (values) => {
       // 从嵌套卡片的值中提取各个选项
       const vboxKey = Object.keys(values).find(k => k.includes('vbox'))
@@ -2335,22 +2287,39 @@ class UnattendConfigManager {
       ]
     })
 
-    // 3. WDAC Switch
-    setupComboCard('wdac-mode-card', (value) => {
-      const enabled = value as boolean
-      this.updateModule('wdac', { mode: enabled ? 'configure' : 'skip' })
+    // 2. AppLocker
+    setupRadioContainer('app-locker-container', 'app-locker-mode', (value) => {
+      this.updateModule('appLocker', { mode: value as 'skip' | 'configure' })
       this.renderAdvancedSettings()
-    })
+    }, true)
 
-    // 3.1 WDAC Configure (仅在启用时显示)
-    if (wdac.mode === 'configure') {
-      setupRadioContainer('wdac-enforcement-container', 'wdac-enforcement-mode', (value) => {
-        this.updateModule('wdac', { enforcementMode: value as 'audit' | 'auditOnBootFailure' | 'enforcement' })
-      }, true)
-
-      setupRadioContainer('wdac-script-enforcement-container', 'wdac-script-mode', (value) => {
-        this.updateModule('wdac', { scriptEnforcement: value as 'restricted' | 'unrestricted' })
-      }, true)
+    if (appLocker.mode === 'configure') {
+      setupTextCard('app-locker-policy-card', (value) => {
+        this.updateModule('appLocker', { policyXml: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('app-locker-policy-card', content)
+            this.updateModule('appLocker', { policyXml: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml'] }],
+            defaultPath: 'AppLockerPolicy.xml'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('app-locker-policy-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
     }
 
     // 初始化图标
@@ -2387,6 +2356,15 @@ class UnattendConfigManager {
         description: '',
         icon: 'settings-2',
         nestedCards: [
+          {
+            id: 'config-pe-compact-os-card',
+            field: 'compactOs',
+            title: t('isoConfig.advancedSettings.compactOS'),
+            description: t('isoConfig.advancedSettings.compactOSDesc'),
+            controlType: 'checkbox',
+            value: pe.compactOs || false,
+            borderless: true
+          },
           {
             id: 'config-pe-disable-8dot3-card',
             field: 'disable8Dot3Names',
@@ -2459,6 +2437,7 @@ pause`,
     if (pe.mode === 'generated') {
       setupComboContainer('pe-generated-options-container', 'pe-generated-options', (values) => {
         this.updateModule('peSettings', {
+          compactOs: Boolean(values.compactOs),
           disable8Dot3Names: Boolean(values.disable8Dot3Names),
           pauseBeforeFormatting: Boolean(values.pauseBeforeFormatting),
           pauseBeforeReboot: Boolean(values.pauseBeforeReboot)
@@ -2470,6 +2449,7 @@ pause`,
         description: '',
         icon: 'settings-2',
         nestedCards: [
+          { id: 'config-pe-compact-os-card', field: 'compactOs', title: '', controlType: 'checkbox', value: false, borderless: true },
           { id: 'config-pe-disable-8dot3-card', field: 'disable8Dot3Names', title: '', controlType: 'checkbox', value: false, borderless: true },
           { id: 'config-pe-pause-formatting-card', field: 'pauseBeforeFormatting', title: '', controlType: 'checkbox', value: false, borderless: true },
           { id: 'config-pe-pause-reboot-card', field: 'pauseBeforeReboot', title: '', controlType: 'checkbox', value: false, borderless: true }
@@ -5386,90 +5366,6 @@ End If`,
     setupComboCard('config-restart-explorer', (value) => {
       this.updateModule('scripts', { restartExplorer: value as boolean })
     })
-
-    if (window.lucide) {
-      window.lucide.createIcons()
-    }
-  }
-
-  // 渲染模块28: Windows Defender Application Control
-  private renderWdac() {
-    const contentDiv = this.getSectionContent('config-wdac')
-    if (!contentDiv) return
-
-    const wdac = this.config.wdac
-
-    contentDiv.innerHTML = `
-      <div class="card">
-        <div class="card-left">
-          <div class="card-content">
-            <div class="card-title">Windows Defender Application Control</div>
-            <div style="display: flex; gap: 20px; margin-top: 10px; flex-direction: column;">
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="wdac-mode" value="skip" ${wdac.mode === 'skip' ? 'checked' : ''}>
-                <span>Do not configure WDAC policy</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="radio" name="wdac-mode" value="configure" ${wdac.mode === 'configure' ? 'checked' : ''}>
-                <span>Configure a basic WDAC policy</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-      ${wdac.mode === 'configure' ? `
-        <div class="card-expandable expanded">
-          <div class="card-expandable-header">
-            <div class="card-expandable-header-left">
-              <div class="card-expandable-title">WDAC Policy Settings</div>
-            </div>
-            <div class="card-expandable-arrow">
-              <i data-lucide="chevron-down"></i>
-            </div>
-          </div>
-          <div class="card-expandable-content">
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-              <div>
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">Enforcement mode:</label>
-                <fluent-select id="config-wdac-enforcement" style="width: 100%;">
-                  <fluent-option value="audit" ${wdac.enforcementMode === 'audit' ? 'selected' : ''}>Auditing mode</fluent-option>
-                  <fluent-option value="auditOnBootFailure" ${wdac.enforcementMode === 'auditOnBootFailure' ? 'selected' : ''}>Auditing mode on boot failure</fluent-option>
-                  <fluent-option value="enforcement" ${wdac.enforcementMode === 'enforcement' ? 'selected' : ''}>Enforcement mode</fluent-option>
-                </fluent-select>
-              </div>
-              <div>
-                <label style="display: block; margin-bottom: 6px; font-weight: 600;">Script enforcement:</label>
-                <fluent-select id="config-wdac-script-enforcement" style="width: 100%;">
-                  <fluent-option value="restricted" ${wdac.scriptEnforcement === 'restricted' ? 'selected' : ''}>Restricted</fluent-option>
-                  <fluent-option value="unrestricted" ${wdac.scriptEnforcement === 'unrestricted' ? 'selected' : ''}>Unrestricted</fluent-option>
-                </fluent-select>
-              </div>
-            </div>
-          </div>
-        </div>
-      ` : ''}
-    `
-
-    contentDiv.querySelectorAll('input[name="wdac-mode"]').forEach(radio => {
-      radio.addEventListener('change', (e: any) => {
-        this.updateModule('wdac', { mode: e.target.value })
-        this.renderWdac()
-      })
-    })
-
-    const enforcementSelect = contentDiv.querySelector('#config-wdac-enforcement') as any
-    if (enforcementSelect) {
-      enforcementSelect.addEventListener('change', (e: any) => {
-        this.updateModule('wdac', { enforcementMode: e.target.value })
-      })
-    }
-
-    const scriptEnforcementSelect = contentDiv.querySelector('#config-wdac-script-enforcement') as any
-    if (scriptEnforcementSelect) {
-      scriptEnforcementSelect.addEventListener('change', (e: any) => {
-        this.updateModule('wdac', { scriptEnforcement: e.target.value })
-      })
-    }
 
     if (window.lucide) {
       window.lucide.createIcons()

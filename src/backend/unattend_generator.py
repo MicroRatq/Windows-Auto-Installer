@@ -68,13 +68,6 @@ class RecoveryMode(Enum):
     Partition = "Partition"
 
 
-class CompactOsModes(Enum):
-    """Compact OS 模式"""
-    Default = "Default"
-    Always = "Always"
-    Never = "Never"
-
-
 # ========================================
 # Constants 类
 # ========================================
@@ -540,6 +533,7 @@ class ICmdPESettings(IPESettings):
 @dataclass
 class GeneratePESettings(ICmdPESettings):
     """生成 PE 设置"""
+    compact_os: bool
     disable_8_dot3_names: bool
     pause_before_formatting: bool
     pause_before_reboot: bool
@@ -1023,34 +1017,20 @@ class Bloatware:
             return f"Remove{self.display_name.replace(' ', '')}"
 
 
-class IWdacSettings:
-    """WDAC 设置接口"""
+class IAppLockerSettings:
+    """AppLocker 设置接口"""
     pass
 
 
-class SkipWdacSettings(IWdacSettings):
-    """跳过 WDAC 设置"""
+class SkipAppLockerSettings(IAppLockerSettings):
+    """跳过 AppLocker 设置"""
     pass
-
-
-class WdacAuditModes(Enum):
-    """WDAC 审计模式"""
-    Auditing = "Auditing"
-    AuditingOnBootFailure = "AuditingOnBootFailure"
-    Enforcement = "Enforcement"
-
-
-class WdacScriptModes(Enum):
-    """WDAC 脚本模式"""
-    Restricted = "Restricted"
-    Unrestricted = "Unrestricted"
 
 
 @dataclass
-class ConfigureWdacSettings(IWdacSettings):
-    """配置 WDAC 设置"""
-    audit_mode: WdacAuditModes
-    script_mode: WdacScriptModes
+class ConfigureAppLockerSettings(IAppLockerSettings):
+    """配置 AppLocker 设置"""
+    policy_xml: str
 
 
 # ========================================
@@ -1148,9 +1128,6 @@ class Configuration:
     # PE 设置
     pe_settings: Any = None  # Optional[IPESettings]
     
-    # Compact OS 模式
-    compact_os_mode: CompactOsModes = CompactOsModes.Default
-    
     # 安装源设置
     install_from_settings: Any = None
     
@@ -1180,8 +1157,8 @@ class Configuration:
     lock_screen_settings: Any = None
     color_settings: Any = None
     
-    # WDAC 设置
-    wdac_settings: Any = None
+    # AppLocker 设置
+    app_locker_settings: Any = None
     
     # 处理器架构
     processor_architectures: Set[ProcessorArchitecture] = field(default_factory=lambda: {ProcessorArchitecture.amd64})
@@ -4875,7 +4852,6 @@ class DiskModifier(Modifier):
         elif isinstance(pe_settings, GeneratePESettings):
             self._generate_pe_script(pe_settings)
         elif isinstance(pe_settings, DefaultPESettings):
-            self._set_compact_mode()
             self._set_partitions()
         else:
             raise ValueError(f"Unsupported PE settings type: {type(pe_settings)}")
@@ -5068,7 +5044,7 @@ class DiskModifier(Modifier):
                 return f'/Name:"{default_name}"'
         
         index_or_name = get_index_or_name()
-        compact_flag = "/Compact" if self.configuration.compact_os_mode == CompactOsModes.Always else ""
+        compact_flag = "/Compact" if pe_settings.compact_os else ""
         writer.write(f'dism.exe /Apply-Image /ImageFile:%IMAGE_FILE% %SWM_PARAM% {index_or_name} /ApplyDir:{windows_drive}:\\ {compact_flag} || ( echo dism.exe encountered an error. & pause & exit /b 1 )\n')
         writer.write(f'bcdboot.exe {windows_drive}:\\Windows /s {boot_drive}: || ( echo bcdboot.exe encountered an error. & pause & exit /b 1 )\n')
         
@@ -5190,76 +5166,6 @@ class DiskModifier(Modifier):
             ]
         else:
             raise ValueError(f"Unsupported partition layout: {settings.partition_layout}")
-    
-    def _set_compact_mode(self):
-        """设置 Compact 模式（对应 C# 的 SetCompactMode 方法）"""
-        ns_uri = '{urn:schemas-microsoft-com:unattend}'
-        mode = self.configuration.compact_os_mode
-        
-        if mode == CompactOsModes.Default:
-            # 移除 Compact 元素（如果存在）
-            compact_elem = self.root.find(f".//{{{ns_uri}}}Compact")
-            if compact_elem is not None:
-                parent = self._find_parent(self.root, compact_elem)
-                if parent is not None:
-                    parent.remove(compact_elem)
-                    
-                # 如果 ImageInstall 现在为空，也移除它
-                os_image = parent if parent is not None else None
-                if os_image is not None and os_image.tag == f"{{{ns_uri}}}OSImage":
-                    image_install = self._find_parent(self.root, os_image)
-                    if image_install is not None:
-                        # 检查 OSImage 是否还有其他子元素
-                        has_other_children = False
-                        for child in os_image:
-                            if child.tag != f"{{{ns_uri}}}Compact":
-                                has_other_children = True
-                                break
-                        if not has_other_children:
-                            # 检查 ImageInstall 是否还有其他子元素
-                            has_other_children = False
-                            for child in image_install:
-                                if child.tag != f"{{{ns_uri}}}OSImage":
-                                    has_other_children = True
-                                    break
-                            if not has_other_children:
-                                setup_component = self._find_parent(self.root, image_install)
-                                if setup_component is not None:
-                                    setup_component.remove(image_install)
-        else:
-            # 查找或创建 ImageInstall/OSImage/Compact 结构
-            setup_component = self.get_or_create_element(
-                Pass.windowsPE,
-                "Microsoft-Windows-Setup"
-            )
-            
-            # 查找或创建 ImageInstall（确保它在 RunSynchronous 之前）
-            image_install = setup_component.find(f"{{{ns_uri}}}ImageInstall")
-            if image_install is None:
-                # 查找 RunSynchronous 的位置
-                run_sync = setup_component.find(f"{{{ns_uri}}}RunSynchronous")
-                if run_sync is not None:
-                    # 在 RunSynchronous 之前插入 ImageInstall
-                    index = list(setup_component).index(run_sync)
-                    image_install = ET.Element(f"{{{ns_uri}}}ImageInstall")
-                    setup_component.insert(index, image_install)
-                else:
-                    image_install = self.new_element("ImageInstall", setup_component)
-            
-            # 查找或创建 OSImage
-            os_image = image_install.find(f"{{{ns_uri}}}OSImage")
-            if os_image is None:
-                os_image = self.new_element("OSImage", image_install)
-            
-            # 查找或创建 Compact
-            compact_elem = os_image.find(f"{{{ns_uri}}}Compact")
-            if compact_elem is None:
-                compact_elem = self.new_element("Compact", os_image)
-            
-            if mode == CompactOsModes.Always:
-                compact_elem.text = "true"
-            elif mode == CompactOsModes.Never:
-                compact_elem.text = "false"
     
     def _set_partitions(self):
         """设置分区（对应 C# 的 SetPartitions 方法）"""
@@ -5554,6 +5460,7 @@ class DiskModifier(Modifier):
             ]
             if all(marker in pe_text_upper for marker in generated_markers):
                 self.configuration.pe_settings = GeneratePESettings(
+                    compact_os='/COMPACT' in pe_text_upper,
                     disable_8_dot3_names='FSUTIL.EXE 8DOT3NAME SET' in pe_text_upper,
                     pause_before_formatting='DISKPART WILL NOW PARTITION AND FORMAT YOUR DISK' in pe_text_upper,
                     pause_before_reboot='COMPUTER WILL NOW REBOOT' in pe_text_upper,
@@ -5567,17 +5474,13 @@ class DiskModifier(Modifier):
 
         # ----- 解析 Compact OS -----
         compact_elem = self.root.find(f".//{{{ns_uri}}}OSImage/{{{ns_uri}}}Compact")
-        if detected_compact:
-            self.configuration.compact_os_mode = CompactOsModes.Always
-        elif compact_elem is not None and compact_elem.text:
-            if compact_elem.text.lower() == "true":
-                self.configuration.compact_os_mode = CompactOsModes.Always
-            elif compact_elem.text.lower() == "false":
-                self.configuration.compact_os_mode = CompactOsModes.Never
-            else:
-                self.configuration.compact_os_mode = CompactOsModes.Default
-        else:
-            self.configuration.compact_os_mode = CompactOsModes.Default
+        compact_enabled = detected_compact or (
+            compact_elem is not None and
+            isinstance(compact_elem.text, str) and
+            compact_elem.text.lower() == "true"
+        )
+        if isinstance(self.configuration.pe_settings, GeneratePESettings):
+            self.configuration.pe_settings.compact_os = compact_enabled
  
 
 class SpecializeModifier(Modifier):
@@ -6670,79 +6573,41 @@ class _FeatureRemover(_Remover):
         return "Feature"
 
 
-class WdacModifier(Modifier):
-    """WDAC 设置 Modifier（对应 C# 的 WdacModifier）"""
+class AppLockerModifier(Modifier):
+    """AppLocker 设置 Modifier（对应 C# 的 AppLockerModifier）"""
     
     def process(self):
-        """处理 WDAC 设置"""
-        wdac_settings = self.configuration.wdac_settings
-        if wdac_settings is None or isinstance(wdac_settings, SkipWdacSettings):
+        """处理 AppLocker 设置"""
+        app_locker_settings = self.configuration.app_locker_settings
+        if app_locker_settings is None or isinstance(app_locker_settings, SkipAppLockerSettings):
             return
-        elif isinstance(wdac_settings, ConfigureWdacSettings):
-            import uuid
-            guid = str(uuid.uuid4())
-            template_file = r"C:\Windows\schemas\CodeIntegrity\ExamplePolicies\DefaultWindows_Enforced.xml"
-            active_folder = r"C:\Windows\System32\CodeIntegrity\CiPolicies\Active"
-            
-            # Load template from resource file
-            template = self._load_resource_file("ConfigureWdac.ps1")
-            
-            # Build Set-RuleOption calls
-            set_rule_options = []
-            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 0;")
-            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 6;")
-            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 9;")
-            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 16;")
-            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 18;")
-            set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 5 -Delete;")
-            
-            if wdac_settings.script_mode == WdacScriptModes.Unrestricted:
-                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 11;")
-            
-            if wdac_settings.audit_mode == WdacAuditModes.Auditing:
-                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 3;")
-                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 10;")
-            elif wdac_settings.audit_mode == WdacAuditModes.AuditingOnBootFailure:
-                set_rule_options.append("    Set-RuleOption -FilePath $xml -Option 10;")
-            
-            set_rule_options_str = '\n'.join(set_rule_options)
-            
-            # Build Deny rules
-            known_writeable_folders = [
-                r"C:\Users\*",
-                r"C:\ProgramData\*",
-                r"C:\Temp\*",
-                r"C:\Tmp\*",
-                r"C:\Windows\Temp\*",
-                r"C:\Windows\Tmp\*",
-            ]
-            deny_rules = []
-            for folder in known_writeable_folders:
-                deny_rules.append(f"        New-CIPolicyRule -FilePathRule '{folder}' -Deny;")
-            deny_rules_str = '\n'.join(deny_rules)
-            
-            # Format template with placeholders
-            ps1_content = template.format(
-                guid=guid,
-                template_file=template_file,
-                active_folder=active_folder,
-                set_rule_options=set_rule_options_str,
-                deny_rules=deny_rules_str
-            )
-            ps1_file = self.add_text_file("Wdac.ps1", ps1_content)
-            self.context.specialize_script.invoke_file(ps1_file)
+        elif isinstance(app_locker_settings, ConfigureAppLockerSettings):
+            import xml.etree.ElementTree as ET
+
+            try:
+                root = ET.fromstring(app_locker_settings.policy_xml)
+            except ET.ParseError as e:
+                raise ValueError(f"AppLocker policy XML is invalid: {e}")
+
+            tag_name = root.tag.split('}')[-1] if '}' in root.tag else root.tag
+            if tag_name != 'AppLockerPolicy':
+                raise ValueError("AppLocker policy XML root element must be 'AppLockerPolicy'.")
+
+            xml_file = self.add_text_file("AppLockerPolicy.xml", app_locker_settings.policy_xml)
+            self.context.specialize_script.append(f"""Get-Service -Name 'AppIDSvc' | Set-Service -StartupType 'Automatic';
+Get-Service -Name 'AppIDSvc' | Start-Service;
+Set-AppLockerPolicy -XmlPolicy '{xml_file}';""")
         else:
-            raise ValueError(f"Unsupported wdac settings type: {type(wdac_settings)}")
+            raise ValueError(f"Unsupported app locker settings type: {type(app_locker_settings)}")
     
     def parse(self):
-        """解析 WDAC 设置"""
+        """解析 AppLocker 设置"""
         if not self.is_parse_mode:
             return
         import logging
-        import re
         logger = logging.getLogger('UnattendGenerator')
         
-        # 查找 Extensions 中的 Wdac.ps1 文件
+        # 查找 Extensions 中的 AppLockerPolicy.xml 文件
         s_uri = "https://schneegans.de/windows/unattend-generator/"
         ns_uri = get_namespace_map()['u']
         
@@ -6758,7 +6623,7 @@ class WdacModifier(Modifier):
                     extensions_elem = elem
                     break
         
-        wdac_ps1_content = None
+        app_locker_policy_content = None
         if extensions_elem is not None:
             # 查找 File 元素（支持多种命名空间）
             file_elems = []
@@ -6773,42 +6638,24 @@ class WdacModifier(Modifier):
             
             for file_elem in file_elems:
                 path_attr = (file_elem.get('path') or '').lower()
-                if path_attr.endswith("wdac.ps1"):
-                    wdac_ps1_content = file_elem.text
-                    if not wdac_ps1_content:
+                if path_attr.endswith("applockerpolicy.xml"):
+                    app_locker_policy_content = file_elem.text
+                    if not app_locker_policy_content:
                         # 尝试从子元素获取内容
-                        wdac_ps1_content = ''.join(file_elem.itertext())
-                    if wdac_ps1_content:
-                        wdac_ps1_content = wdac_ps1_content.strip()
+                        app_locker_policy_content = ''.join(file_elem.itertext())
+                    if app_locker_policy_content:
+                        app_locker_policy_content = app_locker_policy_content.strip()
                     break
         
-        if not wdac_ps1_content:
-            # 文件不存在，使用 SkipWdacSettings
-            self.configuration.wdac_settings = SkipWdacSettings()
-            logger.debug("WdacModifier.parse: Wdac.ps1 not found, using SkipWdacSettings")
+        if not app_locker_policy_content:
+            self.configuration.app_locker_settings = SkipAppLockerSettings()
+            logger.debug("AppLockerModifier.parse: AppLockerPolicy.xml not found, using SkipAppLockerSettings")
             return
-        
-        # 解析脚本内容
-        # 检查 Option 11（Unrestricted script mode）
-        has_option_11 = bool(re.search(r'Set-RuleOption\s+-FilePath\s+\$xml\s+-Option\s+11', wdac_ps1_content))
-        script_mode = WdacScriptModes.Unrestricted if has_option_11 else WdacScriptModes.Restricted
-        
-        # 检查 Option 3 和 Option 10（Auditing mode）
-        has_option_3 = bool(re.search(r'Set-RuleOption\s+-FilePath\s+\$xml\s+-Option\s+3', wdac_ps1_content))
-        has_option_10 = bool(re.search(r'Set-RuleOption\s+-FilePath\s+\$xml\s+-Option\s+10', wdac_ps1_content))
-        
-        if has_option_3 and has_option_10:
-            audit_mode = WdacAuditModes.Auditing
-        elif has_option_10 and not has_option_3:
-            audit_mode = WdacAuditModes.AuditingOnBootFailure
-        else:
-            audit_mode = WdacAuditModes.Enforcement
-        
-        self.configuration.wdac_settings = ConfigureWdacSettings(
-            audit_mode=audit_mode,
-            script_mode=script_mode
+
+        self.configuration.app_locker_settings = ConfigureAppLockerSettings(
+            policy_xml=app_locker_policy_content
         )
-        logger.debug(f"WdacModifier.parse: Detected ConfigureWdacSettings with audit_mode={audit_mode.value}, script_mode={script_mode.value}")
+        logger.debug("AppLockerModifier.parse: Detected ConfigureAppLockerSettings")
 
 
 class ProcessorArchitectureModifier(Modifier):
@@ -8117,7 +7964,7 @@ class UnattendGenerator:
         modifiers.append(PersonalizationModifier(context))  # 处理个性化设置（模块 7）
         if config.time_zone_settings:
             modifiers.append(TimeZoneModifier(context))  # 按照 C# 顺序，在 PersonalizationModifier 之后
-        modifiers.append(WdacModifier(context))  # 处理 WDAC 设置（模块 11）
+        modifiers.append(AppLockerModifier(context))  # 处理 AppLocker 设置（模块 11）
         modifiers.append(ScriptModifier(context))  # 处理自定义脚本（模块 12，会自动生成 Extensions 元素）
         
         # 处理脚本序列（将脚本添加到 XML）
@@ -8372,7 +8219,7 @@ class UnattendGenerator:
         modifiers.append(PasswordExpirationModifier(context))
         modifiers.append(TimeZoneModifier(context))
         modifiers.append(PersonalizationModifier(context))
-        modifiers.append(WdacModifier(context))
+        modifiers.append(AppLockerModifier(context))
         modifiers.append(ScriptModifier(context))
         modifiers.append(ComponentsModifier(context))
         modifiers.append(ProcessorArchitectureModifier(context))
@@ -8764,6 +8611,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             
             if mode == 'generated':
                 config.pe_settings = GeneratePESettings(
+                    compact_os=pe_settings.get('compactOs', False),
                     disable_8_dot3_names=pe_settings.get('disable8Dot3Names', False),
                     pause_before_formatting=pe_settings.get('pauseBeforeFormatting', False),
                     pause_before_reboot=pe_settings.get('pauseBeforeReboot', False)
@@ -8777,20 +8625,13 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
     else:
         config.pe_settings = DefaultPESettings()
     
-    # 转换 Compact OS 模式
-    if 'compactOS' in config_dict:
+    # 兼容旧版顶层 Compact OS 配置
+    if isinstance(config.pe_settings, GeneratePESettings) and 'compactOS' in config_dict:
         compact_os = config_dict['compactOS']
         if isinstance(compact_os, str):
-            if compact_os == 'enabled':
-                config.compact_os_mode = CompactOsModes.Always
-            elif compact_os == 'disabled':
-                config.compact_os_mode = CompactOsModes.Never
-            else:
-                config.compact_os_mode = CompactOsModes.Default
-        else:
-            config.compact_os_mode = CompactOsModes.Default
-    else:
-        config.compact_os_mode = CompactOsModes.Default
+            config.pe_settings.compact_os = compact_os == 'enabled'
+        elif isinstance(compact_os, bool):
+            config.pe_settings.compact_os = compact_os
     
     # 转换模块 6: Windows Edition
     # 转换版本设置
@@ -9285,42 +9126,21 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
     else:
         config.bloatwares = []
     
-    # 转换 WDAC 设置
-    if 'wdac' in config_dict:
-        wdac = config_dict['wdac']
-        # 确保 wdac 是字典
-        if not isinstance(wdac, dict):
-            logger.warning(f"wdac is not a dict, got {type(wdac)}, using default")
-            config.wdac_settings = SkipWdacSettings()
+    # 转换 AppLocker 设置，兼容旧 wdac 配置键
+    app_locker = config_dict.get('appLocker', config_dict.get('wdac'))
+    if app_locker is not None:
+        if not isinstance(app_locker, dict):
+            logger.warning(f"appLocker is not a dict, got {type(app_locker)}, using default")
+            config.app_locker_settings = SkipAppLockerSettings()
         else:
-            mode = wdac.get('mode', 'skip')
-            
-            if mode == 'configure':
-                # 支持前端字段名 enforcementMode 和 scriptEnforcement，也支持后端字段名 auditMode 和 scriptMode
-                audit_mode_str = wdac.get('enforcementMode') or wdac.get('auditMode', 'enforcement')
-                script_mode_str = wdac.get('scriptEnforcement') or wdac.get('scriptMode', 'restricted')
-                
-                # 映射 enforcementMode 值到 audit_mode
-                audit_mode_map = {
-                    'audit': WdacAuditModes.Auditing,
-                    'auditing': WdacAuditModes.Auditing,  # 兼容旧值
-                    'auditOnBootFailure': WdacAuditModes.AuditingOnBootFailure,
-                    'auditingOnBootFailure': WdacAuditModes.AuditingOnBootFailure,  # 兼容旧值
-                    'enforcement': WdacAuditModes.Enforcement
-                }
-                script_mode_map = {
-                    'restricted': WdacScriptModes.Restricted,
-                    'unrestricted': WdacScriptModes.Unrestricted
-                }
-                
-                config.wdac_settings = ConfigureWdacSettings(
-                    audit_mode=audit_mode_map.get(audit_mode_str, WdacAuditModes.Enforcement),
-                    script_mode=script_mode_map.get(script_mode_str, WdacScriptModes.Restricted)
-                )
+            mode = app_locker.get('mode', 'skip')
+            policy_xml = app_locker.get('policyXml', '')
+            if mode == 'configure' and isinstance(policy_xml, str) and policy_xml.strip():
+                config.app_locker_settings = ConfigureAppLockerSettings(policy_xml=policy_xml)
             else:
-                config.wdac_settings = SkipWdacSettings()
+                config.app_locker_settings = SkipAppLockerSettings()
     else:
-        config.wdac_settings = SkipWdacSettings()
+        config.app_locker_settings = SkipAppLockerSettings()
     
     # 转换处理器架构（已在上面处理，这里确保有默认值）
     if 'processorArchitectures' not in config_dict:
@@ -9766,6 +9586,7 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         if isinstance(config.pe_settings, GeneratePESettings):
             config_dict['peSettings'] = {
                 'mode': 'generated',
+                'compactOs': config.pe_settings.compact_os,
                 'disable8Dot3Names': config.pe_settings.disable_8_dot3_names,
                 'pauseBeforeFormatting': config.pe_settings.pause_before_formatting,
                 'pauseBeforeReboot': config.pe_settings.pause_before_reboot
@@ -9801,14 +9622,6 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
             config_dict['windowsEdition'] = {'mode': 'interactive'}
     else:
         config_dict['windowsEdition'] = {'mode': 'interactive'}
-    
-    # 转换 Compact OS 模式
-    if config.compact_os_mode == CompactOsModes.Always:
-        config_dict['compactOS'] = 'enabled'
-    elif config.compact_os_mode == CompactOsModes.Never:
-        config_dict['compactOS'] = 'disabled'
-    else:
-        config_dict['compactOS'] = 'default'
     
     # 转换模块 9: 辅助功能设置
     # 转换 Lock Keys 设置
@@ -9974,34 +9787,14 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         'items': [bw.id for bw in config.bloatwares]
     }
     
-    # 转换 WDAC 设置
-    if isinstance(config.wdac_settings, ConfigureWdacSettings):
-        audit_mode_map = {
-            WdacAuditModes.Auditing: 'auditing',
-            WdacAuditModes.AuditingOnBootFailure: 'auditingOnBootFailure',
-            WdacAuditModes.Enforcement: 'enforcement'
-        }
-        script_mode_map = {
-            WdacScriptModes.Restricted: 'restricted',
-            WdacScriptModes.Unrestricted: 'unrestricted'
-        }
-        # 映射 audit_mode 到 enforcementMode（前端字段名）
-        audit_to_enforcement_map = {
-            WdacAuditModes.Auditing: 'audit',
-            WdacAuditModes.AuditingOnBootFailure: 'auditOnBootFailure',
-            WdacAuditModes.Enforcement: 'enforcement'
-        }
-        script_mode_map = {
-            WdacScriptModes.Restricted: 'restricted',
-            WdacScriptModes.Unrestricted: 'unrestricted'
-        }
-        config_dict['wdac'] = {
+    # 转换 AppLocker 设置
+    if isinstance(config.app_locker_settings, ConfigureAppLockerSettings):
+        config_dict['appLocker'] = {
             'mode': 'configure',
-            'enforcementMode': audit_to_enforcement_map.get(config.wdac_settings.audit_mode, 'enforcement'),
-            'scriptEnforcement': script_mode_map.get(config.wdac_settings.script_mode, 'restricted')
+            'policyXml': config.app_locker_settings.policy_xml
         }
     else:
-        config_dict['wdac'] = {'mode': 'skip'}
+        config_dict['appLocker'] = {'mode': 'skip'}
     
     # 转换模块 12: 自定义脚本（前端期望按阶段分组的格式）
     if config.script_settings:
