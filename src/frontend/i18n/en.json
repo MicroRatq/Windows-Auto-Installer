@@ -249,6 +249,7 @@
         "uiPersonalization": {
             "title": "UI and Personalization",
             "fileExplorer": "File Explorer tweaks",
+            "fileExplorerEntryDesc": "Extensions, hidden files, launch target and classic menu settings.",
             "showFileExtensions": "Always show file extensions",
             "showFileExtensionsDesc": "By default, File Explorer would hide extensions for known file types.",
             "showAllTrayIcons": "Always show all tray icons",
@@ -268,6 +269,7 @@
             "hideFilesNone": "Show all files",
             "hideFilesNoneDesc": "This setting is recommended for advanced users.",
             "startTaskbar": "Start menu and taskbar",
+            "startTaskbarEntryDesc": "Taskbar search, Start layout and folders shown near the power button.",
             "leftTaskbar": "Left-align the taskbar in Windows 11",
             "hideTaskViewButton": "Hide the Task view button from the taskbar",
             "disableWidgets": "Disable widgets",
@@ -421,5 +423,8 @@
         "selectLanguage": "Select language",
         "english": "English",
         "chineseSimplified": "Chinese Simplified"
+    },
+    "menus": {
+        "isoConfig": "Custom Configuration"
     }
 }

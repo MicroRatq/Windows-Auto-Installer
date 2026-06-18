@@ -24,6 +24,7 @@ import { initIsoConfig } from './iso-config'
 import { initIsoBurn } from './iso-burn'
 // 导入设置模块
 import { settingsManager } from './settings'
+import { resetSubPageSystem } from './workspace'
 
 // 注册 Fluent UI 组件
 provideFluentDesignSystem()
@@ -51,12 +52,6 @@ interface MenuItem {
 
 const settingsMenuItem: MenuItem = { id: 'settings', label: '设置', icon: 'settings' }
 
-const mainMenuItems: MenuItem[] = [
-  { id: 'iso', label: '镜像', icon: 'disc' },
-  { id: 'system', label: '系统配置', icon: 'settings' },
-  { id: 'software', label: '软件安装', icon: 'package' }
-]
-
 const subMenuConfig: Record<string, MenuItem[]> = {
   iso: [
     { id: 'iso-cache', label: '下载与缓存', icon: 'download' },
@@ -71,6 +66,20 @@ const subMenuConfig: Record<string, MenuItem[]> = {
     { id: 'office', label: 'Office安装', icon: 'file-text' },
     { id: 'packages', label: '软件包安装', icon: 'box' }
   ]
+}
+
+function applyLocalizedMenuLabels() {
+  settingsMenuItem.label = t('settings.title')
+
+  const isoConfigMenu = subMenuConfig.iso.find(item => item.id === 'iso-config')
+  if (isoConfigMenu) {
+    isoConfigMenu.label = t('menus.isoConfig')
+  }
+
+  const settingsLabel = settingsMenuEl?.querySelector('.menu-label') as HTMLElement | null
+  if (settingsLabel) {
+    settingsLabel.textContent = settingsMenuItem.label
+  }
 }
 
 // 状态
@@ -141,6 +150,11 @@ function clearListboxSelection(listbox: any) {
 function setActiveWorkspacePanel(id: string) {
   workspacePanels.forEach((panel, panelId) => {
     const isActive = panelId === id
+
+    if (!isActive) {
+      resetSubPageSystem(panel)
+    }
+
     panel.classList.toggle('active', isActive)
     panel.style.display = isActive ? 'block' : 'none'
   })
@@ -612,6 +626,7 @@ async function init() {
   }
 
   // 初始化所有二级菜单
+  applyLocalizedMenuLabels()
   mainMenuIds.forEach(mainMenuId => {
     updateSubMenu(mainMenuId)
   })
@@ -760,6 +775,11 @@ async function init() {
 
   // 监听语言切换事件，更新section标题
   addLanguageChangeListener(() => {
+    applyLocalizedMenuLabels()
+    syncExpandedMenuSelection()
+    syncCollapsedIconSelection()
+    updateSettingsMenuState()
+    updateWorkspaceTitle()
     updateSectionTitles()
   })
 

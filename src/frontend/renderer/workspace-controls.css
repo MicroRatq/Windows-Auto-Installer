@@ -1838,3 +1838,57 @@
 .workspace .multi-column-checkbox-container:not(.card-expandable) .multi-column-checkbox-content {
     padding: 0;
 }
+
+/* ========================================
+   通用工作区子页面系统
+   ======================================== */
+
+.ws-subpage-system {
+    min-height: 0;
+}
+
+.workspace-content h2 .workspace-title-breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.workspace-content h2 .workspace-title-breadcrumb-root {
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.workspace-content h2 .workspace-title-breadcrumb-root:hover {
+    color: var(--text-primary);
+}
+
+.workspace-content h2 .workspace-title-breadcrumb-separator {
+    color: var(--text-secondary);
+    opacity: 0.7;
+    font-weight: 400;
+}
+
+.workspace-content h2 .workspace-title-breadcrumb-current {
+    color: var(--text-primary);
+    font-weight: inherit;
+}
+
+/* 概述区 */
+.ws-subpage-overview {
+    min-height: 0;
+}
+
+.ws-subpage-overview.hidden {
+    display: none;
+}
+
+/* 子页面内容区 */
+.ws-subpage-page {
+    min-height: 0;
+}
+
+.ws-subpage-page.hidden {
+    display: none;
+}

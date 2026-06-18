@@ -10,6 +10,9 @@ import {
   setupComboCard,
   createComboContainer,
   setupComboContainer,
+  registerSubPageSystemReset,
+  setWorkspaceTitleBreadcrumb,
+  setWorkspaceTitleText,
   createMultiColumnCheckboxContainer,
   setupMultiColumnCheckboxContainer,
   setupTextCard,
@@ -19,6 +22,9 @@ import {
   setupDynamicListContainer,
   showWorkspaceConfirmDialog,
   showWorkspaceMessageDialog,
+  rememberSubPageReturnPosition,
+  restoreSubPageReturnPosition,
+  clearSubPageReturnPosition,
   type DynamicListItem,
   type ComboContainerConfig
 } from './workspace'
@@ -547,6 +553,9 @@ class UnattendConfigManager {
   private config: UnattendConfig
   private panel: HTMLElement | null = null
   private presetData: PresetData = EMPTY_PRESET
+  private activeUiPersonalizationSubPage: 'file-explorer' | 'start-taskbar' | 'personalization' | null = null
+  private uiPersonalizationRootTitle = ''
+  private workspaceTitleListenerBound = false
 
   constructor() {
     this.config = this.loadPersistedConfig()
@@ -917,6 +926,9 @@ class UnattendConfigManager {
     }
     this.updateSectionTitles()
     this.setupEventListeners()
+    registerSubPageSystemReset(this.panel, () => {
+      this.resetUiPersonalizationSubPage()
+    })
     templateManager.addListener((template) => {
       this.onTemplateChanged(template)
     })
@@ -1009,6 +1021,8 @@ class UnattendConfigManager {
   public renderAllModules() {
     if (!this.panel) return
 
+    this.resetUiPersonalizationSubPage()
+
     // 0. Import and Export cards (在最顶部)
     this.renderImportExport()
 
@@ -1049,6 +1063,915 @@ class UnattendConfigManager {
     this.renderXmlMarkup()
   }
 
+  private getOverviewSections(): HTMLElement[] {
+    if (!this.panel) return []
+
+    return Array.from(this.panel.children).filter((child): child is HTMLElement => {
+      return child instanceof HTMLElement && child.classList.contains('section')
+    })
+  }
+
+  private ensureUiPersonalizationSubPageContainer(): HTMLElement | null {
+    if (!this.panel) return null
+
+    let container = this.panel.querySelector('#iso-config-ui-personalization-subpage') as HTMLElement | null
+    if (container) return container
+
+    container = document.createElement('div')
+    container.id = 'iso-config-ui-personalization-subpage'
+    container.className = 'ws-subpage-page hidden'
+    this.panel.appendChild(container)
+    return container
+  }
+
+  private resetUiPersonalizationSubPage(restorePosition = false) {
+    if (!this.panel) return
+
+    const subPage = this.panel.querySelector('#iso-config-ui-personalization-subpage') as HTMLElement | null
+    if (subPage) {
+      subPage.classList.add('hidden')
+      subPage.innerHTML = ''
+    }
+
+    this.getOverviewSections().forEach(section => {
+      section.style.display = ''
+    })
+
+    if (this.activeUiPersonalizationSubPage) {
+      setWorkspaceTitleText(t('menus.isoConfig') || this.uiPersonalizationRootTitle || '自定义配置')
+    }
+
+    this.activeUiPersonalizationSubPage = null
+
+    if (restorePosition) {
+      restoreSubPageReturnPosition(this.panel)
+      return
+    }
+
+    clearSubPageReturnPosition(this.panel)
+  }
+
+  private openUiPersonalizationSubPage(
+    subPageId: 'file-explorer' | 'start-taskbar' | 'personalization',
+    sourceEntryId?: string
+  ) {
+    if (!this.panel) return
+
+    const subPage = this.ensureUiPersonalizationSubPageContainer()
+    if (!subPage) return
+
+    const currentTitle = (document.getElementById('workspace-title')?.textContent || '').trim()
+    this.uiPersonalizationRootTitle = t('menus.isoConfig') || currentTitle || this.uiPersonalizationRootTitle || '自定义配置'
+    this.activeUiPersonalizationSubPage = subPageId
+
+    if (sourceEntryId) {
+      rememberSubPageReturnPosition(this.panel, `#${sourceEntryId}`)
+    }
+
+    this.getOverviewSections().forEach(section => {
+      section.style.display = 'none'
+    })
+
+    subPage.classList.remove('hidden')
+    if (subPageId === 'file-explorer') {
+      setWorkspaceTitleBreadcrumb(this.uiPersonalizationRootTitle, t('isoConfig.uiPersonalization.fileExplorer'))
+      this.renderFileExplorerContent(subPage)
+      return
+    }
+
+    if (subPageId === 'personalization') {
+      setWorkspaceTitleBreadcrumb(this.uiPersonalizationRootTitle, t('isoConfig.uiPersonalization.personalization'))
+      this.renderPersonalizationSubPageContent(subPage)
+      return
+    }
+
+    setWorkspaceTitleBreadcrumb(this.uiPersonalizationRootTitle, t('isoConfig.uiPersonalization.startTaskbar'))
+    this.renderStartTaskbarContent(subPage)
+  }
+
+  private renderFileExplorerContent(contentDiv: HTMLElement) {
+    const fe = this.config.fileExplorer
+
+    const hideFilesRadioHtml = createRadioContainer({
+      id: 'hide-files-container',
+      name: 'hide-files-mode',
+      title: t('isoConfig.uiPersonalization.hideFiles'),
+      description: '',
+      icon: 'eye-off',
+      options: [
+        {
+          value: 'hidden',
+          label: t('isoConfig.uiPersonalization.hideFilesDefault'),
+          description: t('isoConfig.uiPersonalization.hideFilesDefaultDesc')
+        },
+        {
+          value: 'hiddenSystem',
+          label: t('isoConfig.uiPersonalization.hideFilesHiddenSystem'),
+          description: t('isoConfig.uiPersonalization.hideFilesHiddenSystemDesc')
+        },
+        {
+          value: 'none',
+          label: t('isoConfig.uiPersonalization.hideFilesNone'),
+          description: t('isoConfig.uiPersonalization.hideFilesNoneDesc')
+        }
+      ],
+      selectedValue: fe.hideFiles || 'hidden',
+      expanded: false
+    })
+
+    contentDiv.innerHTML = `
+      ${hideFilesRadioHtml}
+      ${createComboCard({
+        id: 'file-explorer-show-extensions',
+        title: t('isoConfig.uiPersonalization.showFileExtensions'),
+        description: t('isoConfig.uiPersonalization.showFileExtensionsDesc'),
+        controlType: 'switch',
+        value: fe.showFileExtensions || false
+      })}
+      ${createComboCard({
+        id: 'file-explorer-launch-this-pc',
+        title: t('isoConfig.uiPersonalization.launchToThisPC'),
+        description: '',
+        controlType: 'switch',
+        value: fe.launchToThisPC || false
+      })}
+      ${createComboCard({
+        id: 'file-explorer-classic-context-menu',
+        title: t('isoConfig.systemOptimization.classicContextMenu'),
+        description: '',
+        controlType: 'switch',
+        value: fe.classicContextMenu || false
+      })}
+      ${createComboCard({
+        id: 'file-explorer-show-end-task',
+        title: t('isoConfig.systemOptimization.showEndTask'),
+        description: '',
+        controlType: 'switch',
+        value: fe.showEndTask || false
+      })}
+    `
+
+    setupRadioContainer('hide-files-container', 'hide-files-mode', (value) => {
+      this.updateModule('fileExplorer', { hideFiles: value as 'hidden' | 'hiddenSystem' | 'none' })
+    }, true)
+
+    setupComboCard('file-explorer-show-extensions', (value) => {
+      this.updateModule('fileExplorer', { showFileExtensions: value as boolean })
+    })
+    setupComboCard('file-explorer-launch-this-pc', (value) => {
+      this.updateModule('fileExplorer', { launchToThisPC: value as boolean })
+    })
+    setupComboCard('file-explorer-classic-context-menu', (value) => {
+      this.updateModule('fileExplorer', { classicContextMenu: value as boolean })
+    })
+    setupComboCard('file-explorer-show-end-task', (value) => {
+      this.updateModule('fileExplorer', { showEndTask: value as boolean })
+    })
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
+  private renderStartTaskbarContent(contentDiv: HTMLElement) {
+    const st = this.config.startMenuTaskbar
+    const folders = this.config.startFolders
+
+    const taskbarSearchCardHtml = createComboCard({
+      id: 'taskbar-search-card',
+      title: t('isoConfig.uiPersonalization.taskbarSearch'),
+      description: '',
+      icon: 'search',
+      controlType: 'select',
+      options: [
+        { value: 'box', label: t('isoConfig.uiPersonalization.taskbarSearchBox') },
+        { value: 'label', label: t('isoConfig.uiPersonalization.taskbarSearchLabel') },
+        { value: 'icon', label: t('isoConfig.uiPersonalization.taskbarSearchIcon') },
+        { value: 'hide', label: t('isoConfig.uiPersonalization.taskbarSearchHide') }
+      ],
+      value: st.taskbarSearch || 'box'
+    })
+
+    const startTilesRadioHtml = createRadioContainer({
+      id: 'start-tiles-container',
+      name: 'start-tiles-mode',
+      title: t('isoConfig.uiPersonalization.startTilesMode'),
+      description: '',
+      icon: 'grid-3x3',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.startTilesDefault'),
+          description: t('isoConfig.uiPersonalization.startTilesDefaultDesc')
+        },
+        {
+          value: 'empty',
+          label: t('isoConfig.uiPersonalization.startTilesEmpty'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.startTilesCustom'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'start-tiles-xml-card',
+              title: t('isoConfig.uiPersonalization.startTilesXml'),
+              description: '',
+              icon: 'code',
+              value: st.startTilesXml || '',
+              placeholder: `<LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModificationTemplate" xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" Version="1">
+  <defaultlayout:StartLayoutCollection>
+    <defaultlayout:DefaultLayout StartLayoutGroupCellWidth="6">
+      <start:Group Name="Group1">
+        <start:DesktopApplicationTile Size="2x2" Column="0" Row="0" DesktopApplicationLinkPath="%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk" />
+        <start:DesktopApplicationTile Size="2x2" Column="2" Row="0" DesktopApplicationLinkPath="%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\System Tools\\File Explorer.lnk" />
+      </start:Group>
+    </defaultlayout:DefaultLayout>
+  </defaultlayout:StartLayoutCollection>
+</LayoutModificationTemplate>`,
+              rows: 15,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: st.startTilesMode || 'default',
+      expanded: false
+    })
+
+    const startPinsRadioHtml = createRadioContainer({
+      id: 'start-pins-container',
+      name: 'start-pins-mode',
+      title: t('isoConfig.uiPersonalization.startPinsMode'),
+      description: '',
+      icon: 'pin',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.startPinsDefault'),
+          description: t('isoConfig.uiPersonalization.startPinsDefaultDesc')
+        },
+        {
+          value: 'empty',
+          label: t('isoConfig.uiPersonalization.startPinsEmpty'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.startPinsCustom'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'start-pins-json-card',
+              title: t('isoConfig.uiPersonalization.startPinsJson'),
+              description: '',
+              icon: 'code',
+              value: st.startPinsJson || '',
+              placeholder: `{
+  "pinnedList": [
+    {
+      "desktopAppLink": "%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk"
+    },
+    {
+      "desktopAppLink": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\File Explorer.lnk"
+    }
+  ]
+}`,
+              rows: 15,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: st.startPinsMode || 'default',
+      expanded: false
+    })
+
+    const foldersStartRadioHtml = createRadioContainer({
+      id: 'folders-start-container',
+      name: 'folders-start-mode',
+      title: t('isoConfig.uiPersonalization.foldersStart'),
+      description: t('isoConfig.uiPersonalization.foldersStartDesc'),
+      icon: 'folder',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.foldersStartDefault'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.foldersStartCustom'),
+          description: '',
+          nestedCards: [
+            {
+              type: 'multiColumnCheckbox',
+              config: {
+                id: 'folders-start-options-container',
+                name: 'folders-start-options',
+                options: [
+                  { value: 'startFolderDocuments', label: t('isoConfig.uiPersonalization.startFolderDocuments') },
+                  { value: 'startFolderDownloads', label: t('isoConfig.uiPersonalization.startFolderDownloads') },
+                  { value: 'startFolderFileExplorer', label: t('isoConfig.uiPersonalization.startFolderFileExplorer') },
+                  { value: 'startFolderMusic', label: t('isoConfig.uiPersonalization.startFolderMusic') },
+                  { value: 'startFolderNetwork', label: t('isoConfig.uiPersonalization.startFolderNetwork') },
+                  { value: 'startFolderPersonalFolder', label: t('isoConfig.uiPersonalization.startFolderPersonalFolder') },
+                  { value: 'startFolderPictures', label: t('isoConfig.uiPersonalization.startFolderPictures') },
+                  { value: 'startFolderSettings', label: t('isoConfig.uiPersonalization.startFolderSettings') },
+                  { value: 'startFolderVideos', label: t('isoConfig.uiPersonalization.startFolderVideos') }
+                ],
+                values: {
+                  startFolderDocuments: folders.folders?.Documents || false,
+                  startFolderDownloads: folders.folders?.Downloads || false,
+                  startFolderFileExplorer: folders.folders?.FileExplorer || false,
+                  startFolderMusic: folders.folders?.Music || false,
+                  startFolderNetwork: folders.folders?.Network || false,
+                  startFolderPersonalFolder: folders.folders?.PersonalFolder || false,
+                  startFolderPictures: folders.folders?.Pictures || false,
+                  startFolderSettings: folders.folders?.Settings || false,
+                  startFolderVideos: folders.folders?.Videos || false
+                },
+                showHeader: false,
+                minColumnWidth: 140,
+                maxColumns: 3
+              }
+            }
+          ]
+        }
+      ],
+      selectedValue: folders.mode || 'default',
+      expanded: false
+    })
+
+    contentDiv.innerHTML = `
+      ${createComboCard({
+        id: 'taskbar-left',
+        title: t('isoConfig.uiPersonalization.leftTaskbar'),
+        description: '',
+        controlType: 'switch',
+        value: st.leftTaskbar || false
+      })}
+      ${createComboCard({
+        id: 'taskbar-hide-taskview',
+        title: t('isoConfig.uiPersonalization.hideTaskViewButton'),
+        description: '',
+        controlType: 'switch',
+        value: st.hideTaskViewButton || false
+      })}
+      ${createComboCard({
+        id: 'taskbar-disable-widgets',
+        title: t('isoConfig.uiPersonalization.disableWidgets'),
+        description: '',
+        controlType: 'switch',
+        value: st.disableWidgets || false
+      })}
+      ${createComboCard({
+        id: 'taskbar-show-all-tray-icons',
+        title: t('isoConfig.uiPersonalization.showAllTrayIcons'),
+        description: '',
+        controlType: 'switch',
+        value: st.showAllTrayIcons || false
+      })}
+      ${createComboCard({
+        id: 'taskbar-disable-bing',
+        title: t('isoConfig.uiPersonalization.disableBingResults'),
+        description: '',
+        controlType: 'switch',
+        value: st.disableBingResults || false
+      })}
+      ${taskbarSearchCardHtml}
+      ${startTilesRadioHtml}
+      ${startPinsRadioHtml}
+      ${foldersStartRadioHtml}
+    `
+
+    setupComboCard('taskbar-left', (value) => {
+      this.updateModule('startMenuTaskbar', { leftTaskbar: value as boolean })
+    })
+    setupComboCard('taskbar-hide-taskview', (value) => {
+      this.updateModule('startMenuTaskbar', { hideTaskViewButton: value as boolean })
+    })
+    setupComboCard('taskbar-disable-widgets', (value) => {
+      this.updateModule('startMenuTaskbar', { disableWidgets: value as boolean })
+    })
+    setupComboCard('taskbar-show-all-tray-icons', (value) => {
+      this.updateModule('startMenuTaskbar', { showAllTrayIcons: value as boolean })
+    })
+    setupComboCard('taskbar-disable-bing', (value) => {
+      this.updateModule('startMenuTaskbar', { disableBingResults: value as boolean })
+    })
+
+    setupComboCard('taskbar-search-card', (value) => {
+      this.updateModule('startMenuTaskbar', { taskbarSearch: value as 'hide' | 'icon' | 'box' | 'label' })
+    })
+
+    setupRadioContainer('start-tiles-container', 'start-tiles-mode', (value) => {
+      this.updateModule('startMenuTaskbar', { startTilesMode: value as 'default' | 'empty' | 'custom' })
+      this.renderStartTaskbarContent(contentDiv)
+    }, true)
+
+    if (st.startTilesMode === 'custom') {
+      setupTextCard('start-tiles-xml-card', (value) => {
+        this.updateModule('startMenuTaskbar', { startTilesXml: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('start-tiles-xml-card', content)
+            this.updateModule('startMenuTaskbar', { startTilesXml: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'XML Files', extensions: ['xml'] }],
+            defaultPath: 'start-tiles.xml'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('start-tiles-xml-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    setupRadioContainer('start-pins-container', 'start-pins-mode', (value) => {
+      this.updateModule('startMenuTaskbar', { startPinsMode: value as 'default' | 'empty' | 'custom' })
+      this.renderStartTaskbarContent(contentDiv)
+    }, true)
+
+    if (st.startPinsMode === 'custom') {
+      setupTextCard('start-pins-json-card', (value) => {
+        this.updateModule('startMenuTaskbar', { startPinsJson: value })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'JSON Files', extensions: ['json', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('start-pins-json-card', content)
+            this.updateModule('startMenuTaskbar', { startPinsJson: content })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'JSON Files', extensions: ['json'] }],
+            defaultPath: 'start-pins.json'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('start-pins-json-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    setupRadioContainer('folders-start-container', 'folders-start-mode', (value) => {
+      this.updateModule('startFolders', { mode: value as 'default' | 'custom' })
+      this.renderStartTaskbarContent(contentDiv)
+    }, true)
+
+    if (folders.mode === 'custom') {
+      setupMultiColumnCheckboxContainer('folders-start-options-container', 'folders-start-options', (values) => {
+        const foldersObj: Record<string, boolean> = {}
+        const keyMap: Record<string, string> = {
+          startFolderSettings: 'Settings',
+          startFolderFileExplorer: 'FileExplorer',
+          startFolderDocuments: 'Documents',
+          startFolderDownloads: 'Downloads',
+          startFolderMusic: 'Music',
+          startFolderPictures: 'Pictures',
+          startFolderVideos: 'Videos',
+          startFolderNetwork: 'Network',
+          startFolderPersonalFolder: 'PersonalFolder'
+        }
+        Object.keys(values).forEach(key => {
+          if (keyMap[key]) {
+            foldersObj[keyMap[key]] = values[key] as boolean
+          }
+        })
+        this.updateModule('startFolders', { folders: foldersObj })
+      }, false)
+    }
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
+  private renderPersonalizationSubPageContent(contentDiv: HTMLElement) {
+    const ve = this.config.visualEffects
+    const pers = this.config.personalization || {
+      wallpaper: { mode: 'default' },
+      lockScreen: { mode: 'default' },
+      color: { mode: 'default' }
+    }
+
+    const visualEffectsRadioHtml = createRadioContainer({
+      id: 'visual-effects-container',
+      name: 'visual-effects-mode',
+      title: t('isoConfig.uiPersonalization.visualEffects'),
+      description: '',
+      icon: 'sparkles',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.visualEffectsDefault'),
+          description: ''
+        },
+        {
+          value: 'appearance',
+          label: t('isoConfig.uiPersonalization.visualEffectsAppearance'),
+          description: ''
+        },
+        {
+          value: 'performance',
+          label: t('isoConfig.uiPersonalization.visualEffectsPerformance'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.visualEffectsCustom'),
+          description: '',
+          nestedCards: [
+            {
+              type: 'multiColumnCheckbox',
+              config: {
+                id: 'visual-effects-options-container',
+                name: 'visual-effects-options',
+                options: [
+                  { value: 'controlAnimations', label: t('isoConfig.uiPersonalization.controlAnimations') },
+                  { value: 'animateMinMax', label: t('isoConfig.uiPersonalization.animateMinMax') },
+                  { value: 'taskbarAnimations', label: t('isoConfig.uiPersonalization.taskbarAnimations') },
+                  { value: 'dwmAeroPeekEnabled', label: t('isoConfig.uiPersonalization.dwmAeroPeekEnabled') },
+                  { value: 'menuAnimation', label: t('isoConfig.uiPersonalization.menuAnimation') },
+                  { value: 'tooltipAnimation', label: t('isoConfig.uiPersonalization.tooltipAnimation') },
+                  { value: 'selectionFade', label: t('isoConfig.uiPersonalization.selectionFade') },
+                  { value: 'dwmSaveThumbnailEnabled', label: t('isoConfig.uiPersonalization.dwmSaveThumbnailEnabled') },
+                  { value: 'cursorShadow', label: t('isoConfig.uiPersonalization.cursorShadow') },
+                  { value: 'listviewShadow', label: t('isoConfig.uiPersonalization.listviewShadow') },
+                  { value: 'thumbnailsOrIcon', label: t('isoConfig.uiPersonalization.thumbnailsOrIcon') },
+                  { value: 'listviewAlphaSelect', label: t('isoConfig.uiPersonalization.listviewAlphaSelect') },
+                  { value: 'dragFullWindows', label: t('isoConfig.uiPersonalization.dragFullWindows') },
+                  { value: 'comboBoxAnimation', label: t('isoConfig.uiPersonalization.comboBoxAnimation') },
+                  { value: 'fontSmoothing', label: t('isoConfig.uiPersonalization.fontSmoothing') },
+                  { value: 'listBoxSmoothScrolling', label: t('isoConfig.uiPersonalization.listBoxSmoothScrolling') },
+                  { value: 'dropShadow', label: t('isoConfig.uiPersonalization.dropShadow') }
+                ],
+                values: {
+                  controlAnimations: ve.controlAnimations || false,
+                  animateMinMax: ve.animateMinMax || false,
+                  taskbarAnimations: ve.taskbarAnimations || false,
+                  dwmAeroPeekEnabled: ve.dwmAeroPeekEnabled || false,
+                  menuAnimation: ve.menuAnimation || false,
+                  tooltipAnimation: ve.tooltipAnimation || false,
+                  selectionFade: ve.selectionFade || false,
+                  dwmSaveThumbnailEnabled: ve.dwmSaveThumbnailEnabled || false,
+                  cursorShadow: ve.cursorShadow || false,
+                  listviewShadow: ve.listviewShadow || false,
+                  thumbnailsOrIcon: ve.thumbnailsOrIcon || false,
+                  listviewAlphaSelect: ve.listviewAlphaSelect || false,
+                  dragFullWindows: ve.dragFullWindows || false,
+                  comboBoxAnimation: ve.comboBoxAnimation || false,
+                  fontSmoothing: ve.fontSmoothing || false,
+                  listBoxSmoothScrolling: ve.listBoxSmoothScrolling || false,
+                  dropShadow: ve.dropShadow || false
+                },
+                showHeader: false,
+                minColumnWidth: 140,
+                maxColumns: 3
+              }
+            }
+          ]
+        }
+      ],
+      selectedValue: ve.mode || 'default',
+      expanded: false
+    })
+
+    const colorModeRadioHtml = createRadioContainer({
+      id: 'color-mode-container',
+      name: 'color-mode',
+      title: t('isoConfig.uiPersonalization.colorMode'),
+      description: t('isoConfig.uiPersonalization.personalizationDesc'),
+      icon: 'palette',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.colorDefault'),
+          description: ''
+        },
+        {
+          value: 'custom',
+          label: t('isoConfig.uiPersonalization.colorCustom'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'system-color-theme-card',
+              title: t('isoConfig.uiPersonalization.systemColorTheme'),
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' }
+              ],
+              value: pers.color?.systemTheme || 'light',
+              borderless: true
+            },
+            {
+              id: 'apps-color-theme-card',
+              title: t('isoConfig.uiPersonalization.appsColorTheme'),
+              description: '',
+              controlType: 'select',
+              options: [
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' }
+              ],
+              value: pers.color?.appsTheme || 'light',
+              borderless: true
+            },
+            {
+              id: 'accent-color-card',
+              title: t('isoConfig.uiPersonalization.accentColor'),
+              description: '',
+              controlType: 'text',
+              value: pers.color?.accentColor || '#0078D4',
+              placeholder: '#0078D4',
+              borderless: true
+            },
+            {
+              id: 'accent-color-on-start-card',
+              title: t('isoConfig.uiPersonalization.accentColorOnStart'),
+              description: '',
+              controlType: 'switch',
+              value: pers.color?.accentColorOnStart || false,
+              borderless: true
+            },
+            {
+              id: 'accent-color-on-borders-card',
+              title: t('isoConfig.uiPersonalization.accentColorOnBorders'),
+              description: '',
+              controlType: 'switch',
+              value: pers.color?.accentColorOnBorders || false,
+              borderless: true
+            },
+            {
+              id: 'enable-transparency-card',
+              title: t('isoConfig.uiPersonalization.enableTransparency'),
+              description: '',
+              controlType: 'switch',
+              value: pers.color?.enableTransparency || false,
+              borderless: true
+            }
+          ]
+        }
+      ],
+      selectedValue: pers.color?.mode || 'default',
+      expanded: false
+    })
+
+    const wallpaperModeRadioHtml = createRadioContainer({
+      id: 'wallpaper-mode-container',
+      name: 'wallpaper-mode',
+      title: t('isoConfig.uiPersonalization.wallpaperMode'),
+      description: '',
+      icon: 'image',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.wallpaperDefault'),
+          description: ''
+        },
+        {
+          value: 'solid',
+          label: t('isoConfig.uiPersonalization.wallpaperSolid'),
+          description: '',
+          nestedCards: [
+            {
+              id: 'wallpaper-color-card',
+              title: t('isoConfig.uiPersonalization.wallpaperColor'),
+              description: '',
+              controlType: 'text',
+              value: pers.wallpaper?.color || '#008080',
+              placeholder: '#008080',
+              borderless: true
+            }
+          ]
+        },
+        {
+          value: 'script',
+          label: t('isoConfig.uiPersonalization.wallpaperScript'),
+          description: t('isoConfig.uiPersonalization.wallpaperScriptDesc'),
+          nestedCards: [
+            {
+              id: 'wallpaper-script-card',
+              title: t('isoConfig.uiPersonalization.wallpaperPsScript'),
+              description: '',
+              icon: 'code',
+              value: pers.wallpaper?.script || '',
+              placeholder: `$url = 'https://example.com/wallpaper.jpg';
+& {
+  $ProgressPreference = 'SilentlyContinue';
+  ( Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30 ).Content;
+};`,
+              rows: 8,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: pers.wallpaper?.mode || 'default',
+      expanded: false
+    })
+
+    const lockScreenModeRadioHtml = createRadioContainer({
+      id: 'lockscreen-mode-container',
+      name: 'lockscreen-mode',
+      title: t('isoConfig.uiPersonalization.lockScreenMode'),
+      description: '',
+      icon: 'lock',
+      options: [
+        {
+          value: 'default',
+          label: t('isoConfig.uiPersonalization.lockScreenDefault'),
+          description: ''
+        },
+        {
+          value: 'script',
+          label: t('isoConfig.uiPersonalization.lockScreenScript'),
+          description: t('isoConfig.uiPersonalization.lockScreenScriptDesc'),
+          nestedCards: [
+            {
+              id: 'lockscreen-script-card',
+              title: t('isoConfig.uiPersonalization.lockScreenPsScript'),
+              description: '',
+              icon: 'code',
+              value: pers.lockScreen?.script || '',
+              placeholder: `foreach( $drive in [System.IO.DriveInfo]::GetDrives() ) {
+  if( $found = Join-Path -Path $drive.RootDirectory -ChildPath 'lockscreen.png' -Resolve -ErrorAction 'SilentlyContinue' ) {
+    return [System.IO.File]::ReadAllBytes( $found );
+  }
+}`,
+              rows: 8,
+              borderless: true,
+              showImportExport: true
+            } as any
+          ]
+        }
+      ],
+      selectedValue: pers.lockScreen?.mode || 'default',
+      expanded: false
+    })
+
+    contentDiv.innerHTML = `
+      ${visualEffectsRadioHtml}
+      ${colorModeRadioHtml}
+      ${wallpaperModeRadioHtml}
+      ${lockScreenModeRadioHtml}
+    `
+
+    setupRadioContainer('visual-effects-container', 'visual-effects-mode', (value) => {
+      this.updateModule('visualEffects', { mode: value as 'default' | 'appearance' | 'performance' | 'custom' })
+      this.renderPersonalizationSubPageContent(contentDiv)
+    }, true)
+
+    if (ve.mode === 'custom') {
+      setupMultiColumnCheckboxContainer('visual-effects-options-container', 'visual-effects-options', (values) => {
+        this.updateModule('visualEffects', values as Partial<VisualEffects>)
+      }, false)
+    }
+
+    setupRadioContainer('color-mode-container', 'color-mode', (value) => {
+      this.updateModule('personalization', {
+        color: {
+          ...(pers.color || {}),
+          mode: value as 'default' | 'custom'
+        }
+      })
+      this.renderPersonalizationSubPageContent(contentDiv)
+    }, true)
+
+    if (pers.color?.mode === 'custom') {
+      setupComboCard('system-color-theme-card', (value) => {
+        this.updateModule('personalization', { color: { ...(pers.color || {}), systemTheme: value as 'dark' | 'light' } })
+      })
+      setupComboCard('apps-color-theme-card', (value) => {
+        this.updateModule('personalization', { color: { ...(pers.color || {}), appsTheme: value as 'dark' | 'light' } })
+      })
+      setupComboCard('accent-color-card', (value) => {
+        this.updateModule('personalization', { color: { ...(pers.color || {}), accentColor: value as string } })
+      })
+      setupComboCard('accent-color-on-start-card', (value) => {
+        this.updateModule('personalization', { color: { ...(pers.color || {}), accentColorOnStart: value as boolean } })
+      })
+      setupComboCard('accent-color-on-borders-card', (value) => {
+        this.updateModule('personalization', { color: { ...(pers.color || {}), accentColorOnBorders: value as boolean } })
+      })
+      setupComboCard('enable-transparency-card', (value) => {
+        this.updateModule('personalization', { color: { ...(pers.color || {}), enableTransparency: value as boolean } })
+      })
+    }
+
+    setupRadioContainer('wallpaper-mode-container', 'wallpaper-mode', (value) => {
+      this.updateModule('personalization', {
+        wallpaper: {
+          ...(pers.wallpaper || {}),
+          mode: value as 'default' | 'solid' | 'script'
+        }
+      })
+      this.renderPersonalizationSubPageContent(contentDiv)
+    }, true)
+
+    if (pers.wallpaper?.mode === 'solid') {
+      setupComboCard('wallpaper-color-card', (value) => {
+        this.updateModule('personalization', { wallpaper: { ...(pers.wallpaper || {}), color: value as string } })
+      })
+    }
+
+    if (pers.wallpaper?.mode === 'script') {
+      setupTextCard('wallpaper-script-card', (value) => {
+        this.updateModule('personalization', { wallpaper: { ...(pers.wallpaper || {}), script: value } })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('wallpaper-script-card', content)
+            this.updateModule('personalization', { wallpaper: { ...(pers.wallpaper || {}), script: content } })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
+            defaultPath: 'wallpaper.ps1'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('wallpaper-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    setupRadioContainer('lockscreen-mode-container', 'lockscreen-mode', (value) => {
+      this.updateModule('personalization', {
+        lockScreen: {
+          ...(pers.lockScreen || {}),
+          mode: value as 'default' | 'script'
+        }
+      })
+      this.renderPersonalizationSubPageContent(contentDiv)
+    }, true)
+
+    if (pers.lockScreen?.mode === 'script') {
+      setupTextCard('lockscreen-script-card', (value) => {
+        this.updateModule('personalization', { lockScreen: { ...(pers.lockScreen || {}), script: value } })
+      }, async () => {
+        if (window.electronAPI?.showOpenDialog) {
+          const result = await window.electronAPI.showOpenDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
+            properties: ['openFile']
+          })
+          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
+            const content = await window.electronAPI.readFile(result.filePaths[0])
+            setTextCardValue('lockscreen-script-card', content)
+            this.updateModule('personalization', { lockScreen: { ...(pers.lockScreen || {}), script: content } })
+          }
+        }
+      }, async () => {
+        if (window.electronAPI?.showSaveDialog) {
+          const result = await window.electronAPI.showSaveDialog({
+            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
+            defaultPath: 'lockscreen.ps1'
+          })
+          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
+            const currentValue = getTextCardValue('lockscreen-script-card', true)
+            await window.electronAPI.writeFile(result.filePath, currentValue)
+          }
+        }
+      })
+    }
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
   // 设置事件监听器
   private setupEventListeners() {
     // 使用事件委托处理可展开card的展开/折叠
@@ -1069,6 +1992,18 @@ class UnattendConfigManager {
           }
         }
       })
+    }
+
+    if (!this.workspaceTitleListenerBound) {
+      const workspaceTitle = document.getElementById('workspace-title') as HTMLElement | null
+      workspaceTitle?.addEventListener('click', (e: Event) => {
+        const target = e.target as HTMLElement
+        const backEl = target.closest('[data-subpage-action="back"]')
+        if (backEl && this.activeUiPersonalizationSubPage) {
+          this.resetUiPersonalizationSubPage(true)
+        }
+      })
+      this.workspaceTitleListenerBound = true
     }
   }
 
@@ -3439,115 +4374,19 @@ End If`,
     const contentDiv = this.getSectionContent('config-file-explorer')
     if (!contentDiv) return
 
-    const fe = this.config.fileExplorer
-
-    // 1. Hide Files - RadioContainer (嵌套)
-    const hideFilesRadioHtml = createRadioContainer({
-      id: 'hide-files-container',
-      name: 'hide-files-mode',
-      title: t('isoConfig.uiPersonalization.hideFiles'),
-      description: '',
-      icon: 'eye-off',
-      options: [
-        {
-          value: 'hidden',
-          label: t('isoConfig.uiPersonalization.hideFilesDefault'),
-          description: t('isoConfig.uiPersonalization.hideFilesDefaultDesc')
-        },
-        {
-          value: 'hiddenSystem',
-          label: t('isoConfig.uiPersonalization.hideFilesHiddenSystem'),
-          description: t('isoConfig.uiPersonalization.hideFilesHiddenSystemDesc')
-        },
-        {
-          value: 'none',
-          label: t('isoConfig.uiPersonalization.hideFilesNone'),
-          description: t('isoConfig.uiPersonalization.hideFilesNoneDesc')
-        }
-      ],
-      selectedValue: fe.hideFiles || 'hidden',
-      expanded: false
+    contentDiv.innerHTML = createComboCard({
+      id: 'file-explorer-entry-card',
+      title: t('isoConfig.uiPersonalization.fileExplorer'),
+      description: t('isoConfig.uiPersonalization.fileExplorerEntryDesc'),
+      icon: 'folder',
+      controlType: 'clickable',
+      value: ''
     })
 
-    // 2. File Explorer Options - ComboContainer (使用嵌套的 ComboCard)
-    const fileExplorerOptionsConfig: ComboContainerConfig = {
-      id: 'file-explorer-options-container',
-      name: 'file-explorer-options',
-      title: t('isoConfig.uiPersonalization.fileExplorer'),
-      description: '',
-      icon: 'folder',
-      nestedCards: [
-        {
-          id: 'file-explorer-show-extensions',
-          title: t('isoConfig.uiPersonalization.showFileExtensions'),
-          description: t('isoConfig.uiPersonalization.showFileExtensionsDesc'),
-          controlType: 'checkbox',
-          value: fe.showFileExtensions || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-launch-this-pc',
-          title: t('isoConfig.uiPersonalization.launchToThisPC'),
-          controlType: 'checkbox',
-          value: fe.launchToThisPC || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-classic-context-menu',
-          title: t('isoConfig.systemOptimization.classicContextMenu'),
-          controlType: 'checkbox',
-          value: fe.classicContextMenu || false,
-          borderless: true
-        },
-        {
-          id: 'file-explorer-show-end-task',
-          title: t('isoConfig.systemOptimization.showEndTask'),
-          controlType: 'checkbox',
-          value: fe.showEndTask || false,
-          borderless: true
-        }
-      ],
-      expanded: false
-    }
-    const fileExplorerOptionsHtml = createComboContainer(fileExplorerOptionsConfig)
+    setupComboCard('file-explorer-entry-card', () => { }, () => {
+      this.openUiPersonalizationSubPage('file-explorer', 'file-explorer-entry-card')
+    })
 
-    contentDiv.innerHTML = `
-      ${hideFilesRadioHtml}
-      ${fileExplorerOptionsHtml}
-    `
-
-    // === 事件监听设置 ===
-
-    // 1. Hide Files mode
-    setupRadioContainer('hide-files-container', 'hide-files-mode', (value) => {
-      this.updateModule('fileExplorer', { hideFiles: value as 'hidden' | 'hiddenSystem' | 'none' })
-    }, true)
-
-    // 2. File Explorer options
-    setupComboContainer('file-explorer-options-container', 'file-explorer-options', (values) => {
-      // 从嵌套卡片的值中提取各个选项
-      // key 格式为：show_extensions, show_tray_icons 等（最后两部分）
-      const updates: Partial<FileExplorer> = {}
-      const keyMap: Record<string, keyof FileExplorer> = {
-        'show_extensions': 'showFileExtensions',
-        'launch_this_pc': 'launchToThisPC',
-        'classic_context_menu': 'classicContextMenu',
-        'show_end_task': 'showEndTask'
-      }
-      Object.keys(values).forEach(key => {
-        // 查找匹配的 key（key 可能是 show_extensions 或 show_extensions_xxx 格式）
-        const matchedKey = Object.keys(keyMap).find(k => key === k || key.startsWith(k + '_'))
-        if (matchedKey && keyMap[matchedKey]) {
-          const value = values[key]
-          if (typeof value === 'boolean') {
-            (updates as any)[keyMap[matchedKey]] = value
-          }
-        }
-      })
-      this.updateModule('fileExplorer', updates)
-    }, true, fileExplorerOptionsConfig)
-
-    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }
@@ -3558,280 +4397,19 @@ End If`,
     const contentDiv = this.getSectionContent('config-start-taskbar')
     if (!contentDiv) return
 
-    const st = this.config.startMenuTaskbar
-
-    // 1. Taskbar Options - ComboContainer (使用嵌套的 ComboCard)
-    const taskbarOptionsConfig: ComboContainerConfig = {
-      id: 'taskbar-options-container',
-      name: 'taskbar-options',
+    contentDiv.innerHTML = createComboCard({
+      id: 'start-taskbar-entry-card',
       title: t('isoConfig.uiPersonalization.startTaskbar'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.startTaskbarEntryDesc'),
       icon: 'layout-grid',
-      nestedCards: [
-        {
-          id: 'taskbar-left',
-          title: t('isoConfig.uiPersonalization.leftTaskbar'),
-          controlType: 'checkbox',
-          value: st.leftTaskbar || false,
-          borderless: true
-        },
-        {
-          id: 'taskbar-hide-taskview',
-          title: t('isoConfig.uiPersonalization.hideTaskViewButton'),
-          controlType: 'checkbox',
-          value: st.hideTaskViewButton || false,
-          borderless: true
-        },
-        {
-          id: 'taskbar-disable-widgets',
-          title: t('isoConfig.uiPersonalization.disableWidgets'),
-          controlType: 'checkbox',
-          value: st.disableWidgets || false,
-          borderless: true
-        },
-        {
-          id: 'taskbar-show-all-tray-icons',
-          title: t('isoConfig.uiPersonalization.showAllTrayIcons'),
-          controlType: 'checkbox',
-          value: st.showAllTrayIcons || false,
-          borderless: true
-        },
-        {
-          id: 'taskbar-disable-bing',
-          title: t('isoConfig.uiPersonalization.disableBingResults'),
-          controlType: 'checkbox',
-          value: st.disableBingResults || false,
-          borderless: true
-        }
-      ],
-      expanded: false
-    }
-    const taskbarOptionsHtml = createComboContainer(taskbarOptionsConfig)
-
-    // 2. Taskbar Search - ComboCard select
-    const taskbarSearchCardHtml = createComboCard({
-      id: 'taskbar-search-card',
-      title: t('isoConfig.uiPersonalization.taskbarSearch'),
-      description: '',
-      icon: 'search',
-      controlType: 'select',
-      options: [
-        { value: 'box', label: t('isoConfig.uiPersonalization.taskbarSearchBox') },
-        { value: 'label', label: t('isoConfig.uiPersonalization.taskbarSearchLabel') },
-        { value: 'icon', label: t('isoConfig.uiPersonalization.taskbarSearchIcon') },
-        { value: 'hide', label: t('isoConfig.uiPersonalization.taskbarSearchHide') }
-      ],
-      value: st.taskbarSearch || 'box'
+      controlType: 'clickable',
+      value: ''
     })
 
-    // 3. Windows 10 Start Tiles - RadioContainer (嵌套)
-    const startTilesRadioHtml = createRadioContainer({
-      id: 'start-tiles-container',
-      name: 'start-tiles-mode',
-      title: t('isoConfig.uiPersonalization.startTilesMode'),
-      description: '',
-      icon: 'grid-3x3',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.startTilesDefault'),
-          description: t('isoConfig.uiPersonalization.startTilesDefaultDesc')
-        },
-        {
-          value: 'empty',
-          label: t('isoConfig.uiPersonalization.startTilesEmpty'),
-          description: ''
-        },
-        {
-          value: 'custom',
-          label: t('isoConfig.uiPersonalization.startTilesCustom'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'start-tiles-xml-card',
-              title: t('isoConfig.uiPersonalization.startTilesXml'),
-              description: '',
-              icon: 'code',
-              value: st.startTilesXml || '',
-              placeholder: `<LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModificationTemplate" xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" Version="1">
-  <defaultlayout:StartLayoutCollection>
-    <defaultlayout:DefaultLayout StartLayoutGroupCellWidth="6">
-      <start:Group Name="Group1">
-        <start:DesktopApplicationTile Size="2x2" Column="0" Row="0" DesktopApplicationLinkPath="%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk" />
-        <start:DesktopApplicationTile Size="2x2" Column="2" Row="0" DesktopApplicationLinkPath="%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\System Tools\\File Explorer.lnk" />
-      </start:Group>
-    </defaultlayout:DefaultLayout>
-  </defaultlayout:StartLayoutCollection>
-</LayoutModificationTemplate>`,
-              rows: 15,
-              borderless: true,
-              showImportExport: true
-            } as any
-          ]
-        }
-      ],
-      selectedValue: st.startTilesMode || 'default',
-      expanded: false
+    setupComboCard('start-taskbar-entry-card', () => { }, () => {
+      this.openUiPersonalizationSubPage('start-taskbar', 'start-taskbar-entry-card')
     })
 
-    // 4. Windows 11 Start Pins - RadioContainer (嵌套)
-    const startPinsRadioHtml = createRadioContainer({
-      id: 'start-pins-container',
-      name: 'start-pins-mode',
-      title: t('isoConfig.uiPersonalization.startPinsMode'),
-      description: '',
-      icon: 'pin',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.startPinsDefault'),
-          description: t('isoConfig.uiPersonalization.startPinsDefaultDesc')
-        },
-        {
-          value: 'empty',
-          label: t('isoConfig.uiPersonalization.startPinsEmpty'),
-          description: ''
-        },
-        {
-          value: 'custom',
-          label: t('isoConfig.uiPersonalization.startPinsCustom'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'start-pins-json-card',
-              title: t('isoConfig.uiPersonalization.startPinsJson'),
-              description: '',
-              icon: 'code',
-              value: st.startPinsJson || '',
-              placeholder: `{
-  "pinnedList": [
-    {
-      "desktopAppLink": "%ALLUSERSPROFILE%\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Edge.lnk"
-    },
-    {
-      "desktopAppLink": "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\File Explorer.lnk"
-    }
-  ]
-}`,
-              rows: 15,
-              borderless: true,
-              showImportExport: true
-            } as any
-          ]
-        }
-      ],
-      selectedValue: st.startPinsMode || 'default',
-      expanded: false
-    })
-
-    contentDiv.innerHTML = `
-      ${taskbarOptionsHtml}
-      ${taskbarSearchCardHtml}
-      ${startTilesRadioHtml}
-      ${startPinsRadioHtml}
-    `
-
-    // === 事件监听设置 ===
-
-    // 1. Taskbar options
-    setupComboContainer('taskbar-options-container', 'taskbar-options', (values) => {
-      // 从嵌套卡片的值中提取各个选项
-      const updates: Partial<StartMenuTaskbarSettings> = {}
-      const keyMap: Record<string, keyof StartMenuTaskbarSettings> = {
-        'left': 'leftTaskbar',
-        'hide_taskview': 'hideTaskViewButton',
-        'disable_widgets': 'disableWidgets',
-        'show_all_tray_icons': 'showAllTrayIcons',
-        'disable_bing': 'disableBingResults'
-      }
-      Object.keys(values).forEach(key => {
-        const matchedKey = Object.keys(keyMap).find(k => key === k || key.startsWith(k + '_'))
-        if (matchedKey && keyMap[matchedKey]) {
-          const value = values[key]
-          if (typeof value === 'boolean') {
-            (updates as any)[keyMap[matchedKey]] = value
-          }
-        }
-      })
-      this.updateModule('startMenuTaskbar', updates)
-    }, true, taskbarOptionsConfig)
-
-    // 2. Taskbar search
-    setupComboCard('taskbar-search-card', (value) => {
-      this.updateModule('startMenuTaskbar', { taskbarSearch: value as 'hide' | 'icon' | 'box' | 'label' })
-    })
-
-    // 3. Start tiles mode
-    setupRadioContainer('start-tiles-container', 'start-tiles-mode', (value) => {
-      this.updateModule('startMenuTaskbar', { startTilesMode: value as 'default' | 'empty' | 'custom' })
-      this.renderStartTaskbar()
-    }, true)
-
-    if (st.startTilesMode === 'custom') {
-      setupTextCard('start-tiles-xml-card', (value) => {
-        this.updateModule('startMenuTaskbar', { startTilesXml: value })
-      }, async () => {
-        if (window.electronAPI?.showOpenDialog) {
-          const result = await window.electronAPI.showOpenDialog({
-            filters: [{ name: 'XML Files', extensions: ['xml', 'txt'] }],
-            properties: ['openFile']
-          })
-          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
-            const content = await window.electronAPI.readFile(result.filePaths[0])
-            setTextCardValue('start-tiles-xml-card', content)
-            this.updateModule('startMenuTaskbar', { startTilesXml: content })
-          }
-        }
-      }, async () => {
-        if (window.electronAPI?.showSaveDialog) {
-          const result = await window.electronAPI.showSaveDialog({
-            filters: [{ name: 'XML Files', extensions: ['xml'] }],
-            defaultPath: 'start-tiles.xml'
-          })
-          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
-            const currentValue = getTextCardValue('start-tiles-xml-card', true)
-            await window.electronAPI.writeFile(result.filePath, currentValue)
-          }
-        }
-      })
-    }
-
-    // 4. Start pins mode
-    setupRadioContainer('start-pins-container', 'start-pins-mode', (value) => {
-      this.updateModule('startMenuTaskbar', { startPinsMode: value as 'default' | 'empty' | 'custom' })
-      this.renderStartTaskbar()
-    }, true)
-
-    if (st.startPinsMode === 'custom') {
-      setupTextCard('start-pins-json-card', (value) => {
-        this.updateModule('startMenuTaskbar', { startPinsJson: value })
-      }, async () => {
-        if (window.electronAPI?.showOpenDialog) {
-          const result = await window.electronAPI.showOpenDialog({
-            filters: [{ name: 'JSON Files', extensions: ['json', 'txt'] }],
-            properties: ['openFile']
-          })
-          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
-            const content = await window.electronAPI.readFile(result.filePaths[0])
-            setTextCardValue('start-pins-json-card', content)
-            this.updateModule('startMenuTaskbar', { startPinsJson: content })
-          }
-        }
-      }, async () => {
-        if (window.electronAPI?.showSaveDialog) {
-          const result = await window.electronAPI.showSaveDialog({
-            filters: [{ name: 'JSON Files', extensions: ['json'] }],
-            defaultPath: 'start-pins.json'
-          })
-          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
-            const currentValue = getTextCardValue('start-pins-json-card', true)
-            await window.electronAPI.writeFile(result.filePath, currentValue)
-          }
-        }
-      })
-    }
-
-    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }
@@ -3896,115 +4474,7 @@ End If`,
   private renderVisualEffects() {
     const contentDiv = this.getSectionContent('config-visual-effects')
     if (!contentDiv) return
-
-    const ve = this.config.visualEffects
-
-    // Visual Effects Mode - RadioContainer (嵌套多列Checkbox容器)
-    const visualEffectsRadioHtml = createRadioContainer({
-      id: 'visual-effects-container',
-      name: 'visual-effects-mode',
-      title: t('isoConfig.uiPersonalization.visualEffects'),
-      description: '',
-      icon: 'sparkles',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.visualEffectsDefault'),
-          description: ''
-        },
-        {
-          value: 'appearance',
-          label: t('isoConfig.uiPersonalization.visualEffectsAppearance'),
-          description: ''
-        },
-        {
-          value: 'performance',
-          label: t('isoConfig.uiPersonalization.visualEffectsPerformance'),
-          description: ''
-        },
-        {
-          value: 'custom',
-          label: t('isoConfig.uiPersonalization.visualEffectsCustom'),
-          description: '',
-          nestedCards: [
-            {
-              type: 'multiColumnCheckbox',
-              config: {
-                id: 'visual-effects-options-container',
-                name: 'visual-effects-options',
-                options: [
-                  { value: 'controlAnimations', label: t('isoConfig.uiPersonalization.controlAnimations') },
-                  { value: 'animateMinMax', label: t('isoConfig.uiPersonalization.animateMinMax') },
-                  { value: 'taskbarAnimations', label: t('isoConfig.uiPersonalization.taskbarAnimations') },
-                  { value: 'dwmAeroPeekEnabled', label: t('isoConfig.uiPersonalization.dwmAeroPeekEnabled') },
-                  { value: 'menuAnimation', label: t('isoConfig.uiPersonalization.menuAnimation') },
-                  { value: 'tooltipAnimation', label: t('isoConfig.uiPersonalization.tooltipAnimation') },
-                  { value: 'selectionFade', label: t('isoConfig.uiPersonalization.selectionFade') },
-                  { value: 'dwmSaveThumbnailEnabled', label: t('isoConfig.uiPersonalization.dwmSaveThumbnailEnabled') },
-                  { value: 'cursorShadow', label: t('isoConfig.uiPersonalization.cursorShadow') },
-                  { value: 'listviewShadow', label: t('isoConfig.uiPersonalization.listviewShadow') },
-                  { value: 'thumbnailsOrIcon', label: t('isoConfig.uiPersonalization.thumbnailsOrIcon') },
-                  { value: 'listviewAlphaSelect', label: t('isoConfig.uiPersonalization.listviewAlphaSelect') },
-                  { value: 'dragFullWindows', label: t('isoConfig.uiPersonalization.dragFullWindows') },
-                  { value: 'comboBoxAnimation', label: t('isoConfig.uiPersonalization.comboBoxAnimation') },
-                  { value: 'fontSmoothing', label: t('isoConfig.uiPersonalization.fontSmoothing') },
-                  { value: 'listBoxSmoothScrolling', label: t('isoConfig.uiPersonalization.listBoxSmoothScrolling') },
-                  { value: 'dropShadow', label: t('isoConfig.uiPersonalization.dropShadow') }
-                ],
-                values: {
-                  controlAnimations: ve.controlAnimations || false,
-                  animateMinMax: ve.animateMinMax || false,
-                  taskbarAnimations: ve.taskbarAnimations || false,
-                  dwmAeroPeekEnabled: ve.dwmAeroPeekEnabled || false,
-                  menuAnimation: ve.menuAnimation || false,
-                  tooltipAnimation: ve.tooltipAnimation || false,
-                  selectionFade: ve.selectionFade || false,
-                  dwmSaveThumbnailEnabled: ve.dwmSaveThumbnailEnabled || false,
-                  cursorShadow: ve.cursorShadow || false,
-                  listviewShadow: ve.listviewShadow || false,
-                  thumbnailsOrIcon: ve.thumbnailsOrIcon || false,
-                  listviewAlphaSelect: ve.listviewAlphaSelect || false,
-                  dragFullWindows: ve.dragFullWindows || false,
-                  comboBoxAnimation: ve.comboBoxAnimation || false,
-                  fontSmoothing: ve.fontSmoothing || false,
-                  listBoxSmoothScrolling: ve.listBoxSmoothScrolling || false,
-                  dropShadow: ve.dropShadow || false
-                },
-                showHeader: false, // 嵌入模式，隐藏头部
-                minColumnWidth: 140,
-                maxColumns: 3 // 限制最大列数为3，确保文本完整显示
-              }
-            }
-          ]
-        }
-      ],
-      selectedValue: ve.mode || 'default',
-      expanded: false
-    })
-
-    contentDiv.innerHTML = `
-      ${visualEffectsRadioHtml}
-    `
-
-    // === 事件监听设置 ===
-
-    // 1. Visual Effects mode
-    setupRadioContainer('visual-effects-container', 'visual-effects-mode', (value) => {
-      this.updateModule('visualEffects', { mode: value as 'default' | 'appearance' | 'performance' | 'custom' })
-      this.renderVisualEffects()
-    }, true)
-
-    // 2. Custom effects options (仅在custom模式下设置)
-    if (ve.mode === 'custom') {
-      setupMultiColumnCheckboxContainer('visual-effects-options-container', 'visual-effects-options', (values) => {
-        this.updateModule('visualEffects', values as Partial<VisualEffects>)
-      }, false) // 不更新头部值（因为已隐藏头部）
-    }
-
-    // 初始化图标
-    if (window.lucide) {
-      window.lucide.createIcons()
-    }
+    contentDiv.innerHTML = ''
   }
 
   // 渲染模块18: Desktop icons
@@ -4124,106 +4594,7 @@ End If`,
   private renderFoldersStart() {
     const contentDiv = this.getSectionContent('config-folders-start')
     if (!contentDiv) return
-
-    const folders = this.config.startFolders
-
-    // Folders on Start Mode - RadioContainer (嵌套 MultiColumnCheckboxContainer)
-    const foldersStartRadioHtml = createRadioContainer({
-      id: 'folders-start-container',
-      name: 'folders-start-mode',
-      title: t('isoConfig.uiPersonalization.foldersStart'),
-      description: t('isoConfig.uiPersonalization.foldersStartDesc'),
-      icon: 'folder',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.foldersStartDefault'),
-          description: ''
-        },
-        {
-          value: 'custom',
-          label: t('isoConfig.uiPersonalization.foldersStartCustom'),
-          description: '',
-          nestedCards: [
-            {
-              type: 'multiColumnCheckbox',
-              config: {
-                id: 'folders-start-options-container',
-                name: 'folders-start-options',
-                options: [
-                  { value: 'startFolderDocuments', label: t('isoConfig.uiPersonalization.startFolderDocuments') },
-                  { value: 'startFolderDownloads', label: t('isoConfig.uiPersonalization.startFolderDownloads') },
-                  { value: 'startFolderFileExplorer', label: t('isoConfig.uiPersonalization.startFolderFileExplorer') },
-                  { value: 'startFolderMusic', label: t('isoConfig.uiPersonalization.startFolderMusic') },
-                  { value: 'startFolderNetwork', label: t('isoConfig.uiPersonalization.startFolderNetwork') },
-                  { value: 'startFolderPersonalFolder', label: t('isoConfig.uiPersonalization.startFolderPersonalFolder') },
-                  { value: 'startFolderPictures', label: t('isoConfig.uiPersonalization.startFolderPictures') },
-                  { value: 'startFolderSettings', label: t('isoConfig.uiPersonalization.startFolderSettings') },
-                  { value: 'startFolderVideos', label: t('isoConfig.uiPersonalization.startFolderVideos') }
-                ],
-                values: {
-                  startFolderDocuments: folders.folders?.Documents || false,
-                  startFolderDownloads: folders.folders?.Downloads || false,
-                  startFolderFileExplorer: folders.folders?.FileExplorer || false,
-                  startFolderMusic: folders.folders?.Music || false,
-                  startFolderNetwork: folders.folders?.Network || false,
-                  startFolderPersonalFolder: folders.folders?.PersonalFolder || false,
-                  startFolderPictures: folders.folders?.Pictures || false,
-                  startFolderSettings: folders.folders?.Settings || false,
-                  startFolderVideos: folders.folders?.Videos || false
-                },
-                showHeader: false, // 嵌入模式，隐藏头部
-                minColumnWidth: 140,
-                maxColumns: 3
-              }
-            }
-          ]
-        }
-      ],
-      selectedValue: folders.mode || 'default',
-      expanded: false
-    })
-
-    contentDiv.innerHTML = `
-      ${foldersStartRadioHtml}
-    `
-
-    // === 事件监听设置 ===
-
-    // 1. Folders on Start mode
-    setupRadioContainer('folders-start-container', 'folders-start-mode', (value) => {
-      this.updateModule('startFolders', { mode: value as 'default' | 'custom' })
-      this.renderFoldersStart()
-    }, true)
-
-    // 2. Custom folders options (仅在custom模式下设置)
-    if (folders.mode === 'custom') {
-      setupMultiColumnCheckboxContainer('folders-start-options-container', 'folders-start-options', (values) => {
-        const foldersObj: Record<string, boolean> = {}
-        const keyMap: Record<string, string> = {
-          startFolderSettings: 'Settings',
-          startFolderFileExplorer: 'FileExplorer',
-          startFolderDocuments: 'Documents',
-          startFolderDownloads: 'Downloads',
-          startFolderMusic: 'Music',
-          startFolderPictures: 'Pictures',
-          startFolderVideos: 'Videos',
-          startFolderNetwork: 'Network',
-          startFolderPersonalFolder: 'PersonalFolder'
-        }
-        Object.keys(values).forEach(key => {
-          if (keyMap[key]) {
-            foldersObj[keyMap[key]] = values[key] as boolean
-          }
-        })
-        this.updateModule('startFolders', { folders: foldersObj })
-      }, false) // 不更新头部值（因为已隐藏头部）
-    }
-
-    // 初始化图标
-    if (window.lucide) {
-      window.lucide.createIcons()
-    }
+    contentDiv.innerHTML = ''
   }
 
   // 渲染模块23: Lock key settings
@@ -4495,378 +4866,19 @@ End If`,
   private renderPersonalization() {
     const contentDiv = this.getSectionContent('config-personalization')
     if (!contentDiv) return
-
-    const pers = this.config.personalization || {
-      wallpaper: { mode: 'default' },
-      lockScreen: { mode: 'default' },
-      color: { mode: 'default' }
-    }
-
-    // 1. Colors - RadioContainer (嵌套)
-    const colorModeRadioHtml = createRadioContainer({
-      id: 'color-mode-container',
-      name: 'color-mode',
-      title: t('isoConfig.uiPersonalization.colorMode'),
+    contentDiv.innerHTML = createComboCard({
+      id: 'personalization-entry-card',
+      title: t('isoConfig.uiPersonalization.personalization'),
       description: t('isoConfig.uiPersonalization.personalizationDesc'),
       icon: 'palette',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.colorDefault'),
-          description: ''
-        },
-        {
-          value: 'custom',
-          label: t('isoConfig.uiPersonalization.colorCustom'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'system-color-theme-card',
-              title: t('isoConfig.uiPersonalization.systemColorTheme'),
-              description: '',
-              controlType: 'select',
-              options: [
-                { value: 'light', label: 'Light' },
-                { value: 'dark', label: 'Dark' }
-              ],
-              value: pers.color?.systemTheme || 'light',
-              borderless: true
-            },
-            {
-              id: 'apps-color-theme-card',
-              title: t('isoConfig.uiPersonalization.appsColorTheme'),
-              description: '',
-              controlType: 'select',
-              options: [
-                { value: 'light', label: 'Light' },
-                { value: 'dark', label: 'Dark' }
-              ],
-              value: pers.color?.appsTheme || 'light',
-              borderless: true
-            },
-            {
-              id: 'accent-color-card',
-              title: t('isoConfig.uiPersonalization.accentColor'),
-              description: '',
-              controlType: 'text',
-              value: pers.color?.accentColor || '#0078D4',
-              placeholder: '#0078D4',
-              borderless: true
-            },
-            {
-              id: 'accent-color-on-start-card',
-              title: t('isoConfig.uiPersonalization.accentColorOnStart'),
-              description: '',
-              controlType: 'switch',
-              value: pers.color?.accentColorOnStart || false,
-              borderless: true
-            },
-            {
-              id: 'accent-color-on-borders-card',
-              title: t('isoConfig.uiPersonalization.accentColorOnBorders'),
-              description: '',
-              controlType: 'switch',
-              value: pers.color?.accentColorOnBorders || false,
-              borderless: true
-            },
-            {
-              id: 'enable-transparency-card',
-              title: t('isoConfig.uiPersonalization.enableTransparency'),
-              description: '',
-              controlType: 'switch',
-              value: pers.color?.enableTransparency || false,
-              borderless: true
-            }
-          ]
-        }
-      ],
-      selectedValue: pers.color?.mode || 'default',
-      expanded: false
+      controlType: 'clickable',
+      value: ''
     })
 
-    // 2. Desktop Wallpaper - RadioContainer (嵌套)
-    const wallpaperModeRadioHtml = createRadioContainer({
-      id: 'wallpaper-mode-container',
-      name: 'wallpaper-mode',
-      title: t('isoConfig.uiPersonalization.wallpaperMode'),
-      description: '',
-      icon: 'image',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.wallpaperDefault'),
-          description: ''
-        },
-        {
-          value: 'solid',
-          label: t('isoConfig.uiPersonalization.wallpaperSolid'),
-          description: '',
-          nestedCards: [
-            {
-              id: 'wallpaper-color-card',
-              title: t('isoConfig.uiPersonalization.wallpaperColor'),
-              description: '',
-              controlType: 'text',
-              value: pers.wallpaper?.color || '#008080',
-              placeholder: '#008080',
-              borderless: true
-            }
-          ]
-        },
-        {
-          value: 'script',
-          label: t('isoConfig.uiPersonalization.wallpaperScript'),
-          description: t('isoConfig.uiPersonalization.wallpaperScriptDesc'),
-          nestedCards: [
-            {
-              id: 'wallpaper-script-card',
-              title: t('isoConfig.uiPersonalization.wallpaperPsScript'),
-              description: '',
-              icon: 'code',
-              value: pers.wallpaper?.script || '',
-              placeholder: `$url = 'https://example.com/wallpaper.jpg';
-& {
-  $ProgressPreference = 'SilentlyContinue';
-  ( Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30 ).Content;
-};`,
-              rows: 8,
-              borderless: true,
-              showImportExport: true
-            } as any
-          ]
-        }
-      ],
-      selectedValue: pers.wallpaper?.mode || 'default',
-      expanded: false
+    setupComboCard('personalization-entry-card', () => { }, () => {
+      this.openUiPersonalizationSubPage('personalization', 'personalization-entry-card')
     })
 
-    // 3. Lock Screen - RadioContainer (嵌套)
-    const lockScreenModeRadioHtml = createRadioContainer({
-      id: 'lockscreen-mode-container',
-      name: 'lockscreen-mode',
-      title: t('isoConfig.uiPersonalization.lockScreenMode'),
-      description: '',
-      icon: 'lock',
-      options: [
-        {
-          value: 'default',
-          label: t('isoConfig.uiPersonalization.lockScreenDefault'),
-          description: ''
-        },
-        {
-          value: 'script',
-          label: t('isoConfig.uiPersonalization.lockScreenScript'),
-          description: t('isoConfig.uiPersonalization.lockScreenScriptDesc'),
-          nestedCards: [
-            {
-              id: 'lockscreen-script-card',
-              title: t('isoConfig.uiPersonalization.lockScreenPsScript'),
-              description: '',
-              icon: 'code',
-              value: pers.lockScreen?.script || '',
-              placeholder: `foreach( $drive in [System.IO.DriveInfo]::GetDrives() ) {
-  if( $found = Join-Path -Path $drive.RootDirectory -ChildPath 'lockscreen.png' -Resolve -ErrorAction 'SilentlyContinue' ) {
-    return [System.IO.File]::ReadAllBytes( $found );
-  }
-}`,
-              rows: 8,
-              borderless: true,
-              showImportExport: true
-            } as any
-          ]
-        }
-      ],
-      selectedValue: pers.lockScreen?.mode || 'default',
-      expanded: false
-    })
-
-    contentDiv.innerHTML = `
-      ${colorModeRadioHtml}
-      ${wallpaperModeRadioHtml}
-      ${lockScreenModeRadioHtml}
-    `
-
-    // === 事件监听设置 ===
-
-    // 1. Color mode
-    setupRadioContainer('color-mode-container', 'color-mode', (value) => {
-      this.updateModule('personalization', { 
-        color: { 
-          ...(pers.color || {}), 
-          mode: value as 'default' | 'custom' 
-        } 
-      })
-      this.renderPersonalization()
-    }, true)
-
-    if (pers.color?.mode === 'custom') {
-      setupComboCard('system-color-theme-card', (value) => {
-        this.updateModule('personalization', { 
-          color: { 
-            ...(pers.color || {}), 
-            systemTheme: value as 'dark' | 'light' 
-          } 
-        })
-      })
-
-      setupComboCard('apps-color-theme-card', (value) => {
-        this.updateModule('personalization', { 
-          color: { 
-            ...(pers.color || {}), 
-            appsTheme: value as 'dark' | 'light' 
-          } 
-        })
-      })
-
-      setupComboCard('accent-color-card', (value) => {
-        this.updateModule('personalization', { 
-          color: { 
-            ...(pers.color || {}), 
-            accentColor: value as string 
-          } 
-        })
-      })
-
-      setupComboCard('accent-color-on-start-card', (value) => {
-        this.updateModule('personalization', { 
-          color: { 
-            ...(pers.color || {}), 
-            accentColorOnStart: value as boolean 
-          } 
-        })
-      })
-
-      setupComboCard('accent-color-on-borders-card', (value) => {
-        this.updateModule('personalization', { 
-          color: { 
-            ...(pers.color || {}), 
-            accentColorOnBorders: value as boolean 
-          } 
-        })
-      })
-
-      setupComboCard('enable-transparency-card', (value) => {
-        this.updateModule('personalization', { 
-          color: { 
-            ...(pers.color || {}), 
-            enableTransparency: value as boolean 
-          } 
-        })
-      })
-    }
-
-    // 2. Wallpaper mode
-    setupRadioContainer('wallpaper-mode-container', 'wallpaper-mode', (value) => {
-      this.updateModule('personalization', { 
-        wallpaper: { 
-          ...(pers.wallpaper || {}), 
-          mode: value as 'default' | 'solid' | 'script' 
-        } 
-      })
-      this.renderPersonalization()
-    }, true)
-
-    if (pers.wallpaper?.mode === 'solid') {
-      setupComboCard('wallpaper-color-card', (value) => {
-        this.updateModule('personalization', { 
-          wallpaper: { 
-            ...(pers.wallpaper || {}), 
-            color: value as string 
-          } 
-        })
-      })
-    }
-
-    if (pers.wallpaper?.mode === 'script') {
-      setupTextCard('wallpaper-script-card', (value) => {
-        this.updateModule('personalization', { 
-          wallpaper: { 
-            ...(pers.wallpaper || {}), 
-            script: value 
-          } 
-        })
-      }, async () => {
-        if (window.electronAPI?.showOpenDialog) {
-          const result = await window.electronAPI.showOpenDialog({
-            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
-            properties: ['openFile']
-          })
-          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
-            const content = await window.electronAPI.readFile(result.filePaths[0])
-            setTextCardValue('wallpaper-script-card', content)
-            this.updateModule('personalization', { 
-              wallpaper: { 
-                ...(pers.wallpaper || {}), 
-                script: content 
-              } 
-            })
-          }
-        }
-      }, async () => {
-        if (window.electronAPI?.showSaveDialog) {
-          const result = await window.electronAPI.showSaveDialog({
-            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
-            defaultPath: 'wallpaper.ps1'
-          })
-          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
-            const currentValue = getTextCardValue('wallpaper-script-card', true)
-            await window.electronAPI.writeFile(result.filePath, currentValue)
-          }
-        }
-      })
-    }
-
-    // 3. Lock Screen mode
-    setupRadioContainer('lockscreen-mode-container', 'lockscreen-mode', (value) => {
-      this.updateModule('personalization', { 
-        lockScreen: { 
-          ...(pers.lockScreen || {}), 
-          mode: value as 'default' | 'script' 
-        } 
-      })
-      this.renderPersonalization()
-    }, true)
-
-    if (pers.lockScreen?.mode === 'script') {
-      setupTextCard('lockscreen-script-card', (value) => {
-        this.updateModule('personalization', { 
-          lockScreen: { 
-            ...(pers.lockScreen || {}), 
-            script: value 
-          } 
-        })
-      }, async () => {
-        if (window.electronAPI?.showOpenDialog) {
-          const result = await window.electronAPI.showOpenDialog({
-            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1', 'txt'] }],
-            properties: ['openFile']
-          })
-          if (!result.canceled && result.filePaths?.[0] && window.electronAPI?.readFile) {
-            const content = await window.electronAPI.readFile(result.filePaths[0])
-            setTextCardValue('lockscreen-script-card', content)
-            this.updateModule('personalization', { 
-              lockScreen: { 
-                ...(pers.lockScreen || {}), 
-                script: content 
-              } 
-            })
-          }
-        }
-      }, async () => {
-        if (window.electronAPI?.showSaveDialog) {
-          const result = await window.electronAPI.showSaveDialog({
-            filters: [{ name: 'PowerShell Scripts', extensions: ['ps1'] }],
-            defaultPath: 'lockscreen.ps1'
-          })
-          if (!result.canceled && result.filePath && window.electronAPI?.writeFile) {
-            const currentValue = getTextCardValue('lockscreen-script-card', true)
-            await window.electronAPI.writeFile(result.filePath, currentValue)
-          }
-        }
-      })
-    }
-
-    // 初始化图标
     if (window.lucide) {
       window.lucide.createIcons()
     }

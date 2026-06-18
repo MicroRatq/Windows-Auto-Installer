@@ -1491,3 +1491,251 @@ export function setupDynamicListContainer(
   }
 }
 
+// ========================================
+// 通用工作区子页面系统
+// ========================================
+
+export interface WorkspaceSubPage {
+  id: string
+  title: string
+  description?: string
+  icon: string
+}
+
+export interface SubPageSystemIds {
+  overviewId: string
+  pageId: string
+}
+
+const subPageSystemCleanupMap = new WeakMap<HTMLElement, () => void>()
+const subPageSystemResetMap = new WeakMap<HTMLElement, () => void>()
+const subPageReturnStateMap = new WeakMap<HTMLElement, { anchorSelector: string; scrollTop: number }>()
+
+function getWorkspaceScroller(panel: HTMLElement): HTMLElement | null {
+  return panel.closest('.workspace') as HTMLElement | null
+}
+
+function scrollAnchorIntoWorkspaceCenter(scroller: HTMLElement, anchor: HTMLElement): void {
+  const scrollerRect = scroller.getBoundingClientRect()
+  const anchorRect = anchor.getBoundingClientRect()
+  const anchorOffsetWithinScroller = anchorRect.top - scrollerRect.top + scroller.scrollTop
+  const targetScrollTop = anchorOffsetWithinScroller - (scroller.clientHeight / 2) + (anchorRect.height / 2)
+  const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+  scroller.scrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop))
+}
+
+export function rememberSubPageReturnPosition(panel: HTMLElement, anchorSelector: string): void {
+  const scroller = getWorkspaceScroller(panel)
+  subPageReturnStateMap.set(panel, {
+    anchorSelector,
+    scrollTop: scroller?.scrollTop || 0
+  })
+}
+
+export function restoreSubPageReturnPosition(panel: HTMLElement): void {
+  const state = subPageReturnStateMap.get(panel)
+  if (!state) return
+
+  requestAnimationFrame(() => {
+    const scroller = getWorkspaceScroller(panel)
+    const anchor = panel.querySelector(state.anchorSelector) as HTMLElement | null
+    if (anchor && scroller) {
+      scrollAnchorIntoWorkspaceCenter(scroller, anchor)
+    } else {
+      if (scroller) {
+        scroller.scrollTop = state.scrollTop
+      }
+    }
+    subPageReturnStateMap.delete(panel)
+  })
+}
+
+export function clearSubPageReturnPosition(panel: HTMLElement): void {
+  subPageReturnStateMap.delete(panel)
+}
+
+export function setWorkspaceTitleText(title: string): void {
+  const workspaceTitle = document.getElementById('workspace-title') as HTMLElement | null
+  if (!workspaceTitle) return
+
+  workspaceTitle.textContent = title
+}
+
+export function setWorkspaceTitleBreadcrumb(rootTitle: string, currentTitle: string): void {
+  const workspaceTitle = document.getElementById('workspace-title') as HTMLElement | null
+  if (!workspaceTitle) return
+
+  workspaceTitle.innerHTML = `
+    <span class="workspace-title-breadcrumb">
+      <span class="workspace-title-breadcrumb-root" data-subpage-action="back">${rootTitle}</span>
+      <span class="workspace-title-breadcrumb-separator">&rsaquo;</span>
+      <span class="workspace-title-breadcrumb-current">${currentTitle}</span>
+    </span>
+  `
+}
+
+/**
+ * 创建子页面系统HTML结构
+ * 包含面包屑导航栏、概述区和子页面内容区
+ */
+export function createSubPageSystem(groupId: string, _groupTitle: string): { html: string; ids: SubPageSystemIds } {
+  const ids: SubPageSystemIds = {
+    overviewId: `${groupId}-overview`,
+    pageId: `${groupId}-page`
+  }
+
+  const html = `
+    <div class="ws-subpage-system" id="${groupId}-system">
+      <div class="ws-subpage-overview" id="${ids.overviewId}">
+      </div>
+
+      <div class="ws-subpage-page hidden" id="${ids.pageId}">
+      </div>
+    </div>
+  `
+
+  return { html, ids }
+}
+
+/**
+ * 创建子页面入口卡片HTML（clickable ComboCard）
+ */
+export function createSubPageEntryCard(page: WorkspaceSubPage): string {
+  return createComboCard({
+    id: `subpage-entry-${page.id}`,
+    title: page.title,
+    description: page.description,
+    icon: page.icon,
+    controlType: 'clickable',
+    value: ''
+  })
+}
+
+/**
+ * 设置子页面系统导航事件
+ * @param panel - 工作区面板元素
+ * @param groupId - 子页面系统组ID
+ * @param pages - 子页面配置列表
+ * @param renderPageContent - 渲染子页面内容的回调 (pageId, container) => void
+ * @param onBackToOverview - 返回概述时的回调（用于重新渲染概述内容等）
+ */
+export function setupSubPageSystem(
+  panel: HTMLElement,
+  groupId: string,
+  groupTitle: string,
+  pages: WorkspaceSubPage[],
+  renderPageContent: (pageId: string, container: HTMLElement) => void,
+  onBackToOverview?: () => void
+): void {
+  const overview = panel.querySelector(`#${groupId}-overview`) as HTMLElement
+  const page = panel.querySelector(`#${groupId}-page`) as HTMLElement
+
+  if (!overview || !page) return
+
+  subPageSystemCleanupMap.get(panel)?.()
+  subPageSystemResetMap.get(panel)?.()
+
+  const hideOverview = () => {
+    overview.classList.add('hidden')
+    overview.setAttribute('aria-hidden', 'true')
+  }
+
+  const showOverview = () => {
+    overview.classList.remove('hidden')
+    overview.removeAttribute('aria-hidden')
+  }
+
+  const hidePage = () => {
+    page.classList.add('hidden')
+    page.setAttribute('aria-hidden', 'true')
+  }
+
+  const showPage = () => {
+    page.classList.remove('hidden')
+    page.removeAttribute('aria-hidden')
+  }
+
+  const navigateTo = (pageId: string, entryCard?: HTMLElement | null) => {
+    const targetPage = pages.find(p => p.id === pageId)
+    if (!targetPage) return
+
+    if (entryCard?.id) {
+      rememberSubPageReturnPosition(panel, `#${entryCard.id}`)
+    }
+
+    setWorkspaceTitleBreadcrumb(groupTitle, targetPage.title)
+    hideOverview()
+    showPage()
+
+    renderPageContent(pageId, page)
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
+  const navigateBack = () => {
+    hidePage()
+    page.innerHTML = ''
+    showOverview()
+    setWorkspaceTitleText(groupTitle)
+
+    if (onBackToOverview) {
+      onBackToOverview()
+    }
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+
+    restoreSubPageReturnPosition(panel)
+  }
+
+  const resetToOverview = () => {
+    hidePage()
+    page.innerHTML = ''
+    showOverview()
+    clearSubPageReturnPosition(panel)
+  }
+
+  const workspaceTitle = document.getElementById('workspace-title') as HTMLElement | null
+
+  const handleTitleClick = (e: Event) => {
+    const target = e.target as HTMLElement
+    const backEl = target.closest('[data-subpage-action="back"]')
+    if (backEl) {
+      navigateBack()
+    }
+  }
+
+  const handlePanelClick = (e: Event) => {
+    const target = e.target as HTMLElement
+    const entryCard = target.closest('[id^="subpage-entry-"]') as HTMLElement
+    if (!entryCard) return
+
+    // 提取 pageId
+    const pageId = entryCard.id.replace('subpage-entry-', '')
+    if (pages.some(p => p.id === pageId)) {
+      navigateTo(pageId, entryCard)
+    }
+  }
+
+  workspaceTitle?.addEventListener('click', handleTitleClick)
+  panel.addEventListener('click', handlePanelClick)
+  setWorkspaceTitleText(groupTitle)
+
+  subPageSystemCleanupMap.set(panel, () => {
+    workspaceTitle?.removeEventListener('click', handleTitleClick)
+    panel.removeEventListener('click', handlePanelClick)
+  })
+  subPageSystemResetMap.set(panel, resetToOverview)
+}
+
+export function resetSubPageSystem(panel: HTMLElement): void {
+  subPageSystemResetMap.get(panel)?.()
+}
+
+export function registerSubPageSystemReset(panel: HTMLElement, resetHandler: () => void): void {
+  subPageSystemResetMap.set(panel, resetHandler)
+}
+
