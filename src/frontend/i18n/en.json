@@ -41,6 +41,8 @@
             "bypassRequirementsDesc": "Bypass TPM, Secure Boot, RAM, and CPU requirements for Windows 11 installation.",
             "bypassNetwork": "Allow Windows 11 without internet connection",
             "bypassNetworkDesc": "Only check this if your computer really does not have internet access. You will still need to click \"I don't have internet\" during Setup. If you just want to create local accounts, use the User accounts section instead.",
+            "disableOobePrivacyPrompts": "Disable all OOBE privacy and compliance prompts",
+            "disableOobePrivacyPromptsDesc": "Writes the related registry values during specialize to skip OOBE privacy experience and consent prompts.",
             "useConfigurationSet": "Use a distribution share / configuration set",
             "useConfigurationSetDesc": "Windows Setup will look for a folder named $OEM$ in the root of the drive where autounattend.xml is located and copy its contents to the target partition.",
             "hidePowerShell": "Hide any PowerShell windows during Setup",

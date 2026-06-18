@@ -41,6 +41,8 @@
       "bypassRequirementsDesc": "绕过 Windows 11 安装的 TPM、安全启动、RAM 和 CPU 要求。",
       "bypassNetwork": "允许没有互联网连接的 Windows 11",
       "bypassNetworkDesc": "仅当您的计算机确实没有互联网访问时才选中此项。在安装过程中，您仍需要点击'我没有互联网'。如果您只想创建本地账户，请改用用户账户部分。",
+      "disableOobePrivacyPrompts": "禁用所有 OOBE 隐私及合规弹窗",
+      "disableOobePrivacyPromptsDesc": "在 specialize 阶段预写入相关注册表，跳过 OOBE 中的隐私体验和合规同意弹窗。",
       "useConfigurationSet": "使用分发共享 / 配置集",
       "useConfigurationSetDesc": "Windows 安装程序将在 autounattend.xml 所在驱动器的根目录中查找名为 $OEM$ 的文件夹，并将其内容复制到目标分区。",
       "hidePowerShell": "在安装期间隐藏任何 PowerShell 窗口",

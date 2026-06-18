@@ -1204,6 +1204,7 @@ class Configuration:
     # 布尔标志
     bypass_requirements_check: bool = False
     bypass_network_check: bool = False
+    disable_oobe_privacy_prompts: bool = False
     enable_long_paths: bool = False
     enable_remote_desktop: bool = False
     harden_system_drive_acl: bool = False
@@ -2588,6 +2589,13 @@ class BypassModifier(Modifier):
                 'reg.exe add "HKLM\\SYSTEM\\Setup\\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f;'
             )
 
+        if self.configuration.disable_oobe_privacy_prompts:
+            self.specialize_script.append(
+                'reg.exe load "HKU\\DefaultUser" "$env:SystemDrive\\Users\\Default\\NTUSER.DAT";\n'
+                'reg.exe add "HKU\\DefaultUser\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CloudExperienceHost\\Intent\\PersonalDataExport" /v "PDEShown" /t REG_DWORD /d 2 /f;\n'
+                'reg.exe unload "HKU\\DefaultUser";'
+            )
+
     def parse(self):
         """解析绕过检查设置"""
         if not self.is_parse_mode:
@@ -2596,6 +2604,7 @@ class BypassModifier(Modifier):
         s_uri = "https://schneegans.de/windows/unattend-generator/"
         bypass_requirements = False
         bypass_network = False
+        disable_oobe_privacy_prompts = False
         
         # 1. 检查 RunSynchronousCommand
         for cmd in self.root.findall(f".//{{{ns_uri}}}RunSynchronousCommand"):
@@ -2606,6 +2615,9 @@ class BypassModifier(Modifier):
                     bypass_requirements = True
                 if 'bypassnro' in cmd_text.lower() or 'BypassNetworkCheck' in cmd_text:
                     bypass_network = True
+                lower_cmd_text = cmd_text.lower()
+                if 'cloudexperiencehost\\intent\\personaldataexport' in lower_cmd_text or 'pdeshown' in lower_cmd_text:
+                    disable_oobe_privacy_prompts = True
         
         # 2. 检查 Specialize.ps1 内容（从 Extensions 中提取）
         extensions_elem = None
@@ -2626,6 +2638,8 @@ class BypassModifier(Modifier):
                                 bypass_requirements = True
                             if 'bypassnro' in content_lower:
                                 bypass_network = True
+                            if 'cloudexperiencehost\\intent\\personaldataexport' in content_lower or 'pdeshown' in content_lower:
+                                disable_oobe_privacy_prompts = True
                         break
 
         # 3. 检查官方支持的 OOBE 网络跳过设置
@@ -2639,6 +2653,7 @@ class BypassModifier(Modifier):
         
         self.configuration.bypass_requirements_check = bypass_requirements
         self.configuration.bypass_network_check = bypass_network
+        self.configuration.disable_oobe_privacy_prompts = disable_oobe_privacy_prompts
 
 
 class DeleteModifier(Modifier):
@@ -8547,6 +8562,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
         else:
             config.bypass_requirements_check = setup.get('bypassRequirementsCheck', False)
             config.bypass_network_check = setup.get('bypassNetworkCheck', False)
+            config.disable_oobe_privacy_prompts = setup.get('disableOobePrivacyPrompts', False)
             config.use_configuration_set = setup.get('useConfigurationSet', False)
             config.hide_power_shell_windows = setup.get('hidePowerShellWindows', False)
             config.keep_sensitive_files = setup.get('keepSensitiveFiles', False)
@@ -9552,6 +9568,7 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
     config_dict['setupSettings'] = {
         'bypassRequirementsCheck': config.bypass_requirements_check,
         'bypassNetworkCheck': config.bypass_network_check,
+        'disableOobePrivacyPrompts': config.disable_oobe_privacy_prompts,
         'useConfigurationSet': config.use_configuration_set,
         'hidePowerShellWindows': config.hide_power_shell_windows,
         'keepSensitiveFiles': config.keep_sensitive_files,

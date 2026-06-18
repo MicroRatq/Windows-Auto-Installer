@@ -49,6 +49,7 @@ type ProcessorArchitecture = 'x86' | 'amd64' | 'arm64'
 interface SetupSettings {
   bypassRequirementsCheck: boolean
   bypassNetworkCheck: boolean
+  disableOobePrivacyPrompts: boolean
   useConfigurationSet: boolean
   hidePowerShellWindows: boolean
   keepSensitiveFiles: boolean
@@ -414,6 +415,7 @@ function createDefaultConfig(): UnattendConfig {
     setupSettings: {
       bypassRequirementsCheck: false,
       bypassNetworkCheck: false,
+      disableOobePrivacyPrompts: false,
       useConfigurationSet: false,
       hidePowerShellWindows: false,
       keepSensitiveFiles: false,
@@ -1488,6 +1490,15 @@ class UnattendConfigManager {
       value: settings.bypassNetworkCheck
     })
 
+    const disableOobePrivacyPromptsCardHtml = createComboCard({
+      id: 'config-disable-oobe-privacy-prompts-card',
+      title: t('isoConfig.setupSettings.disableOobePrivacyPrompts'),
+      description: t('isoConfig.setupSettings.disableOobePrivacyPromptsDesc'),
+      icon: 'shield-x',
+      controlType: 'switch',
+      value: settings.disableOobePrivacyPrompts
+    })
+
     const useConfigurationSetCardHtml = createComboCard({
       id: 'config-use-configuration-set-card',
       title: t('isoConfig.setupSettings.useConfigurationSet'),
@@ -1527,6 +1538,7 @@ class UnattendConfigManager {
     contentDiv.innerHTML = `
       ${bypassRequirementsCardHtml}
       ${bypassNetworkCardHtml}
+      ${disableOobePrivacyPromptsCardHtml}
       ${useConfigurationSetCardHtml}
       ${hidePowerShellWindowsCardHtml}
       ${keepSensitiveFilesCardHtml}
@@ -1540,6 +1552,10 @@ class UnattendConfigManager {
 
     setupComboCard('config-bypass-network-card', (value) => {
       this.updateModule('setupSettings', { bypassNetworkCheck: value as boolean })
+    })
+
+    setupComboCard('config-disable-oobe-privacy-prompts-card', (value) => {
+      this.updateModule('setupSettings', { disableOobePrivacyPrompts: value as boolean })
     })
 
     setupComboCard('config-use-configuration-set-card', (value) => {
