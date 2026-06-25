@@ -7,7 +7,7 @@ import i18next from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 // 使用相对路径导入 JSON 文件
 import en from '../i18n/en.json'
-import zhCN from '../i18n/zh-CN.json'
+import zh from '../i18n/zh.json'
 
 // 语言切换事件监听器
 type LanguageChangeListener = (lng: string) => void
@@ -20,10 +20,10 @@ const initPromise = i18next
   .init({
     resources: {
       en: { translation: en },
-      'zh-CN': { translation: zhCN }
+      'zh': { translation: zh }
     },
     fallbackLng: 'en',
-    supportedLngs: ['en', 'zh-CN'],
+    supportedLngs: ['en', 'zh'],
     detection: {
       // 优先从 localStorage 读取
       order: ['localStorage', 'navigator'],
@@ -68,7 +68,7 @@ export async function waitForI18nInit(): Promise<void> {
 
 /**
  * 切换语言
- * @param lng 语言代码（'en' 或 'zh-CN'）
+ * @param lng 语言代码（'en' 或 'zh'）
  */
 export async function changeLanguage(lng: string): Promise<void> {
   await i18next.changeLanguage(lng)

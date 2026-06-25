@@ -1,6 +1,7 @@
 [
   {
     "DisplayName": "Internet Explorer",
+    "DisplayName_zh": "Internet Explorer",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -21,6 +22,7 @@
   },
   {
     "DisplayName": "Windows Media Player (classic)",
+    "DisplayName_zh": "Windows Media Player（经典版）",
     "Token": "WindowsMediaPlayer",
     "Steps": [
       {
@@ -35,6 +37,7 @@
   },
   {
     "DisplayName": "Windows Media Player (modern)",
+    "DisplayName_zh": "Windows Media Player（现代版）",
     "Token": "ZuneMusic",
     "Steps": [
       {
@@ -49,6 +52,7 @@
   },
   {
     "DisplayName": "Media Features",
+    "DisplayName_zh": "媒体功能",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.OptionalFeatureBloatwareStep, UnattendGenerator",
@@ -62,6 +66,7 @@
   },
   {
     "DisplayName": "WordPad",
+    "DisplayName_zh": "写字板",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -75,6 +80,7 @@
   },
   {
     "DisplayName": "Notepad (classic)",
+    "DisplayName_zh": "记事本（经典版）",
     "Token": "NotepadClassic",
     "Steps": [
       {
@@ -95,6 +101,7 @@
   },
   {
     "DisplayName": "Notepad (modern)",
+    "DisplayName_zh": "记事本（现代版）",
     "Token": "Notepad",
     "Steps": [
       {
@@ -114,6 +121,7 @@
   },
   {
     "DisplayName": "Steps Recorder",
+    "DisplayName_zh": "步骤记录器",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -127,6 +135,7 @@
   },
   {
     "DisplayName": "Paint",
+    "DisplayName_zh": "画图",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -146,6 +155,7 @@
   },
   {
     "DisplayName": "Paint 3D",
+    "DisplayName_zh": "画图 3D",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -158,6 +168,7 @@
   },
   {
     "DisplayName": "Skype",
+    "DisplayName_zh": "Skype",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -170,6 +181,7 @@
   },
   {
     "DisplayName": "Snipping Tool",
+    "DisplayName_zh": "截图工具",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -197,6 +209,7 @@
   },
   {
     "DisplayName": "Movies & TV",
+    "DisplayName_zh": "电影和电视",
     "Token": "ZuneVideo",
     "Steps": [
       {
@@ -211,6 +224,7 @@
   },
   {
     "DisplayName": "Xbox Apps",
+    "DisplayName_zh": "Xbox 应用",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -276,6 +290,7 @@
   },
   {
     "DisplayName": "Photos",
+    "DisplayName_zh": "照片",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -289,6 +304,7 @@
   },
   {
     "DisplayName": "News",
+    "DisplayName_zh": "新闻",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -301,6 +317,7 @@
   },
   {
     "DisplayName": "Weather",
+    "DisplayName_zh": "天气",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -314,6 +331,7 @@
   },
   {
     "DisplayName": "People",
+    "DisplayName_zh": "人脉",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -327,6 +345,7 @@
   },
   {
     "DisplayName": "To Do",
+    "DisplayName_zh": "待办",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -339,6 +358,7 @@
   },
   {
     "DisplayName": "Solitaire Collection",
+    "DisplayName_zh": "纸牌合集",
     "Token": "Solitaire",
     "Steps": [
       {
@@ -353,6 +373,7 @@
   },
   {
     "DisplayName": "Sticky Notes",
+    "DisplayName_zh": "便笺",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -366,6 +387,7 @@
   },
   {
     "DisplayName": "3D Viewer",
+    "DisplayName_zh": "3D 查看器",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -378,6 +400,7 @@
   },
   {
     "DisplayName": "Maps",
+    "DisplayName_zh": "地图",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -391,6 +414,7 @@
   },
   {
     "DisplayName": "Voice Recorder",
+    "DisplayName_zh": "录音机",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -404,6 +428,7 @@
   },
   {
     "DisplayName": "Clipchamp",
+    "DisplayName_zh": "Clipchamp",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -416,6 +441,7 @@
   },
   {
     "DisplayName": "Power Automate",
+    "DisplayName_zh": "Power Automate",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -428,6 +454,7 @@
   },
   {
     "DisplayName": "Windows Terminal",
+    "DisplayName_zh": "Windows 终端",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -440,6 +467,7 @@
   },
   {
     "DisplayName": "OneNote",
+    "DisplayName_zh": "OneNote",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -452,6 +480,7 @@
   },
   {
     "DisplayName": "Clock",
+    "DisplayName_zh": "时钟",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -465,6 +494,7 @@
   },
   {
     "DisplayName": "Calculator",
+    "DisplayName_zh": "计算器",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -478,6 +508,7 @@
   },
   {
     "DisplayName": "Camera",
+    "DisplayName_zh": "相机",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -491,6 +522,7 @@
   },
   {
     "DisplayName": "Your Phone\u2009/\u2009Phone Link",
+    "DisplayName_zh": "手机连接",
     "Token": "YourPhone",
     "Steps": [
       {
@@ -505,6 +537,7 @@
   },
   {
     "DisplayName": "Get Help",
+    "DisplayName_zh": "获取帮助",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -518,6 +551,7 @@
   },
   {
     "DisplayName": "Feedback Hub",
+    "DisplayName_zh": "反馈中心",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -531,6 +565,7 @@
   },
   {
     "DisplayName": "Office 365",
+    "DisplayName_zh": "Office 365",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -544,6 +579,7 @@
   },
   {
     "DisplayName": "Tips",
+    "DisplayName_zh": "使用技巧",
     "Token": "GetStarted",
     "Steps": [
       {
@@ -558,6 +594,7 @@
   },
   {
     "DisplayName": "Cortana",
+    "DisplayName_zh": "Cortana",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -571,6 +608,7 @@
   },
   {
     "DisplayName": "Math Input Panel",
+    "DisplayName_zh": "数学输入面板",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -584,6 +622,7 @@
   },
   {
     "DisplayName": "PowerShell ISE",
+    "DisplayName_zh": "PowerShell ISE",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -597,6 +636,7 @@
   },
   {
     "DisplayName": "OpenSSH Client",
+    "DisplayName_zh": "OpenSSH 客户端",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -610,6 +650,7 @@
   },
   {
     "DisplayName": "OneDrive",
+    "DisplayName_zh": "OneDrive",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CustomBloatwareStep, UnattendGenerator",
@@ -622,6 +663,7 @@
   },
   {
     "DisplayName": "Teams",
+    "DisplayName_zh": "Teams",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CustomBloatwareStep, UnattendGenerator",
@@ -647,6 +689,7 @@
   },
   {
     "DisplayName": "Quick Assist",
+    "DisplayName_zh": "快速助手",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -666,6 +709,7 @@
   },
   {
     "DisplayName": "Family",
+    "DisplayName_zh": "家庭",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -678,6 +722,7 @@
   },
   {
     "DisplayName": "Mail and Calendar",
+    "DisplayName_zh": "邮件和日历",
     "Token": "MailCalendar",
     "Steps": [
       {
@@ -692,6 +737,7 @@
   },
   {
     "DisplayName": "Outlook for Windows",
+    "DisplayName_zh": "Windows 版 Outlook",
     "Token": "Outlook",
     "Steps": [
       {
@@ -711,6 +757,7 @@
   },
   {
     "DisplayName": "Dev Home",
+    "DisplayName_zh": "Dev Home",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CustomBloatwareStep, UnattendGenerator",
@@ -729,6 +776,7 @@
   },
   {
     "DisplayName": "Copilot",
+    "DisplayName_zh": "Copilot",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -747,6 +795,7 @@
   },
   {
     "DisplayName": "Bing Search",
+    "DisplayName_zh": "必应搜索",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -759,6 +808,7 @@
   },
   {
     "DisplayName": "Mixed Reality",
+    "DisplayName_zh": "混合现实",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -771,6 +821,7 @@
   },
   {
     "DisplayName": "Recall",
+    "DisplayName_zh": "Recall",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.OptionalFeatureBloatwareStep, UnattendGenerator",
@@ -783,6 +834,7 @@
   },
   {
     "DisplayName": "Remote Desktop Client",
+    "DisplayName_zh": "远程桌面客户端",
     "Token": "RdpClient",
     "Steps": [
       {
@@ -797,6 +849,7 @@
   },
   {
     "DisplayName": "Wallet",
+    "DisplayName_zh": "钱包",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
@@ -809,6 +862,7 @@
   },
   {
     "DisplayName": "Facial recognition (Windows Hello)",
+    "DisplayName_zh": "面部识别（Windows Hello）",
     "Token": "WindowsHello",
     "Steps": [
       {
@@ -836,6 +890,7 @@
   },
   {
     "DisplayName": "PowerShell 2.0",
+    "DisplayName_zh": "PowerShell 2.0",
     "Token": "PowerShell2",
     "Steps": [
       {
@@ -850,6 +905,7 @@
   },
   {
     "DisplayName": "Handwriting (all languages)",
+    "DisplayName_zh": "手写输入（所有语言）",
     "Token": "Handwriting",
     "Steps": [
       {
@@ -864,6 +920,7 @@
   },
   {
     "DisplayName": "Speech (all languages)",
+    "DisplayName_zh": "语音（所有语言）",
     "Token": "Speech",
     "Steps": [
       {
@@ -886,6 +943,7 @@
   },
   {
     "DisplayName": "Windows Fax and Scan",
+    "DisplayName_zh": "Windows 传真和扫描",
     "Token": "FaxAndScan",
     "Steps": [
       {
@@ -900,6 +958,7 @@
   },
   {
     "DisplayName": "OneSync",
+    "DisplayName_zh": "OneSync",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
@@ -913,12 +972,36 @@
   },
   {
     "DisplayName": "Game Assist",
+    "DisplayName_zh": "游戏助手",
     "Steps": [
       {
         "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
         "Selector": "Microsoft.Edge.GameAssist",
         "AppliesTo": [
           "Windows 11 27902.1000"
+        ]
+      }
+    ]
+  },
+  {
+    "DisplayName": "Microsoft Store",
+    "DisplayName_zh": "Microsoft Store",
+    "Token": "Store",
+    "Steps": [
+      {
+        "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
+        "Selector": "Microsoft.WindowsStore",
+        "AppliesTo": [
+          "Windows 10",
+          "Windows 11"
+        ]
+      },
+      {
+        "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
+        "Selector": "Microsoft.StorePurchaseApp",
+        "AppliesTo": [
+          "Windows 10",
+          "Windows 11"
         ]
       }
     ]

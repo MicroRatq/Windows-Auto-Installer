@@ -1016,6 +1016,7 @@ class BackendServer:
         if not self.unattend_generator:
             raise Exception("Unattend generator not initialized")
         
+        logger = logging.getLogger('UnattendImportXml')
         try:
             # 获取 XML 内容（base64 编码）
             xml_base64 = params.get('xml', '')
@@ -1041,19 +1042,10 @@ class BackendServer:
         if not self.unattend_generator:
             raise Exception("Unattend generator not initialized")
         
-            import logging
-            logger = logging.getLogger('UnattendGetData')
+        logger = logging.getLogger('UnattendGetData')
         try:
             # 获取语言代码（用于 i18n 适配）
             lang = params.get('lang', 'en')
-            # 如果语言代码是 'zh-CN' 或 'zh-TW'，转换为 'zh' 或 'zh-Hant'
-            if lang == 'zh-CN':
-                lang = 'zh'
-            elif lang == 'zh-TW':
-                lang = 'zh-Hant'
-            elif '-' in lang:
-                # 提取主要语言代码（如 'en-US' -> 'en'）
-                lang = lang.split('-')[0]
             
             # 如果语言代码改变，重新加载数据
             if self.unattend_generator.lang != lang:

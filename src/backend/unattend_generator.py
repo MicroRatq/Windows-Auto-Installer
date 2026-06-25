@@ -1006,10 +1006,13 @@ class Bloatware:
     display_name: str
     token: Optional[str] = None
     steps: List[BloatwareStep] = field(default_factory=list)
+    stable_id: Optional[str] = None
     
     @property
     def id(self) -> str:
         """生成ID（对应C#的Id属性）"""
+        if self.stable_id:
+            return self.stable_id
         if self.token:
             return f"Remove{self.token}"
         else:
@@ -1549,7 +1552,6 @@ def load_data_with_i18n(
     # 如果数据是列表
     if isinstance(data, list):
         for item in data:
-            # 尝试获取对应语言的显示名称
             display_name_key = f'DisplayName_{lang}' if lang != 'en' else 'DisplayName'
             if display_name_key in item:
                 item['DisplayName'] = item[display_name_key]
@@ -2905,9 +2907,11 @@ class OptimizationsModifier(Modifier):
         self.context.user_once_script.append('\n'.join(sb))
         self.context.user_once_script.restart_explorer()
     
-    def _set_sticky_keys(self, flags: set[StickyKeys]):
+    def _set_sticky_keys(self, flags: set[StickyKeys], include_confirm: bool = True):
         """设置粘滞键（对应 C# 的 SetStickyKeys 方法）"""
-        result = 0x00000002 | 0x00000008  # SKF_AVAILABLE | SKF_CONFIRMHOTKEY
+        result = 0x00000002  # SKF_AVAILABLE
+        if include_confirm:
+            result |= 0x00000008  # SKF_CONFIRMHOTKEY
         for flag in flags:
             result |= flag.value
         
@@ -2973,8 +2977,7 @@ class OptimizationsModifier(Modifier):
         # 处理模块 10: 系统优化选项
         # Disable Windows Update
         if self.configuration.disable_windows_update:
-            self.add_text_file("PauseWindowsUpdate.ps1", "")
-            xml_file = self.add_xml_file("PauseWindowsUpdate.xml", "")
+            xml_file = self.add_xml_file("PauseWindowsUpdate.xml")
             self.context.specialize_script.append(
                 f"Register-ScheduledTask -TaskName 'PauseWindowsUpdate' -Xml $( Get-Content -LiteralPath '{xml_file}' -Raw );"
             )
@@ -3150,8 +3153,7 @@ reg.exe add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDeny
         if self.configuration.prevent_automatic_reboot:
             script_content = self._load_resource_file("PreventAutomaticReboot.ps1")
             self.context.specialize_script.append(script_content)
-            self.add_text_file("MoveActiveHours.vbs", "")
-            xml_file = self.add_xml_file("MoveActiveHours.xml", "")
+            xml_file = self.add_xml_file("MoveActiveHours.xml")
             self.context.specialize_script.append(
                 f"Register-ScheduledTask -TaskName 'MoveActiveHours' -Xml $( Get-Content -LiteralPath '{xml_file}' -Raw );"
             )
@@ -3428,7 +3430,7 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             # 默认设置，不需要操作
             pass
         elif isinstance(self.configuration.sticky_keys_settings, DisabledStickyKeysSettings):
-            self._set_sticky_keys(set())
+            self._set_sticky_keys(set(), include_confirm=False)
         elif isinstance(self.configuration.sticky_keys_settings, CustomStickyKeysSettings):
             self._set_sticky_keys(self.configuration.sticky_keys_settings.flags)
         
@@ -4250,6 +4252,8 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         roots: List[str],
         label: str,
     ) -> None:
+        import logging
+        logger = logging.getLogger('UnattendGenerator')
         for category_key, attr_name in category_attrs.items():
             guids = EXPLORER_CATEGORY_GUIDS.get(category_key, [])
             if not guids:
@@ -5816,6 +5820,12 @@ class FirstLogonModifier(Modifier):
             return
         
         logger.debug("FirstLogonModifier.parse: Found FirstLogon.ps1, parsing content")
+
+        # deleteWindowsOld 可能存在于脚本内容中，但未必能被后续块提取逻辑稳定命中。
+        if 'rmdir' in firstlogon_content.lower() and 'windows.old' in firstlogon_content.lower():
+            if hasattr(self.configuration, 'delete_windows_old'):
+                self.configuration.delete_windows_old = True
+                logger.debug("FirstLogonModifier.parse: Found deleteWindowsOld in FirstLogon.ps1 content")
         
         # 解析 $scripts = @(...) 中的命令块
         # 匹配模式：$scripts = @( { ... }; { ... }; );
@@ -7926,17 +7936,20 @@ class UnattendGenerator:
                 bloatware_data = json.load(f)
             
             # 应用 i18n 适配
-            bloatware_data = load_data_with_i18n(bloatware_file, self.lang)
+            localized_bloatware_data = load_data_with_i18n(bloatware_file, self.lang)
             
             # 手动处理 Bloatware 对象（因为 Steps 需要根据 $type 创建不同的类）
             self.bloatwares = {}
-            for item in bloatware_data:
-                display_name = item.get('DisplayName', '')
-                token = item.get('Token')
+            for source_item, localized_item in zip(bloatware_data, localized_bloatware_data):
+                display_name = localized_item.get('DisplayName', '')
+                token = localized_item.get('Token')
+                source_display_name = source_item.get('DisplayName', '')
+                source_token = source_item.get('Token')
+                stable_id = f"Remove{source_token}" if source_token else f"Remove{source_display_name.replace(' ', '')}"
                 
                 # 处理 Steps（根据 $type 创建相应的 BloatwareStep）
                 steps = []
-                for step_data in item.get('Steps', []):
+                for step_data in localized_item.get('Steps', []):
                     step_type = step_data.get('$type', '')
                     applies_to = step_data.get('AppliesTo', [])
                     
@@ -7958,7 +7971,8 @@ class UnattendGenerator:
                 bloatware = Bloatware(
                     display_name=display_name,
                     token=token,
-                    steps=steps
+                    steps=steps,
+                    stable_id=stable_id,
                 )
                 self.bloatwares[bloatware.id] = bloatware
         else:
@@ -9322,7 +9336,9 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.hide_edge_fre = st.get('hideEdgeFre', False)
             config.disable_edge_startup_boost = st.get('disableEdgeStartupBoost', False)
             config.make_edge_uninstallable = st.get('makeEdgeUninstallable', False)
-            config.delete_edge_desktop_icon = st.get('deleteEdgeDesktopIcon', False)
+            # delete_edge_desktop_icon 优先从 desktopIcons 读取，避免空 systemTweaks 覆盖
+            if 'desktopIcons' not in config_dict:
+                config.delete_edge_desktop_icon = st.get('deleteEdgeDesktopIcon', False)
     else:
         # 设置默认值（已经在 Configuration 类中定义）
         pass

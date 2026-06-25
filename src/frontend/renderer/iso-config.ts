@@ -837,7 +837,8 @@ class UnattendConfigManager {
       return
     }
     try {
-      const lang = (window as any)?.currentLanguage || navigator.language || 'en'
+      const raw = (window as any)?.currentLanguage || navigator.language || 'en'
+      const lang = raw.startsWith('zh') ? 'zh' : 'en'
       const request = {
         jsonrpc: '2.0',
         id: Date.now(),

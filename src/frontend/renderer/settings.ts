@@ -55,7 +55,7 @@ export class SettingsManager {
           description: ''
         },
         {
-          value: 'zh-CN',
+          value: 'zh',
           label: t('settings.chineseSimplified'),
           description: ''
         }
