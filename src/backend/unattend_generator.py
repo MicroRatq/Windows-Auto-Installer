@@ -1322,6 +1322,25 @@ EXPLORER_NAVIGATION_PANE_ROOTS: List[str] = [
     r'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace',
 ]
 
+# Known folder GUIDs for hiding from "This PC" in Win11 navigation pane via ThisPCPolicy
+EXPLORER_THISPC_GUIDS: Dict[str, str] = {
+    'hideDesktop': '{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}',
+    'hideDocuments': '{FDD39AD0-238F-46AF-ADB4-6C85480369C7}',
+    'hideDownloads': '{374DE290-123F-4565-9164-39C4925E467B}',
+    'hideMusic': '{4BD8D571-6D19-48D3-BE97-422220080E43}',
+    'hidePictures': '{33E28130-4E1E-4676-835A-98395C3BC3BB}',
+    'hideVideos': '{18989B1D-99B5-455B-841C-AB7C74E4DDFC}',
+    'hideUserProfile': '{59031A47-3F72-44A7-89C5-5595FE6B30EE}',
+}
+
+# CLSID-based entries hidden via Policies\NonEnum (Win11 nav pane)
+EXPLORER_NONENUM_GUIDS: Dict[str, str] = {
+    'hideGallery': '{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}',
+    'hideHome': '{F874310E-B6B7-47DC-BC84-B9E6B38F5903}',
+    'hideLibraries': '{031E4825-7B94-4DC3-B131-E946B44C8DD5}',
+    'hideNetwork': '{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}',
+}
+
 EXPLORER_FOLDER_DIALOG_ROOTS: List[str] = [
     r'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace_36354489',
     r'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace_41040327',
@@ -2960,6 +2979,43 @@ class OptimizationsModifier(Modifier):
         if commands:
             self.context.specialize_script.append('\n'.join(commands))
     
+    def _hide_navigation_pane_items(self, category_values: Dict[str, bool]):
+        """隐藏 Win11 导航窗格条目（ThisPCPolicy + Policies NonEnum + NameSpace 删除）。"""
+        commands: List[str] = []
+
+        # 1. 通过 ThisPCPolicy=Hide 隐藏 "此电脑" 下的已知文件夹
+        for category_key, enabled in category_values.items():
+            if not enabled:
+                continue
+            guid = EXPLORER_THISPC_GUIDS.get(category_key)
+            if guid:
+                commands.append(
+                    f'reg.exe add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FolderDescriptions\\{guid}" '
+                    f'/v "ThisPCPolicy" /t REG_SZ /d "Hide" /f;'
+                )
+
+        # 2. 通过 Policies\NonEnum 隐藏 CLSID 节点（Home、Gallery、Network、Libraries）
+        for category_key, enabled in category_values.items():
+            if not enabled:
+                continue
+            guid = EXPLORER_NONENUM_GUIDS.get(category_key)
+            if guid:
+                commands.append(
+                    f'reg.exe add "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\NonEnum" '
+                    f'/v "{guid}" /t REG_DWORD /d 1 /f;'
+                )
+
+        # 3. 同时删除 NameSpace 键（桌面/经典视图兼容）
+        for category_key, enabled in category_values.items():
+            if not enabled:
+                continue
+            for guid in EXPLORER_CATEGORY_GUIDS[category_key]:
+                for root in EXPLORER_NAVIGATION_PANE_ROOTS:
+                    commands.append(f'reg.exe delete "{root}\\{guid}" /f;')
+
+        if commands:
+            self.context.specialize_script.append('\n'.join(commands))
+    
     def process(self):
         """处理优化设置（部分实现，仅 UseConfigurationSet）"""
         # UseConfigurationSet 设置
@@ -3348,12 +3404,11 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                 'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer" /v ShowRecommendations /t REG_DWORD /d 0 /f;'
             )
 
-        self._remove_explorer_category_keys(
+        self._hide_navigation_pane_items(
             {
                 key: getattr(self.configuration, attr)
                 for key, attr in EXPLORER_NAVIGATION_PANE_ATTRS.items()
             },
-            EXPLORER_NAVIGATION_PANE_ROOTS,
         )
 
         self._remove_explorer_category_keys(
@@ -6736,7 +6791,7 @@ class _PackageRemover(_Remover):
     
     def _get_filter_command(self) -> str:
         return """{
-  $_.DisplayName -eq $selector;
+  $_.PackageName -like "$selector*";
 }"""
     
     def _get_remove_command_inner(self) -> str:

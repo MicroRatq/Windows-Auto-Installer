@@ -1005,5 +1005,20 @@
         ]
       }
     ]
+  },
+  {
+    "DisplayName": "Microsoft PC Manager",
+    "DisplayName_zh": "微软电脑管家",
+    "Token": "MicrosoftPCManager",
+    "Steps": [
+      {
+        "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
+        "Selector": "Microsoft.MicrosoftPCManager",
+        "AppliesTo": [
+          "Windows 10",
+          "Windows 11"
+        ]
+      }
+    ]
   }
 ]
