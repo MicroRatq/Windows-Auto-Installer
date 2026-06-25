@@ -144,6 +144,26 @@ interface FileExplorer {
   launchToThisPC: boolean
   classicContextMenu: boolean
   showEndTask: boolean
+  hideRecentInQuickAccess: boolean
+  hideFrequentInQuickAccess: boolean
+  hideCloudFilesInQuickAccess: boolean
+  hideRecommendations: boolean
+  navigationPane: ExplorerCategoryVisibility
+  folderDialog: ExplorerCategoryVisibility
+}
+
+interface ExplorerCategoryVisibility {
+  hideDesktop: boolean
+  hideDocuments: boolean
+  hideDownloads: boolean
+  hideMusic: boolean
+  hidePictures: boolean
+  hideVideos: boolean
+  hideGallery: boolean
+  hideHome: boolean
+  hideLibraries: boolean
+  hideNetwork: boolean
+  hideUserProfile: boolean
 }
 
 // 开始菜单和任务栏设置
@@ -454,7 +474,37 @@ function createDefaultConfig(): UnattendConfig {
       hideFiles: 'hidden',
       launchToThisPC: false,
       classicContextMenu: false,
-      showEndTask: false
+      showEndTask: false,
+      hideRecentInQuickAccess: false,
+      hideFrequentInQuickAccess: false,
+      hideCloudFilesInQuickAccess: false,
+      hideRecommendations: false,
+      navigationPane: {
+        hideDesktop: false,
+        hideDocuments: false,
+        hideDownloads: false,
+        hideMusic: false,
+        hidePictures: false,
+        hideVideos: false,
+        hideGallery: false,
+        hideHome: false,
+        hideLibraries: false,
+        hideNetwork: false,
+        hideUserProfile: false
+      },
+      folderDialog: {
+        hideDesktop: false,
+        hideDocuments: false,
+        hideDownloads: false,
+        hideMusic: false,
+        hidePictures: false,
+        hideVideos: false,
+        hideGallery: false,
+        hideHome: false,
+        hideLibraries: false,
+        hideNetwork: false,
+        hideUserProfile: false
+      }
     },
     startMenuTaskbar: {
       leftTaskbar: false,
@@ -1145,12 +1195,79 @@ class UnattendConfigManager {
 
   private renderFileExplorerContent(contentDiv: HTMLElement) {
     const fe = this.config.fileExplorer
+    const navigationPane = fe.navigationPane || {} as ExplorerCategoryVisibility
+    const folderDialog = fe.folderDialog || {} as ExplorerCategoryVisibility
+    const categoryOptions = [
+      { value: 'hideDesktop', label: t('isoConfig.uiPersonalization.iconDesktop') },
+      { value: 'hideDocuments', label: t('isoConfig.uiPersonalization.iconDocuments') },
+      { value: 'hideDownloads', label: t('isoConfig.uiPersonalization.iconDownloads') },
+      { value: 'hideMusic', label: t('isoConfig.uiPersonalization.iconMusic') },
+      { value: 'hidePictures', label: t('isoConfig.uiPersonalization.iconPictures') },
+      { value: 'hideVideos', label: t('isoConfig.uiPersonalization.iconVideos') },
+      { value: 'hideGallery', label: t('isoConfig.uiPersonalization.iconGallery') },
+      { value: 'hideHome', label: t('isoConfig.uiPersonalization.iconHome') },
+      { value: 'hideLibraries', label: t('isoConfig.uiPersonalization.iconLibraries') },
+      { value: 'hideNetwork', label: t('isoConfig.uiPersonalization.iconNetwork') },
+      { value: 'hideUserProfile', label: t('isoConfig.uiPersonalization.iconUserFiles') }
+    ]
+
+    const navigationPaneHtml = createMultiColumnCheckboxContainer({
+      id: 'file-explorer-navigation-pane-container',
+      name: 'file-explorer-navigation-pane',
+      title: t('isoConfig.uiPersonalization.navigationPaneCategories'),
+      description: t('isoConfig.uiPersonalization.navigationPaneCategoriesDesc'),
+      icon: 'panel-left',
+      options: categoryOptions,
+      values: {
+        hideDesktop: navigationPane.hideDesktop || false,
+        hideDocuments: navigationPane.hideDocuments || false,
+        hideDownloads: navigationPane.hideDownloads || false,
+        hideMusic: navigationPane.hideMusic || false,
+        hidePictures: navigationPane.hidePictures || false,
+        hideVideos: navigationPane.hideVideos || false,
+        hideGallery: navigationPane.hideGallery || false,
+        hideHome: navigationPane.hideHome || false,
+        hideLibraries: navigationPane.hideLibraries || false,
+        hideNetwork: navigationPane.hideNetwork || false,
+        hideUserProfile: navigationPane.hideUserProfile || false
+      },
+      expanded: false,
+      showHeader: true,
+      minColumnWidth: 180,
+      maxColumns: 4
+    })
+
+    const folderDialogHtml = createMultiColumnCheckboxContainer({
+      id: 'file-explorer-folder-dialog-container',
+      name: 'file-explorer-folder-dialog',
+      title: t('isoConfig.uiPersonalization.folderDialogCategories'),
+      description: t('isoConfig.uiPersonalization.folderDialogCategoriesDesc'),
+      icon: 'folder-tree',
+      options: categoryOptions,
+      values: {
+        hideDesktop: folderDialog.hideDesktop || false,
+        hideDocuments: folderDialog.hideDocuments || false,
+        hideDownloads: folderDialog.hideDownloads || false,
+        hideMusic: folderDialog.hideMusic || false,
+        hidePictures: folderDialog.hidePictures || false,
+        hideVideos: folderDialog.hideVideos || false,
+        hideGallery: folderDialog.hideGallery || false,
+        hideHome: folderDialog.hideHome || false,
+        hideLibraries: folderDialog.hideLibraries || false,
+        hideNetwork: folderDialog.hideNetwork || false,
+        hideUserProfile: folderDialog.hideUserProfile || false
+      },
+      expanded: false,
+      showHeader: true,
+      minColumnWidth: 180,
+      maxColumns: 4
+    })
 
     const hideFilesRadioHtml = createRadioContainer({
       id: 'hide-files-container',
       name: 'hide-files-mode',
       title: t('isoConfig.uiPersonalization.hideFiles'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.hideFilesDesc'),
       icon: 'eye-off',
       options: [
         {
@@ -1179,30 +1296,68 @@ class UnattendConfigManager {
         id: 'file-explorer-show-extensions',
         title: t('isoConfig.uiPersonalization.showFileExtensions'),
         description: t('isoConfig.uiPersonalization.showFileExtensionsDesc'),
+        icon: 'file-code',
         controlType: 'switch',
         value: fe.showFileExtensions || false
       })}
       ${createComboCard({
         id: 'file-explorer-launch-this-pc',
         title: t('isoConfig.uiPersonalization.launchToThisPC'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.launchToThisPCDesc'),
+        icon: 'hard-drive',
         controlType: 'switch',
         value: fe.launchToThisPC || false
       })}
       ${createComboCard({
         id: 'file-explorer-classic-context-menu',
         title: t('isoConfig.systemOptimization.classicContextMenu'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.classicContextMenuDesc'),
+        icon: 'layout-grid',
         controlType: 'switch',
         value: fe.classicContextMenu || false
       })}
       ${createComboCard({
         id: 'file-explorer-show-end-task',
         title: t('isoConfig.systemOptimization.showEndTask'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.showEndTaskDesc'),
+        icon: 'alert-triangle',
         controlType: 'switch',
         value: fe.showEndTask || false
       })}
+      ${createComboCard({
+        id: 'file-explorer-hide-recent',
+        title: t('isoConfig.uiPersonalization.hideRecentInQuickAccess'),
+        description: t('isoConfig.uiPersonalization.hideRecentInQuickAccessDesc'),
+        icon: 'clock',
+        controlType: 'switch',
+        value: fe.hideRecentInQuickAccess || false
+      })}
+      ${createComboCard({
+        id: 'file-explorer-hide-frequent',
+        title: t('isoConfig.uiPersonalization.hideFrequentInQuickAccess'),
+        description: t('isoConfig.uiPersonalization.hideFrequentInQuickAccessDesc'),
+        icon: 'folder',
+        controlType: 'switch',
+        value: fe.hideFrequentInQuickAccess || false
+      })}
+      ${createComboCard({
+        id: 'file-explorer-hide-cloud-files',
+        title: t('isoConfig.uiPersonalization.hideCloudFilesInQuickAccess'),
+        description: t('isoConfig.uiPersonalization.hideCloudFilesInQuickAccessDesc'),
+        icon: 'folder-up',
+        controlType: 'switch',
+        value: fe.hideCloudFilesInQuickAccess || false
+      })}
+      ${createComboCard({
+        id: 'file-explorer-hide-recommendations',
+        title: t('isoConfig.uiPersonalization.hideExplorerRecommendations'),
+        description: t('isoConfig.uiPersonalization.hideExplorerRecommendationsDesc'),
+        icon: 'sparkles',
+        controlType: 'switch',
+        value: fe.hideRecommendations || false
+      })}
+      ${navigationPaneHtml}
+      ${folderDialogHtml}
     `
 
     setupRadioContainer('hide-files-container', 'hide-files-mode', (value) => {
@@ -1221,6 +1376,24 @@ class UnattendConfigManager {
     setupComboCard('file-explorer-show-end-task', (value) => {
       this.updateModule('fileExplorer', { showEndTask: value as boolean })
     })
+    setupComboCard('file-explorer-hide-recent', (value) => {
+      this.updateModule('fileExplorer', { hideRecentInQuickAccess: value as boolean })
+    })
+    setupComboCard('file-explorer-hide-frequent', (value) => {
+      this.updateModule('fileExplorer', { hideFrequentInQuickAccess: value as boolean })
+    })
+    setupComboCard('file-explorer-hide-cloud-files', (value) => {
+      this.updateModule('fileExplorer', { hideCloudFilesInQuickAccess: value as boolean })
+    })
+    setupComboCard('file-explorer-hide-recommendations', (value) => {
+      this.updateModule('fileExplorer', { hideRecommendations: value as boolean })
+    })
+    setupMultiColumnCheckboxContainer('file-explorer-navigation-pane-container', 'file-explorer-navigation-pane', (values) => {
+      this.updateModule('fileExplorer', { navigationPane: values as ExplorerCategoryVisibility })
+    }, true)
+    setupMultiColumnCheckboxContainer('file-explorer-folder-dialog-container', 'file-explorer-folder-dialog', (values) => {
+      this.updateModule('fileExplorer', { folderDialog: values as ExplorerCategoryVisibility })
+    }, true)
 
     if (window.lucide) {
       window.lucide.createIcons()
@@ -1234,7 +1407,7 @@ class UnattendConfigManager {
     const taskbarSearchCardHtml = createComboCard({
       id: 'taskbar-search-card',
       title: t('isoConfig.uiPersonalization.taskbarSearch'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.taskbarSearchDesc'),
       icon: 'search',
       controlType: 'select',
       options: [
@@ -1250,7 +1423,7 @@ class UnattendConfigManager {
       id: 'start-tiles-container',
       name: 'start-tiles-mode',
       title: t('isoConfig.uiPersonalization.startTilesMode'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.startTilesModeDesc'),
       icon: 'grid-3x3',
       options: [
         {
@@ -1261,17 +1434,17 @@ class UnattendConfigManager {
         {
           value: 'empty',
           label: t('isoConfig.uiPersonalization.startTilesEmpty'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.startTilesEmptyDesc')
         },
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.startTilesCustom'),
-          description: '',
+          description: t('isoConfig.uiPersonalization.startTilesCustomDesc'),
           nestedCards: [
             {
               id: 'start-tiles-xml-card',
               title: t('isoConfig.uiPersonalization.startTilesXml'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.startTilesXmlDesc'),
               icon: 'code',
               value: st.startTilesXml || '',
               placeholder: `<LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModificationTemplate" xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout" xmlns:start="http://schemas.microsoft.com/Start/2014/StartLayout" xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout" Version="1">
@@ -1299,7 +1472,7 @@ class UnattendConfigManager {
       id: 'start-pins-container',
       name: 'start-pins-mode',
       title: t('isoConfig.uiPersonalization.startPinsMode'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.startPinsModeDesc'),
       icon: 'pin',
       options: [
         {
@@ -1310,17 +1483,17 @@ class UnattendConfigManager {
         {
           value: 'empty',
           label: t('isoConfig.uiPersonalization.startPinsEmpty'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.startPinsEmptyDesc')
         },
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.startPinsCustom'),
-          description: '',
+          description: t('isoConfig.uiPersonalization.startPinsCustomDesc'),
           nestedCards: [
             {
               id: 'start-pins-json-card',
               title: t('isoConfig.uiPersonalization.startPinsJson'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.startPinsJsonDesc'),
               icon: 'code',
               value: st.startPinsJson || '',
               placeholder: `{
@@ -1354,12 +1527,12 @@ class UnattendConfigManager {
         {
           value: 'default',
           label: t('isoConfig.uiPersonalization.foldersStartDefault'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.foldersStartDefaultDesc')
         },
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.foldersStartCustom'),
-          description: '',
+          description: t('isoConfig.uiPersonalization.foldersStartCustomDesc'),
           nestedCards: [
             {
               type: 'multiColumnCheckbox',
@@ -1404,35 +1577,40 @@ class UnattendConfigManager {
       ${createComboCard({
         id: 'taskbar-left',
         title: t('isoConfig.uiPersonalization.leftTaskbar'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.leftTaskbarDesc'),
+        icon: 'align-left',
         controlType: 'switch',
         value: st.leftTaskbar || false
       })}
       ${createComboCard({
         id: 'taskbar-hide-taskview',
         title: t('isoConfig.uiPersonalization.hideTaskViewButton'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.hideTaskViewButtonDesc'),
+        icon: 'layers',
         controlType: 'switch',
         value: st.hideTaskViewButton || false
       })}
       ${createComboCard({
         id: 'taskbar-disable-widgets',
         title: t('isoConfig.uiPersonalization.disableWidgets'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.disableWidgetsDesc'),
+        icon: 'newspaper',
         controlType: 'switch',
         value: st.disableWidgets || false
       })}
       ${createComboCard({
         id: 'taskbar-show-all-tray-icons',
         title: t('isoConfig.uiPersonalization.showAllTrayIcons'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.showAllTrayIconsDesc'),
+        icon: 'eye',
         controlType: 'switch',
         value: st.showAllTrayIcons || false
       })}
       ${createComboCard({
         id: 'taskbar-disable-bing',
         title: t('isoConfig.uiPersonalization.disableBingResults'),
-        description: '',
+        description: t('isoConfig.uiPersonalization.disableBingResultsDesc'),
+        icon: 'search-x',
         controlType: 'switch',
         value: st.disableBingResults || false
       })}
@@ -1575,28 +1753,28 @@ class UnattendConfigManager {
       id: 'visual-effects-container',
       name: 'visual-effects-mode',
       title: t('isoConfig.uiPersonalization.visualEffects'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.visualEffectsDesc'),
       icon: 'sparkles',
       options: [
         {
           value: 'default',
           label: t('isoConfig.uiPersonalization.visualEffectsDefault'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.visualEffectsDefaultDesc')
         },
         {
           value: 'appearance',
           label: t('isoConfig.uiPersonalization.visualEffectsAppearance'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.visualEffectsAppearanceDesc')
         },
         {
           value: 'performance',
           label: t('isoConfig.uiPersonalization.visualEffectsPerformance'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.visualEffectsPerformanceDesc')
         },
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.visualEffectsCustom'),
-          description: '',
+          description: t('isoConfig.uiPersonalization.visualEffectsCustomDesc'),
           nestedCards: [
             {
               type: 'multiColumnCheckbox',
@@ -1663,17 +1841,17 @@ class UnattendConfigManager {
         {
           value: 'default',
           label: t('isoConfig.uiPersonalization.colorDefault'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.colorDefaultDesc')
         },
         {
           value: 'custom',
           label: t('isoConfig.uiPersonalization.colorCustom'),
-          description: '',
+          description: t('isoConfig.uiPersonalization.colorCustomDesc'),
           nestedCards: [
             {
               id: 'system-color-theme-card',
               title: t('isoConfig.uiPersonalization.systemColorTheme'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.systemColorThemeDesc'),
               controlType: 'select',
               options: [
                 { value: 'light', label: 'Light' },
@@ -1685,7 +1863,7 @@ class UnattendConfigManager {
             {
               id: 'apps-color-theme-card',
               title: t('isoConfig.uiPersonalization.appsColorTheme'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.appsColorThemeDesc'),
               controlType: 'select',
               options: [
                 { value: 'light', label: 'Light' },
@@ -1697,7 +1875,7 @@ class UnattendConfigManager {
             {
               id: 'accent-color-card',
               title: t('isoConfig.uiPersonalization.accentColor'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.accentColorDesc'),
               controlType: 'text',
               value: pers.color?.accentColor || '#0078D4',
               placeholder: '#0078D4',
@@ -1706,7 +1884,7 @@ class UnattendConfigManager {
             {
               id: 'accent-color-on-start-card',
               title: t('isoConfig.uiPersonalization.accentColorOnStart'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.accentColorOnStartDesc'),
               controlType: 'switch',
               value: pers.color?.accentColorOnStart || false,
               borderless: true
@@ -1714,7 +1892,7 @@ class UnattendConfigManager {
             {
               id: 'accent-color-on-borders-card',
               title: t('isoConfig.uiPersonalization.accentColorOnBorders'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.accentColorOnBordersDesc'),
               controlType: 'switch',
               value: pers.color?.accentColorOnBorders || false,
               borderless: true
@@ -1722,7 +1900,7 @@ class UnattendConfigManager {
             {
               id: 'enable-transparency-card',
               title: t('isoConfig.uiPersonalization.enableTransparency'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.enableTransparencyDesc'),
               controlType: 'switch',
               value: pers.color?.enableTransparency || false,
               borderless: true
@@ -1738,23 +1916,23 @@ class UnattendConfigManager {
       id: 'wallpaper-mode-container',
       name: 'wallpaper-mode',
       title: t('isoConfig.uiPersonalization.wallpaperMode'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.wallpaperModeDesc'),
       icon: 'image',
       options: [
         {
           value: 'default',
           label: t('isoConfig.uiPersonalization.wallpaperDefault'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.wallpaperDefaultDesc')
         },
         {
           value: 'solid',
           label: t('isoConfig.uiPersonalization.wallpaperSolid'),
-          description: '',
+          description: t('isoConfig.uiPersonalization.wallpaperSolidDesc'),
           nestedCards: [
             {
               id: 'wallpaper-color-card',
               title: t('isoConfig.uiPersonalization.wallpaperColor'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.wallpaperColorDesc'),
               controlType: 'text',
               value: pers.wallpaper?.color || '#008080',
               placeholder: '#008080',
@@ -1770,7 +1948,7 @@ class UnattendConfigManager {
             {
               id: 'wallpaper-script-card',
               title: t('isoConfig.uiPersonalization.wallpaperPsScript'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.wallpaperPsScriptDesc'),
               icon: 'code',
               value: pers.wallpaper?.script || '',
               placeholder: `$url = 'https://example.com/wallpaper.jpg';
@@ -1793,13 +1971,13 @@ class UnattendConfigManager {
       id: 'lockscreen-mode-container',
       name: 'lockscreen-mode',
       title: t('isoConfig.uiPersonalization.lockScreenMode'),
-      description: '',
+      description: t('isoConfig.uiPersonalization.lockScreenModeDesc'),
       icon: 'lock',
       options: [
         {
           value: 'default',
           label: t('isoConfig.uiPersonalization.lockScreenDefault'),
-          description: ''
+          description: t('isoConfig.uiPersonalization.lockScreenDefaultDesc')
         },
         {
           value: 'script',
@@ -1809,7 +1987,7 @@ class UnattendConfigManager {
             {
               id: 'lockscreen-script-card',
               title: t('isoConfig.uiPersonalization.lockScreenPsScript'),
-              description: '',
+              description: t('isoConfig.uiPersonalization.lockScreenPsScriptDesc'),
               icon: 'code',
               value: pers.lockScreen?.script || '',
               placeholder: `foreach( $drive in [System.IO.DriveInfo]::GetDrives() ) {

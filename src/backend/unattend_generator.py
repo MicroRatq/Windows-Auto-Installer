@@ -1215,6 +1215,32 @@ class Configuration:
     make_edge_uninstallable: bool = False
     delete_edge_desktop_icon: bool = False
     launch_to_this_pc: bool = False
+    hide_recent_in_quick_access: bool = False
+    hide_frequent_in_quick_access: bool = False
+    hide_cloud_files_in_quick_access: bool = False
+    hide_explorer_recommendations: bool = False
+    hide_navigation_pane_desktop: bool = False
+    hide_navigation_pane_documents: bool = False
+    hide_navigation_pane_downloads: bool = False
+    hide_navigation_pane_music: bool = False
+    hide_navigation_pane_pictures: bool = False
+    hide_navigation_pane_videos: bool = False
+    hide_navigation_pane_gallery: bool = False
+    hide_navigation_pane_home: bool = False
+    hide_navigation_pane_libraries: bool = False
+    hide_navigation_pane_network: bool = False
+    hide_navigation_pane_user_profile: bool = False
+    hide_folder_dialog_desktop: bool = False
+    hide_folder_dialog_documents: bool = False
+    hide_folder_dialog_downloads: bool = False
+    hide_folder_dialog_music: bool = False
+    hide_folder_dialog_pictures: bool = False
+    hide_folder_dialog_videos: bool = False
+    hide_folder_dialog_gallery: bool = False
+    hide_folder_dialog_home: bool = False
+    hide_folder_dialog_libraries: bool = False
+    hide_folder_dialog_network: bool = False
+    hide_folder_dialog_user_profile: bool = False
     disable_windows_update: bool = False
     disable_pointer_precision: bool = False
     delete_windows_old: bool = False
@@ -1247,6 +1273,77 @@ class Configuration:
     
     # 开始菜单文件夹设置
     start_folder_settings: Any = None
+
+
+EXPLORER_CATEGORY_GUIDS: Dict[str, List[str]] = {
+    'hideDesktop': ['{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}'],
+    'hideDocuments': [
+        '{A8CDFF1C-4878-43BE-B5FD-F8091C1C60D0}',
+        '{450D8FBA-AD25-11D0-98A8-0800361B1103}',
+        '{D3162B92-9365-467A-956B-92703ACA08AF}',
+    ],
+    'hideDownloads': [
+        '{374DE290-123F-4565-9164-39C4925E467B}',
+        '{088E3905-0323-4B02-9826-5D99428E115F}',
+    ],
+    'hideMusic': [
+        '{1CF1260C-4DD0-4EBB-811F-33C572699FDE}',
+        '{3DFDF296-DBEC-4FB4-81D1-6A3438BCF4DE}',
+    ],
+    'hidePictures': [
+        '{3ADD1653-EB32-4CB0-BBD7-DFA0ABB5ACCA}',
+        '{24AD3AD4-A569-4530-98E1-AB02F9417AA8}',
+    ],
+    'hideVideos': [
+        '{A0953C92-50DC-43BF-BE83-3742FED03C9C}',
+        '{F86FA3AB-70D2-4FC7-9C99-FCBF05467F3A}',
+    ],
+    'hideGallery': ['{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}'],
+    'hideHome': ['{F874310E-B6B7-47DC-BC84-B9E6B38F5903}'],
+    'hideLibraries': ['{031E4825-7B94-4DC3-B131-E946B44C8DD5}'],
+    'hideNetwork': ['{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}'],
+    'hideUserProfile': ['{59031A47-3F72-44A7-89C5-5595FE6B30EE}'],
+}
+
+EXPLORER_NAVIGATION_PANE_ROOTS: List[str] = [
+    r'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace',
+    r'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace',
+]
+
+EXPLORER_FOLDER_DIALOG_ROOTS: List[str] = [
+    r'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace_36354489',
+    r'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace_41040327',
+    r'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace_36354489',
+    r'HKLM\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace_41040327',
+]
+
+EXPLORER_NAVIGATION_PANE_ATTRS: Dict[str, str] = {
+    'hideDesktop': 'hide_navigation_pane_desktop',
+    'hideDocuments': 'hide_navigation_pane_documents',
+    'hideDownloads': 'hide_navigation_pane_downloads',
+    'hideMusic': 'hide_navigation_pane_music',
+    'hidePictures': 'hide_navigation_pane_pictures',
+    'hideVideos': 'hide_navigation_pane_videos',
+    'hideGallery': 'hide_navigation_pane_gallery',
+    'hideHome': 'hide_navigation_pane_home',
+    'hideLibraries': 'hide_navigation_pane_libraries',
+    'hideNetwork': 'hide_navigation_pane_network',
+    'hideUserProfile': 'hide_navigation_pane_user_profile',
+}
+
+EXPLORER_FOLDER_DIALOG_ATTRS: Dict[str, str] = {
+    'hideDesktop': 'hide_folder_dialog_desktop',
+    'hideDocuments': 'hide_folder_dialog_documents',
+    'hideDownloads': 'hide_folder_dialog_downloads',
+    'hideMusic': 'hide_folder_dialog_music',
+    'hidePictures': 'hide_folder_dialog_pictures',
+    'hideVideos': 'hide_folder_dialog_videos',
+    'hideGallery': 'hide_folder_dialog_gallery',
+    'hideHome': 'hide_folder_dialog_home',
+    'hideLibraries': 'hide_folder_dialog_libraries',
+    'hideNetwork': 'hide_folder_dialog_network',
+    'hideUserProfile': 'hide_folder_dialog_user_profile',
+}
 
 
 # ========================================
@@ -2837,6 +2934,18 @@ class OptimizationsModifier(Modifier):
             self.context.user_once_script.append(
                 f"Set-ItemProperty -Path 'Registry::HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Start' -Name 'VisiblePlaces' -Value $( [convert]::FromBase64String('{base64_str}') ) -Type 'Binary';"
             )
+
+    def _remove_explorer_category_keys(self, category_values: Dict[str, bool], roots: List[str]):
+        """删除 Explorer 分类键，用于隐藏导航项或文件夹对话框节点。"""
+        commands: List[str] = []
+        for category_key, enabled in category_values.items():
+            if not enabled:
+                continue
+            for guid in EXPLORER_CATEGORY_GUIDS[category_key]:
+                for root in roots:
+                    commands.append(f'reg.exe delete "{root}\\{guid}" /f;')
+        if commands:
+            self.context.specialize_script.append('\n'.join(commands))
     
     def process(self):
         """处理优化设置（部分实现，仅 UseConfigurationSet）"""
@@ -3215,7 +3324,43 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             self.context.user_once_script.append(
                 "Set-ItemProperty -LiteralPath 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced' -Name 'LaunchTo' -Type 'DWord' -Value 1;"
             )
-        
+
+        if self.configuration.hide_recent_in_quick_access:
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer" /v ShowRecent /t REG_DWORD /d 0 /f;'
+            )
+
+        if self.configuration.hide_frequent_in_quick_access:
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer" /v ShowFrequent /t REG_DWORD /d 0 /f;'
+            )
+
+        if self.configuration.hide_cloud_files_in_quick_access:
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer" /v ShowCloudFilesInQuickAccess /t REG_DWORD /d 0 /f;'
+            )
+
+        if self.configuration.hide_explorer_recommendations:
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer" /v ShowRecommendations /t REG_DWORD /d 0 /f;'
+            )
+
+        self._remove_explorer_category_keys(
+            {
+                key: getattr(self.configuration, attr)
+                for key, attr in EXPLORER_NAVIGATION_PANE_ATTRS.items()
+            },
+            EXPLORER_NAVIGATION_PANE_ROOTS,
+        )
+
+        self._remove_explorer_category_keys(
+            {
+                key: getattr(self.configuration, attr)
+                for key, attr in EXPLORER_FOLDER_DIALOG_ATTRS.items()
+            },
+            EXPLORER_FOLDER_DIALOG_ROOTS,
+        )
+
         # Disable Bing Results
         if self.configuration.disable_bing_results:
             self.context.default_user_script.append(
@@ -3234,7 +3379,12 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             self._set_start_pins('{"pinnedList":[]}')
         elif isinstance(self.configuration.start_pins_settings, CustomStartPinsSettings):
             self._set_start_pins(self.configuration.start_pins_settings.json)
-        
+
+        if isinstance(self.configuration.start_tiles_settings, EmptyStartTilesSettings):
+            self._set_start_tiles('<LayoutModificationTemplate Version="1"><DefaultLayoutOverride /></LayoutModificationTemplate>')
+        elif isinstance(self.configuration.start_tiles_settings, CustomStartTilesSettings):
+            self._set_start_tiles(self.configuration.start_tiles_settings.xml)
+
         # Delete Windows Old（按照 C# 顺序：在 StartPins 之后，DisablePointerPrecision 之前）
         if self.configuration.delete_windows_old:
             self.context.first_logon_script.append('cmd.exe /c "rmdir C:\\Windows.old";')
@@ -3751,6 +3901,26 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             if self.generator._check_registry_command(cmd_text, r'HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'LaunchTo', '1'):
                 self.configuration.launch_to_this_pc = True
                 break
+
+        for cmd_text in all_script_texts:
+            if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer', 'ShowRecent', '0'):
+                self.configuration.hide_recent_in_quick_access = True
+                break
+
+        for cmd_text in all_script_texts:
+            if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer', 'ShowFrequent', '0'):
+                self.configuration.hide_frequent_in_quick_access = True
+                break
+
+        for cmd_text in all_script_texts:
+            if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer', 'ShowCloudFilesInQuickAccess', '0'):
+                self.configuration.hide_cloud_files_in_quick_access = True
+                break
+
+        for cmd_text in all_script_texts:
+            if self.generator._check_registry_command(cmd_text, r'HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer', 'ShowRecommendations', '0'):
+                self.configuration.hide_explorer_recommendations = True
+                break
         
         # taskbar_search (从 UserOnce.ps1 中解析 SearchboxTaskbarMode)
         for cmd_text in all_script_texts:
@@ -3974,8 +4144,25 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
                     logger.debug("OptimizationsModifier.parse: Detected CustomStartPinsSettings")
             except json.JSONDecodeError as e:
                 logger.warning(f"OptimizationsModifier.parse: Invalid JSON in SetStartPins.ps1: {start_pins_json[:100]}..., error: {e}")
-        
-        # 8. 桌面图标解析（从 UserOnce.ps1 中解析）
+
+        # 8. 开始菜单磁贴（Start Tiles）解析
+        start_tiles_xml = None
+        for name, content in ext_files.items():
+            lower_name = name.lower()
+            if lower_name.endswith('layoutmodification.xml') and not lower_name.endswith('taskbarlayoutmodification.xml'):
+                start_tiles_xml = content.strip() if content else ''
+                break
+
+        if start_tiles_xml:
+            normalized_start_tiles_xml = re.sub(r'>\s+<', '><', start_tiles_xml).strip()
+            if normalized_start_tiles_xml == '<LayoutModificationTemplate Version="1"><DefaultLayoutOverride /></LayoutModificationTemplate>':
+                self.configuration.start_tiles_settings = EmptyStartTilesSettings()
+                logger.debug("OptimizationsModifier.parse: Detected EmptyStartTilesSettings")
+            else:
+                self.configuration.start_tiles_settings = CustomStartTilesSettings(xml=normalized_start_tiles_xml)
+                logger.debug("OptimizationsModifier.parse: Detected CustomStartTilesSettings")
+
+        # 9. 桌面图标解析（从 UserOnce.ps1 中解析）
         desktop_icons_dict = {}
         # 查找 UserOnce.ps1 内容
         useronce_content = None
@@ -4015,7 +4202,7 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         if desktop_icons_dict:
             self.configuration.desktop_icons = CustomDesktopIconSettings(settings=desktop_icons_dict)
         
-        # 9. 开始菜单文件夹解析（从 UserOnce.ps1 中解析）
+        # 10. 开始菜单文件夹解析（从 UserOnce.ps1 中解析）
         start_folders_dict = {}
         # 使用之前找到的 useronce_content
         if useronce_content:
@@ -4049,6 +4236,38 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             logger.debug(f"OptimizationsModifier.parse: Parsed {len(start_folders_dict)} StartFolder(s)")
         else:
             logger.debug("OptimizationsModifier.parse: No StartFolders found in VisiblePlaces")
+
+        # 解析 Explorer category 删除命令
+        self._parse_explorer_categories(
+            all_script_texts, EXPLORER_NAVIGATION_PANE_ATTRS, EXPLORER_NAVIGATION_PANE_ROOTS, 'navigation_pane')
+        self._parse_explorer_categories(
+            all_script_texts, EXPLORER_FOLDER_DIALOG_ATTRS, EXPLORER_FOLDER_DIALOG_ROOTS, 'folder_dialog')
+
+    def _parse_explorer_categories(
+        self,
+        all_script_texts: List[str],
+        category_attrs: Dict[str, str],
+        roots: List[str],
+        label: str,
+    ) -> None:
+        for category_key, attr_name in category_attrs.items():
+            guids = EXPLORER_CATEGORY_GUIDS.get(category_key, [])
+            if not guids:
+                continue
+            for cmd_text in all_script_texts:
+                for guid in guids:
+                    for root in roots:
+                        path = f"{root}\\{guid}"
+                        if self.generator._check_registry_delete_command(cmd_text, path):
+                            setattr(self.configuration, attr_name, True)
+                            logger.debug(f"OptimizationsModifier.parse: {label} {category_key} hidden (matched {path})")
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    continue
+                break
 
 
 class ComputerNameModifier(Modifier):
@@ -8092,7 +8311,7 @@ class UnattendGenerator:
         if match:
             return match.group(1)
         # 也支持 PowerShell Set-ItemProperty 格式
-        pattern2 = rf'Set-ItemProperty\s+-LiteralPath\s+[\'"]Registry::({escaped_path})[\'"]\s+-Name\s+[\'"]{re.escape(value_name)}[\'"]\s+-Type\s+\w+\s+-Value\s+(\d+)'
+        pattern2 = rf'Set-ItemProperty\s+-LiteralPath\s+[\'"]Registry::({escaped_path})[\'"]\s+-Name\s+[\'"]{re.escape(value_name)}[\'"]\s+-Type\s+(?:[\'"])?\w+(?:[\'"])?\s+-Value\s+(\d+)'
         match2 = re.search(pattern2, cmd_text, re.IGNORECASE)
         if match2:
             return match2.group(2)
@@ -8102,6 +8321,16 @@ class UnattendGenerator:
         """检查注册表命令是否设置了指定的值"""
         value = self._parse_registry_command(cmd_text, registry_path, value_name)
         return value == expected_value
+
+    def _check_registry_delete_command(self, cmd_text: str, registry_path: str) -> bool:
+        """检查注册表删除命令是否删除了指定的键。"""
+        escaped_path = re.escape(registry_path)
+        patterns = [
+            rf'reg(?:\.exe)?\s+delete\s+"{escaped_path}"',
+            rf'Remove-Item\s+-LiteralPath\s+[\'"]Registry::({escaped_path})[\'"]',
+            rf'Remove-Item\s+-Path\s+[\'"]Registry::({escaped_path})[\'"]',
+        ]
+        return any(re.search(pattern, cmd_text, re.IGNORECASE) for pattern in patterns)
     
     def _collect_all_commands(self, root: ET.Element) -> List[str]:
         """收集所有脚本命令（RunSynchronousCommand、FirstLogonCommand 等）"""
@@ -8703,6 +8932,22 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
         config.disable_bing_results = fe.get('disableBingResults', False)
         config.classic_context_menu = fe.get('classicContextMenu', False)
         config.show_end_task = fe.get('showEndTask', False)
+        config.hide_recent_in_quick_access = fe.get('hideRecentInQuickAccess', False)
+        config.hide_frequent_in_quick_access = fe.get('hideFrequentInQuickAccess', False)
+        config.hide_cloud_files_in_quick_access = fe.get('hideCloudFilesInQuickAccess', False)
+        config.hide_explorer_recommendations = fe.get('hideRecommendations', False)
+
+        # 导航窗格分类
+        np = fe.get('navigationPane', {}) or {}
+        for key, attr in EXPLORER_NAVIGATION_PANE_ATTRS.items():
+            camel_key = key  # hideDesktop -> hideDesktop
+            setattr(config, attr, bool(np.get(camel_key, False)))
+
+        # 文件夹对话框分类
+        fd = fe.get('folderDialog', {}) or {}
+        for key, attr in EXPLORER_FOLDER_DIALOG_ATTRS.items():
+            camel_key = key
+            setattr(config, attr, bool(fd.get(camel_key, False)))
     # 注意：如果 fileExplorer 不存在，这些字段会在 systemTweaks 部分读取（向后兼容）
     
     # 转换 Virtual machine support 设置
@@ -8747,7 +8992,10 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 if start_pins.get('mode') == 'empty':
                     config.start_pins_settings = EmptyStartPinsSettings()
                 elif start_pins.get('mode') == 'custom':
-                    config.start_pins_settings = CustomStartPinsSettings(json=start_pins.get('json', '{"pinnedList":[]}'))
+                    start_pins_json = start_pins.get('json', '{"pinnedList":[]}')
+                    if not isinstance(start_pins_json, str):
+                        start_pins_json = json.dumps(start_pins_json, ensure_ascii=False)
+                    config.start_pins_settings = CustomStartPinsSettings(start_pins_json)
                 else:
                     config.start_pins_settings = DefaultStartPinsSettings()
             else:
@@ -8776,6 +9024,9 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     config.taskbar_icons = DefaultTaskbarIcons()
             else:
                 config.taskbar_icons = DefaultTaskbarIcons()
+            config.left_taskbar = smt.get('leftTaskbar', False)
+            config.hide_task_view_button = smt.get('hideTaskViewButton', False)
+            config.disable_widgets = smt.get('disableWidgets', False)
             # 从 startMenuTaskbar 读取 showAllTrayIcons 和 disableBingResults（如果存在）
             config.show_all_tray_icons = smt.get('showAllTrayIcons', False)
             config.disable_bing_results = smt.get('disableBingResults', False)
@@ -9707,7 +9958,21 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         # disableBingResults 已移到 startMenuTaskbar
         'classicContextMenu': config.classic_context_menu,
         'showEndTask': config.show_end_task,
+        'hideRecentInQuickAccess': config.hide_recent_in_quick_access,
+        'hideFrequentInQuickAccess': config.hide_frequent_in_quick_access,
+        'hideCloudFilesInQuickAccess': config.hide_cloud_files_in_quick_access,
+        'hideRecommendations': config.hide_explorer_recommendations,
     }
+    # 导航窗格分类
+    navigation_pane: Dict[str, Any] = {}
+    for key, attr in EXPLORER_NAVIGATION_PANE_ATTRS.items():
+        navigation_pane[key] = getattr(config, attr, False)
+    file_explorer['navigationPane'] = navigation_pane
+    # 文件夹对话框分类
+    folder_dialog: Dict[str, Any] = {}
+    for key, attr in EXPLORER_FOLDER_DIALOG_ATTRS.items():
+        folder_dialog[key] = getattr(config, attr, False)
+    file_explorer['folderDialog'] = folder_dialog
     config_dict['fileExplorer'] = file_explorer
     
     # 转换 Virtual machine support 设置
