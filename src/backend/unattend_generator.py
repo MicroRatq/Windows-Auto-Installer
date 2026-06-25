@@ -841,6 +841,24 @@ class ScriptLockScreenSettings(ILockScreenSettings):
     script: str
 
 
+# 微软拼音 English Switch Key 位标志。
+# Bit 0 (1): Ctrl+Space  |  Bit 1 (2): Ctrl  |  Bit 2 (4): Shift
+_ENGLISH_SWITCH_KEY_FLAG_CTRL_SPACE = 1
+_ENGLISH_SWITCH_KEY_FLAG_CTRL = 2
+_ENGLISH_SWITCH_KEY_FLAG_SHIFT = 4
+
+
+@dataclass
+class InputMethodSettings:
+    """微软拼音输入法设置。"""
+    english_switch_key_ctrl: bool = False
+    english_switch_key_ctrl_space: bool = True
+    english_switch_key_shift: bool = True
+    enable_full_half_width_switch_key: bool = False
+    enable_simplified_traditional_output_switch: bool = True
+    enable_cloud_candidate: bool = True
+
+
 # ========================================
 # 模块 9: 辅助功能设置数据类
 # ========================================
@@ -1161,6 +1179,7 @@ class Configuration:
     wallpaper_settings: Any = None
     lock_screen_settings: Any = None
     color_settings: Any = None
+    input_method_settings: InputMethodSettings = field(default_factory=InputMethodSettings)
     
     # AppLocker 设置
     app_locker_settings: Any = None
@@ -7040,9 +7059,49 @@ class ProcessorArchitectureModifier(Modifier):
 
 class PersonalizationModifier(Modifier):
     """个性化设置 Modifier（对应 C# 的 PersonalizationModifier）"""
+
+    INPUT_METHOD_REGISTRY_PATH_HKCU = r'HKCU\Software\Microsoft\InputMethod\Settings\CHS'
+    INPUT_METHOD_REGISTRY_PATH_DEFAULT_USER = r'HKU\DefaultUser\Software\Microsoft\InputMethod\Settings\CHS'
+
+    @staticmethod
+    def _english_switch_key_to_registry_value(settings: InputMethodSettings) -> int:
+        value = 0
+        if settings.english_switch_key_ctrl_space:
+            value |= _ENGLISH_SWITCH_KEY_FLAG_CTRL_SPACE
+        if settings.english_switch_key_ctrl:
+            value |= _ENGLISH_SWITCH_KEY_FLAG_CTRL
+        if settings.english_switch_key_shift:
+            value |= _ENGLISH_SWITCH_KEY_FLAG_SHIFT
+        return value
+
+    @staticmethod
+    def _registry_value_to_english_switch_key(value: Optional[str]) -> dict[str, bool]:
+        try:
+            int_value = int(str(value), 0) if value else 5
+        except (ValueError, TypeError):
+            int_value = 5
+        return {
+            'english_switch_key_ctrl_space': bool(int_value & _ENGLISH_SWITCH_KEY_FLAG_CTRL_SPACE),
+            'english_switch_key_ctrl': bool(int_value & _ENGLISH_SWITCH_KEY_FLAG_CTRL),
+            'english_switch_key_shift': bool(int_value & _ENGLISH_SWITCH_KEY_FLAG_SHIFT),
+        }
+
+    def _append_input_method_registry_commands(self, registry_path: str, target: Any):
+        settings = self.configuration.input_method_settings or InputMethodSettings()
+        english_switch_key = self._english_switch_key_to_registry_value(settings)
+        commands = [
+            f'reg.exe add "{registry_path}" /v "English Switch Key" /t REG_DWORD /d {english_switch_key} /f;',
+            f'reg.exe add "{registry_path}" /v "EnableFullHalfWidthSwitchKey" /t REG_DWORD /d {1 if settings.enable_full_half_width_switch_key else 0} /f;',
+            f'reg.exe add "{registry_path}" /v "EnableSimplifiedTraditionalOutputSwitch" /t REG_DWORD /d {1 if settings.enable_simplified_traditional_output_switch else 0} /f;',
+            f'reg.exe add "{registry_path}" /v "Enable Cloud Candidate" /t REG_DWORD /d {1 if settings.enable_cloud_candidate else 0} /f;',
+        ]
+        target.append('\n'.join(commands))
     
     def process(self):
         """处理个性化设置"""
+        self._append_input_method_registry_commands(self.INPUT_METHOD_REGISTRY_PATH_DEFAULT_USER, self.context.default_user_script)
+        self._append_input_method_registry_commands(self.INPUT_METHOD_REGISTRY_PATH_HKCU, self.context.user_once_script)
+
         # 颜色设置
         color_settings = self.configuration.color_settings
         if isinstance(color_settings, CustomColorSettings):
@@ -7158,6 +7217,7 @@ $htmlAccentColor = '{color_settings.accent_color}';
         self.configuration.wallpaper_settings = DefaultWallpaperSettings()
         self.configuration.lock_screen_settings = DefaultLockScreenSettings()
         self.configuration.color_settings = DefaultColorSettings()
+        self.configuration.input_method_settings = InputMethodSettings()
 
         # 收集 Extensions 文件（兼容不同命名空间）
         ext_files: Dict[str, str] = {}
@@ -7244,6 +7304,31 @@ $htmlAccentColor = '{color_settings.accent_color}';
                 accent_color_on_borders=accent_borders,
                 accent_color=accent_color,
             )
+
+        # 输入法
+        all_script_texts = list(ext_files.values()) + list(self.generator._collect_all_commands(self.root))
+
+        def _find_registry_value(value_name: str) -> Optional[str]:
+            for cmd_text in all_script_texts:
+                if not cmd_text:
+                    continue
+                value = self.generator._parse_registry_command(cmd_text, self.INPUT_METHOD_REGISTRY_PATH_HKCU, value_name)
+                if value is not None:
+                    return value
+                value = self.generator._parse_registry_command(cmd_text, self.INPUT_METHOD_REGISTRY_PATH_DEFAULT_USER, value_name)
+                if value is not None:
+                    return value
+            return None
+
+        english_switch_flags = self._registry_value_to_english_switch_key(_find_registry_value('English Switch Key'))
+        self.configuration.input_method_settings = InputMethodSettings(
+            english_switch_key_ctrl=english_switch_flags.get('english_switch_key_ctrl', False),
+            english_switch_key_ctrl_space=english_switch_flags.get('english_switch_key_ctrl_space', True),
+            english_switch_key_shift=english_switch_flags.get('english_switch_key_shift', True),
+            enable_full_half_width_switch_key=_find_registry_value('EnableFullHalfWidthSwitchKey') == '1',
+            enable_simplified_traditional_output_switch=_find_registry_value('EnableSimplifiedTraditionalOutputSwitch') == '1',
+            enable_cloud_candidate=_find_registry_value('Enable Cloud Candidate') == '1',
+        )
 
 
 
@@ -9249,6 +9334,7 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.wallpaper_settings = DefaultWallpaperSettings()
             config.lock_screen_settings = DefaultLockScreenSettings()
             config.color_settings = DefaultColorSettings()
+            config.input_method_settings = InputMethodSettings()
         else:
             # Wallpaper
             wallpaper = p.get('wallpaper', {})
@@ -9281,10 +9367,25 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                 )
             else:
                 config.color_settings = DefaultColorSettings()
+
+            # Input Method Settings
+            input_method = p.get('inputMethod', {})
+            if isinstance(input_method, dict):
+                config.input_method_settings = InputMethodSettings(
+                    english_switch_key_ctrl=bool(input_method.get('englishSwitchKeyCtrl', False)),
+                    english_switch_key_ctrl_space=bool(input_method.get('englishSwitchKeyCtrlSpace', True)),
+                    english_switch_key_shift=bool(input_method.get('englishSwitchKeyShift', True)),
+                    enable_full_half_width_switch_key=bool(input_method.get('enableFullHalfWidthSwitchKey', False)),
+                    enable_simplified_traditional_output_switch=bool(input_method.get('enableSimplifiedTraditionalOutputSwitch', True)),
+                    enable_cloud_candidate=bool(input_method.get('enableCloudCandidate', True)),
+                )
+            else:
+                config.input_method_settings = InputMethodSettings()
     else:
         config.wallpaper_settings = DefaultWallpaperSettings()
         config.lock_screen_settings = DefaultLockScreenSettings()
         config.color_settings = DefaultColorSettings()
+        config.input_method_settings = InputMethodSettings()
     
     # 转换模块 9: 辅助功能设置
     # 转换 Lock Keys 设置
@@ -9827,6 +9928,14 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         'wallpaper': {'mode': 'default'},
         'lockScreen': {'mode': 'default'},
         'color': {'mode': 'default'},
+        'inputMethod': {
+            'englishSwitchKeyCtrl': False,
+            'englishSwitchKeyCtrlSpace': True,
+            'englishSwitchKeyShift': True,
+            'enableFullHalfWidthSwitchKey': False,
+            'enableSimplifiedTraditionalOutputSwitch': True,
+            'enableCloudCandidate': True,
+        },
     }
     if isinstance(config.wallpaper_settings, SolidWallpaperSettings):
         personalization['wallpaper'] = {
@@ -9853,6 +9962,15 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
             'accentColorOnBorders': bool(config.color_settings.accent_color_on_borders),
             'accentColor': config.color_settings.accent_color,
         }
+    input_method_settings = config.input_method_settings or InputMethodSettings()
+    personalization['inputMethod'] = {
+        'englishSwitchKeyCtrl': bool(input_method_settings.english_switch_key_ctrl),
+        'englishSwitchKeyCtrlSpace': bool(input_method_settings.english_switch_key_ctrl_space),
+        'englishSwitchKeyShift': bool(input_method_settings.english_switch_key_shift),
+        'enableFullHalfWidthSwitchKey': bool(input_method_settings.enable_full_half_width_switch_key),
+        'enableSimplifiedTraditionalOutputSwitch': bool(input_method_settings.enable_simplified_traditional_output_switch),
+        'enableCloudCandidate': bool(input_method_settings.enable_cloud_candidate),
+    }
     config_dict['personalization'] = personalization
     
     # 转换密码过期设置

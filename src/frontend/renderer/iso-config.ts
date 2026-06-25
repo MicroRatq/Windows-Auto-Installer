@@ -326,6 +326,14 @@ interface PersonalizationSettings {
     accentColorOnBorders?: boolean
     enableTransparency?: boolean
   }
+  inputMethod: {
+    englishSwitchKeyCtrl?: boolean
+    englishSwitchKeyCtrlSpace?: boolean
+    englishSwitchKeyShift?: boolean
+    enableFullHalfWidthSwitchKey?: boolean
+    enableSimplifiedTraditionalOutputSwitch?: boolean
+    enableCloudCandidate?: boolean
+  }
 }
 
 // 预装软件移除
@@ -576,6 +584,14 @@ function createDefaultConfig(): UnattendConfig {
       },
       color: {
         mode: 'default'
+      },
+      inputMethod: {
+        englishSwitchKeyCtrl: false,
+        englishSwitchKeyCtrlSpace: true,
+        englishSwitchKeyShift: true,
+        enableFullHalfWidthSwitchKey: false,
+        enableSimplifiedTraditionalOutputSwitch: true,
+        enableCloudCandidate: true
       }
     },
     bloatware: {
@@ -605,7 +621,7 @@ class UnattendConfigManager {
   private config: UnattendConfig
   private panel: HTMLElement | null = null
   private presetData: PresetData = EMPTY_PRESET
-  private activeUiPersonalizationSubPage: 'file-explorer' | 'start-taskbar' | 'personalization' | null = null
+  private activeUiPersonalizationSubPage: 'file-explorer' | 'start-taskbar' | 'input-method' | 'personalization' | null = null
   private uiPersonalizationRootTitle = ''
   private workspaceTitleListenerBound = false
 
@@ -1089,6 +1105,7 @@ class UnattendConfigManager {
     // 7. UI and Personalization (合并模块14、15、16、17、18、25)
     this.renderFileExplorer()
     this.renderStartTaskbar()
+    this.renderInputMethod()
     this.renderVisualEffects()
     this.renderDesktopIcons()
     this.renderFoldersStart()
@@ -1160,7 +1177,7 @@ class UnattendConfigManager {
   }
 
   private openUiPersonalizationSubPage(
-    subPageId: 'file-explorer' | 'start-taskbar' | 'personalization',
+    subPageId: 'file-explorer' | 'start-taskbar' | 'input-method' | 'personalization',
     sourceEntryId?: string
   ) {
     if (!this.panel) return
@@ -1193,8 +1210,142 @@ class UnattendConfigManager {
       return
     }
 
+    if (subPageId === 'input-method') {
+      setWorkspaceTitleBreadcrumb(this.uiPersonalizationRootTitle, t('isoConfig.uiPersonalization.inputMethod'))
+      this.renderInputMethodSubPageContent(subPage)
+      return
+    }
+
     setWorkspaceTitleBreadcrumb(this.uiPersonalizationRootTitle, t('isoConfig.uiPersonalization.startTaskbar'))
     this.renderStartTaskbarContent(subPage)
+  }
+
+  private getInputMethodSettings(): NonNullable<PersonalizationSettings['inputMethod']> {
+    const defaultInputMethodSettings: NonNullable<PersonalizationSettings['inputMethod']> = {
+      englishSwitchKeyCtrl: false,
+      englishSwitchKeyCtrlSpace: true,
+      englishSwitchKeyShift: true,
+      enableFullHalfWidthSwitchKey: false,
+      enableSimplifiedTraditionalOutputSwitch: true,
+      enableCloudCandidate: true
+    }
+
+    return {
+      ...defaultInputMethodSettings,
+      ...(this.config.personalization?.inputMethod || {})
+    }
+  }
+
+  private renderInputMethodSubPageContent(contentDiv: HTMLElement) {
+    const inputMethod = this.getInputMethodSettings()
+
+    const englishSwitchKeyContainerConfig = {
+      id: 'input-method-english-switch-key-container',
+      name: 'input-method-english-switch-key',
+      title: t('isoConfig.uiPersonalization.inputMethodEnglishSwitchKey'),
+      description: t('isoConfig.uiPersonalization.inputMethodEnglishSwitchKeyDesc'),
+      icon: 'languages',
+      nestedCards: [
+        {
+          id: 'input-method-english-switch-key-ctrl-space-card',
+          field: 'englishSwitchKeyCtrlSpace',
+          title: t('isoConfig.uiPersonalization.inputMethodEnglishSwitchKeyCtrlSpace'),
+          description: '',
+          controlType: 'checkbox',
+          value: inputMethod.englishSwitchKeyCtrlSpace ?? true,
+          borderless: true
+        },
+        {
+          id: 'input-method-english-switch-key-shift-card',
+          field: 'englishSwitchKeyShift',
+          title: t('isoConfig.uiPersonalization.inputMethodEnglishSwitchKeyShift'),
+          description: '',
+          controlType: 'checkbox',
+          value: inputMethod.englishSwitchKeyShift ?? true,
+          borderless: true
+        },
+        {
+          id: 'input-method-english-switch-key-ctrl-card',
+          field: 'englishSwitchKeyCtrl',
+          title: t('isoConfig.uiPersonalization.inputMethodEnglishSwitchKeyCtrl'),
+          description: '',
+          controlType: 'checkbox',
+          value: inputMethod.englishSwitchKeyCtrl ?? false,
+          borderless: true
+        }
+      ],
+      expanded: false
+    }
+
+    contentDiv.innerHTML = `
+      ${createComboContainer(englishSwitchKeyContainerConfig)}
+      ${createComboCard({
+        id: 'input-method-full-half-width-switch-key-card',
+        title: t('isoConfig.uiPersonalization.inputMethodFullHalfWidthSwitchKey'),
+        description: t('isoConfig.uiPersonalization.inputMethodFullHalfWidthSwitchKeyDesc'),
+        icon: 'rectangle-ellipsis',
+        controlType: 'switch',
+        value: inputMethod.enableFullHalfWidthSwitchKey
+      })}
+      ${createComboCard({
+        id: 'input-method-simplified-traditional-switch-card',
+        title: t('isoConfig.uiPersonalization.inputMethodSimplifiedTraditionalSwitch'),
+        description: t('isoConfig.uiPersonalization.inputMethodSimplifiedTraditionalSwitchDesc'),
+        icon: 'languages',
+        controlType: 'switch',
+        value: !inputMethod.enableSimplifiedTraditionalOutputSwitch
+      })}
+      ${createComboCard({
+        id: 'input-method-cloud-candidate-card',
+        title: t('isoConfig.uiPersonalization.inputMethodCloudCandidate'),
+        description: t('isoConfig.uiPersonalization.inputMethodCloudCandidateDesc'),
+        icon: 'cloud',
+        controlType: 'switch',
+        value: !inputMethod.enableCloudCandidate
+      })}
+    `
+
+    setupComboContainer('input-method-english-switch-key-container', 'input-method-english-switch-key', (values) => {
+      this.updateModule('personalization', {
+        inputMethod: {
+          ...this.getInputMethodSettings(),
+          englishSwitchKeyCtrlSpace: values.englishSwitchKeyCtrlSpace as boolean,
+          englishSwitchKeyShift: values.englishSwitchKeyShift as boolean,
+          englishSwitchKeyCtrl: values.englishSwitchKeyCtrl as boolean
+        }
+      })
+    }, true, englishSwitchKeyContainerConfig)
+
+    setupComboCard('input-method-full-half-width-switch-key-card', (value) => {
+      this.updateModule('personalization', {
+        inputMethod: {
+          ...this.getInputMethodSettings(),
+          enableFullHalfWidthSwitchKey: value as boolean
+        }
+      })
+    })
+
+    setupComboCard('input-method-simplified-traditional-switch-card', (value) => {
+      this.updateModule('personalization', {
+        inputMethod: {
+          ...this.getInputMethodSettings(),
+          enableSimplifiedTraditionalOutputSwitch: !(value as boolean)
+        }
+      })
+    })
+
+    setupComboCard('input-method-cloud-candidate-card', (value) => {
+      this.updateModule('personalization', {
+        inputMethod: {
+          ...this.getInputMethodSettings(),
+          enableCloudCandidate: !(value as boolean)
+        }
+      })
+    })
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
   }
 
   private renderFileExplorerContent(contentDiv: HTMLElement) {
@@ -4604,6 +4755,28 @@ End If`,
 
     setupComboCard('start-taskbar-entry-card', () => { }, () => {
       this.openUiPersonalizationSubPage('start-taskbar', 'start-taskbar-entry-card')
+    })
+
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+  }
+
+  private renderInputMethod() {
+    const contentDiv = this.getSectionContent('config-input-method')
+    if (!contentDiv) return
+
+    contentDiv.innerHTML = createComboCard({
+      id: 'input-method-entry-card',
+      title: t('isoConfig.uiPersonalization.inputMethod'),
+      description: t('isoConfig.uiPersonalization.inputMethodEntryDesc'),
+      icon: 'languages',
+      controlType: 'clickable',
+      value: ''
+    })
+
+    setupComboCard('input-method-entry-card', () => { }, () => {
+      this.openUiPersonalizationSubPage('input-method', 'input-method-entry-card')
     })
 
     if (window.lucide) {
