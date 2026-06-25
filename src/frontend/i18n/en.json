@@ -123,7 +123,9 @@
             "generated": "Generate unattended setup",
             "script": "Custom script",
             "generatedOptions": "Generated options",
-            "scriptTitle": "Custom PE script"
+            "scriptTitle": "Custom PE script",
+            "disableDefender": "Disable Windows Defender",
+            "disableDefenderDesc": "Disable Windows Defender by setting its services to disabled in the offline registry before Windows boots."
         },
         "partitioning": {
             "title": "Partitioning and formatting",

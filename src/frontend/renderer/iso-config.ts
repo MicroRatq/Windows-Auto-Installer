@@ -104,6 +104,7 @@ interface PESettings {
   pauseBeforeFormatting?: boolean
   pauseBeforeReboot?: boolean
   compactOs?: boolean
+  disableDefender?: boolean
 }
 
 // 用户账户设置
@@ -189,7 +190,6 @@ interface SystemTweaks {
   allowPowerShellScripts: boolean
   disableLastAccess: boolean
   preventAutomaticReboot: boolean
-  disableDefender: boolean
   disableSac: boolean
   disableUac: boolean
   disableSmartScreen: boolean
@@ -457,7 +457,8 @@ function createDefaultConfig(): UnattendConfig {
     },
     peSettings: {
       mode: 'default',
-      compactOs: false
+      compactOs: false,
+      disableDefender: false
     },
     accountSettings: {
       mode: 'interactive-local',
@@ -524,7 +525,6 @@ function createDefaultConfig(): UnattendConfig {
       allowPowerShellScripts: false,
       disableLastAccess: false,
       preventAutomaticReboot: false,
-      disableDefender: false,
       disableSac: false,
       disableUac: false,
       disableSmartScreen: false,
@@ -3483,7 +3483,6 @@ class UnattendConfigManager {
         { value: 'allowPowerShellScripts', label: t('isoConfig.systemOptimization.allowPowerShellScripts') },
         { value: 'disableLastAccess', label: t('isoConfig.systemOptimization.disableLastAccess') },
         { value: 'preventAutomaticReboot', label: t('isoConfig.systemOptimization.preventAutomaticReboot') },
-        { value: 'disableDefender', label: t('isoConfig.systemOptimization.disableDefender') },
         { value: 'disableSac', label: t('isoConfig.systemOptimization.disableSac') },
         { value: 'disableUac', label: t('isoConfig.systemOptimization.disableUac') },
         { value: 'disableSmartScreen', label: t('isoConfig.systemOptimization.disableSmartScreen') },
@@ -3506,7 +3505,6 @@ class UnattendConfigManager {
         allowPowerShellScripts: tweaks.allowPowerShellScripts || false,
         disableLastAccess: tweaks.disableLastAccess || false,
         preventAutomaticReboot: tweaks.preventAutomaticReboot || false,
-        disableDefender: tweaks.disableDefender || false,
         disableSac: tweaks.disableSac || false,
         disableUac: tweaks.disableUac || false,
         disableSmartScreen: tweaks.disableSmartScreen || false,
@@ -3719,6 +3717,15 @@ class UnattendConfigManager {
         icon: 'settings-2',
         nestedCards: [
           {
+            id: 'config-pe-disable-defender-card',
+            field: 'disableDefender',
+            title: t('isoConfig.peMode.disableDefender'),
+            description: t('isoConfig.peMode.disableDefenderDesc'),
+            controlType: 'checkbox',
+            value: pe.disableDefender || false,
+            borderless: true
+          },
+          {
             id: 'config-pe-compact-os-card',
             field: 'compactOs',
             title: t('isoConfig.advancedSettings.compactOS'),
@@ -3802,7 +3809,8 @@ pause`,
           compactOs: Boolean(values.compactOs),
           disable8Dot3Names: Boolean(values.disable8Dot3Names),
           pauseBeforeFormatting: Boolean(values.pauseBeforeFormatting),
-          pauseBeforeReboot: Boolean(values.pauseBeforeReboot)
+          pauseBeforeReboot: Boolean(values.pauseBeforeReboot),
+          disableDefender: Boolean(values.disableDefender)
         })
       }, true, {
         id: 'pe-generated-options-container',
@@ -3811,6 +3819,7 @@ pause`,
         description: '',
         icon: 'settings-2',
         nestedCards: [
+          { id: 'config-pe-disable-defender-card', field: 'disableDefender', title: '', controlType: 'checkbox', value: false, borderless: true },
           { id: 'config-pe-compact-os-card', field: 'compactOs', title: '', controlType: 'checkbox', value: false, borderless: true },
           { id: 'config-pe-disable-8dot3-card', field: 'disable8Dot3Names', title: '', controlType: 'checkbox', value: false, borderless: true },
           { id: 'config-pe-pause-formatting-card', field: 'pauseBeforeFormatting', title: '', controlType: 'checkbox', value: false, borderless: true },

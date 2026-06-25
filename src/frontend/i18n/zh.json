@@ -123,7 +123,9 @@
       "generated": "生成自动安装配置",
       "script": "自定义脚本",
       "generatedOptions": "生成选项",
-      "scriptTitle": "自定义 PE 脚本"
+      "scriptTitle": "自定义 PE 脚本",
+      "disableDefender": "禁用 Windows Defender",
+      "disableDefenderDesc": "在 Windows 启动前通过离线注册表将 Defender 服务设为禁用状态。"
     },
     "partitioning": {
       "title": "分区和格式化",

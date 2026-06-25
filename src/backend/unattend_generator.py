@@ -537,6 +537,7 @@ class GeneratePESettings(ICmdPESettings):
     disable_8_dot3_names: bool
     pause_before_formatting: bool
     pause_before_reboot: bool
+    disable_defender: bool = False
 
 
 @dataclass
@@ -1192,7 +1193,6 @@ class Configuration:
     allow_power_shell_scripts: bool = False
     disable_last_access: bool = False
     prevent_automatic_reboot: bool = False
-    disable_defender: bool = False
     disable_sac: bool = False
     disable_uac: bool = False
     disable_smart_screen: bool = False
@@ -1276,6 +1276,10 @@ class Configuration:
     
     # 开始菜单文件夹设置
     start_folder_settings: Any = None
+
+    @property
+    def is_defender_disabled(self) -> bool:
+        return isinstance(self.pe_settings, GeneratePESettings) and self.pe_settings.disable_defender
 
 
 EXPLORER_CATEGORY_GUIDS: Dict[str, List[str]] = {
@@ -3030,16 +3034,8 @@ class OptimizationsModifier(Modifier):
                 'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f;'
             )
         
-        # Disable Defender
-        if self.configuration.disable_defender:
-            # 如果使用 GeneratePESettings，禁用 Windows Defender 的操作已经在 pe.cmd 脚本中处理
-            # 不需要额外添加 start /MIN cscript.exe 命令
-            if not isinstance(self.configuration.pe_settings, GeneratePESettings):
-                vbs_file = self.add_text_file("DisableDefender.vbs", "")
-                appender = self.get_appender(CommandConfig.windows_pe())
-                appender.append(
-                    self.command_builder.shell_command(f'start /MIN cscript.exe //E:vbscript {vbs_file}')
-                )
+        # Disable Defender (only when PESettings is GeneratePESettings with disable_defender=True)
+        if self.configuration.is_defender_disabled:
             self.context.specialize_script.append(
                 'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender Security Center\\Notifications" /v DisableNotifications /t REG_DWORD /d 1 /f;'
             )
@@ -3222,7 +3218,7 @@ foreach( $name in $names ) {
         # VM Guest Tools
         def install_vm_software(resource_name: str):
             """安装虚拟机软件"""
-            target = self.context.specialize_script if self.configuration.disable_defender else self.context.first_logon_script
+            target = self.context.specialize_script if self.configuration.is_defender_disabled else self.context.first_logon_script
             target.invoke_file(self.add_text_file(resource_name))
         
         if self.configuration.vbox_guest_additions:
@@ -3649,7 +3645,14 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         
         # disable_defender
         if any('disabledefender' in name for name in file_names_lower):
-            self.configuration.disable_defender = True
+            if isinstance(self.configuration.pe_settings, GeneratePESettings):
+                self.configuration.pe_settings.disable_defender = True
+            else:
+                self.configuration.pe_settings = GeneratePESettings(
+                    compact_os=False, disable_8_dot3_names=False,
+                    pause_before_formatting=False, pause_before_reboot=False,
+                    disable_defender=True
+                )
             logger.debug("OptimizationsModifier.parse: Found disable_defender via file name")
         # 也检查注册表命令和脚本调用
         for cmd_text in all_script_texts:
@@ -3658,7 +3661,14 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             cmd_lower = cmd_text.lower()
             # 检查DisableDefender.vbs文件
             if 'disabledefender' in cmd_lower or 'windefend' in cmd_lower:
-                self.configuration.disable_defender = True
+                if isinstance(self.configuration.pe_settings, GeneratePESettings):
+                    self.configuration.pe_settings.disable_defender = True
+                else:
+                    self.configuration.pe_settings = GeneratePESettings(
+                        compact_os=False, disable_8_dot3_names=False,
+                        pause_before_formatting=False, pause_before_reboot=False,
+                        disable_defender=True
+                    )
                 logger.debug(f"OptimizationsModifier.parse: Found disable_defender via script content")
                 break
             # 检查注册表命令（DisableNotifications）
@@ -3666,7 +3676,14 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
             if 'disablenotifications' in cmd_lower:
                 # 匹配 /d 1 或 /d\s+1（可能在脚本块中）
                 if re.search(r'/d\s+1\s+/f', cmd_text, re.IGNORECASE) or '/d 1' in cmd_text or re.search(r'/d\s+1', cmd_text):
-                    self.configuration.disable_defender = True
+                    if isinstance(self.configuration.pe_settings, GeneratePESettings):
+                        self.configuration.pe_settings.disable_defender = True
+                    else:
+                        self.configuration.pe_settings = GeneratePESettings(
+                            compact_os=False, disable_8_dot3_names=False,
+                            pause_before_formatting=False, pause_before_reboot=False,
+                            disable_defender=True
+                        )
                     logger.debug(f"OptimizationsModifier.parse: Found disable_defender via DisableNotifications check in text length {len(cmd_text)}")
                     break
             # 使用_check_registry_command检查（这个方法可能不适用于脚本块格式）
@@ -5304,7 +5321,7 @@ class DiskModifier(Modifier):
             writer.write(f"fsutil.exe 8dot3name strip /s /f {windows_drive}:\\\n")
         
         # 禁用 Windows Defender
-        if self.configuration.disable_defender:
+        if self.configuration.is_defender_disabled:
             writer.write(f"rem Disable Windows Defender\n")
             writer.write(f"reg.exe LOAD HKLM\\mount {windows_drive}:\\Windows\\System32\\config\\SYSTEM\n")
             writer.write("for %%s in (Sense WdBoot WdFilter WdNisDrv WdNisSvc WinDefend) do reg.exe ADD HKLM\\mount\\ControlSet001\\Services\\%%s /v Start /t REG_DWORD /d 4 /f\n")
@@ -5687,6 +5704,7 @@ class DiskModifier(Modifier):
                     disable_8_dot3_names='FSUTIL.EXE 8DOT3NAME SET' in pe_text_upper,
                     pause_before_formatting='DISKPART WILL NOW PARTITION AND FORMAT YOUR DISK' in pe_text_upper,
                     pause_before_reboot='COMPUTER WILL NOW REBOOT' in pe_text_upper,
+                    disable_defender='WINDEFEND' in pe_text_upper,
                 )
             else:
                 self.configuration.pe_settings = ScriptPESettings(script='\n'.join(pe_lines))
@@ -8857,7 +8875,8 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     compact_os=pe_settings.get('compactOs', False),
                     disable_8_dot3_names=pe_settings.get('disable8Dot3Names', False),
                     pause_before_formatting=pe_settings.get('pauseBeforeFormatting', False),
-                    pause_before_reboot=pe_settings.get('pauseBeforeReboot', False)
+                    pause_before_reboot=pe_settings.get('pauseBeforeReboot', False),
+                    disable_defender=pe_settings.get('disableDefender', False)
                 )
             elif mode == 'script':
                 config.pe_settings = ScriptPESettings(
@@ -9281,7 +9300,6 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.allow_power_shell_scripts = st.get('allowPowerShellScripts', False)
             config.disable_last_access = st.get('disableLastAccess', False)
             config.prevent_automatic_reboot = st.get('preventAutomaticReboot', False)
-            config.disable_defender = st.get('disableDefender', False)
             config.disable_sac = st.get('disableSac', False)
             config.disable_uac = st.get('disableUac', False)
             config.disable_smart_screen = st.get('disableSmartScreen', False)
@@ -9856,7 +9874,8 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
                 'compactOs': config.pe_settings.compact_os,
                 'disable8Dot3Names': config.pe_settings.disable_8_dot3_names,
                 'pauseBeforeFormatting': config.pe_settings.pause_before_formatting,
-                'pauseBeforeReboot': config.pe_settings.pause_before_reboot
+                'pauseBeforeReboot': config.pe_settings.pause_before_reboot,
+                'disableDefender': config.pe_settings.disable_defender
             }
         elif isinstance(config.pe_settings, ScriptPESettings):
             config_dict['peSettings'] = {
@@ -9931,7 +9950,6 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
         'allowPowerShellScripts': config.allow_power_shell_scripts,
         'disableLastAccess': config.disable_last_access,
         'preventAutomaticReboot': config.prevent_automatic_reboot,
-        'disableDefender': config.disable_defender,
         'disableSac': config.disable_sac,
         'disableUac': config.disable_uac,
         'disableSmartScreen': config.disable_smart_screen,
