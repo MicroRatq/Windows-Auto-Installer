@@ -538,6 +538,7 @@ class GeneratePESettings(ICmdPESettings):
     pause_before_formatting: bool
     pause_before_reboot: bool
     disable_defender: bool = False
+    inject_virtio_storage_drivers: bool = False
 
 
 @dataclass
@@ -1280,6 +1281,10 @@ class Configuration:
     @property
     def is_defender_disabled(self) -> bool:
         return isinstance(self.pe_settings, GeneratePESettings) and self.pe_settings.disable_defender
+
+    @property
+    def uses_builtin_virtio_storage_drivers(self) -> bool:
+        return isinstance(self.pe_settings, GeneratePESettings) and self.pe_settings.inject_virtio_storage_drivers
 
 
 EXPLORER_CATEGORY_GUIDS: Dict[str, List[str]] = {
@@ -5245,6 +5250,8 @@ class DiskModifier(Modifier):
             write_diskpart_script(diskpart_lines)
         
         # 添加安装驱动程序的逻辑
+        if pe_settings.inject_virtio_storage_drivers:
+            writer.write("rem WAI_OPTION:INJECT_VIRTIO_STORAGE_DRIVERS=1\n")
         writer.write("rem Install drivers from $WinPEDriver$ folder\n")
         writer.write('if defined PEDRIVERS_FOLDER (\n')
         writer.write('    for /R %PEDRIVERS_FOLDER% %%f IN (*.inf) do drvload.exe "%%f"\n')
@@ -5705,6 +5712,7 @@ class DiskModifier(Modifier):
                     pause_before_formatting='DISKPART WILL NOW PARTITION AND FORMAT YOUR DISK' in pe_text_upper,
                     pause_before_reboot='COMPUTER WILL NOW REBOOT' in pe_text_upper,
                     disable_defender='WINDEFEND' in pe_text_upper,
+                    inject_virtio_storage_drivers='WAI_OPTION:INJECT_VIRTIO_STORAGE_DRIVERS=1' in pe_text_upper,
                 )
             else:
                 self.configuration.pe_settings = ScriptPESettings(script='\n'.join(pe_lines))
@@ -8876,7 +8884,8 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
                     disable_8_dot3_names=pe_settings.get('disable8Dot3Names', False),
                     pause_before_formatting=pe_settings.get('pauseBeforeFormatting', False),
                     pause_before_reboot=pe_settings.get('pauseBeforeReboot', False),
-                    disable_defender=pe_settings.get('disableDefender', False)
+                    disable_defender=pe_settings.get('disableDefender', False),
+                    inject_virtio_storage_drivers=pe_settings.get('injectVirtioStorageDrivers', False)
                 )
             elif mode == 'script':
                 config.pe_settings = ScriptPESettings(
@@ -9875,7 +9884,8 @@ def configuration_to_config_dict(config: Configuration, generator: Optional['Una
                 'disable8Dot3Names': config.pe_settings.disable_8_dot3_names,
                 'pauseBeforeFormatting': config.pe_settings.pause_before_formatting,
                 'pauseBeforeReboot': config.pe_settings.pause_before_reboot,
-                'disableDefender': config.pe_settings.disable_defender
+                'disableDefender': config.pe_settings.disable_defender,
+                'injectVirtioStorageDrivers': config.pe_settings.inject_virtio_storage_drivers
             }
         elif isinstance(config.pe_settings, ScriptPESettings):
             config_dict['peSettings'] = {

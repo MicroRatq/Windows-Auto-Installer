@@ -125,7 +125,9 @@
       "generatedOptions": "生成选项",
       "scriptTitle": "自定义 PE 脚本",
       "disableDefender": "禁用 Windows Defender",
-      "disableDefenderDesc": "在 Windows 启动前通过离线注册表将 Defender 服务设为禁用状态。"
+      "disableDefenderDesc": "在 Windows 启动前通过离线注册表将 Defender 服务设为禁用状态。",
+      "injectVirtioStorageDrivers": "为 Windows PE 注入 VirtIO 存储驱动",
+      "injectVirtioStorageDriversDesc": "将内置的 VirtIO vioscsi 驱动文件添加到安装介质的 $WinPEDriver$ 目录中，以便生成式 PE 脚本在分区和应用镜像前通过 drvload 加载它们。"
     },
     "partitioning": {
       "title": "分区和格式化",

@@ -125,7 +125,9 @@
             "generatedOptions": "Generated options",
             "scriptTitle": "Custom PE script",
             "disableDefender": "Disable Windows Defender",
-            "disableDefenderDesc": "Disable Windows Defender by setting its services to disabled in the offline registry before Windows boots."
+            "disableDefenderDesc": "Disable Windows Defender by setting its services to disabled in the offline registry before Windows boots.",
+            "injectVirtioStorageDrivers": "Inject VirtIO storage drivers for Windows PE",
+            "injectVirtioStorageDriversDesc": "Adds the built-in VirtIO vioscsi driver files to $WinPEDriver$ on the installation media so generated PE scripts can drvload them before partitioning and image apply."
         },
         "partitioning": {
             "title": "Partitioning and formatting",

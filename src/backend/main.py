@@ -1288,7 +1288,7 @@ class BackendServer:
 
         return normalized_mappings
 
-    def _resolve_wim_image_index(self, wim_path: str, selected_index: Any, config_dict: dict[str, Any]) -> int:
+    def _resolve_wim_image_index(self, wim_path: str, selected_index: Any) -> int:
         from wim_handler import WIMHandler
 
         with WIMHandler(wim_path) as handler:
@@ -1305,36 +1305,6 @@ class BackendServer:
                 return resolved_index
 
             return 1
-
-    def _build_installer_payload(self, work_dir: Path) -> Path:
-        payload_root = work_dir / "installer_payload" / "WindowsAutoInstaller"
-        payload_root.mkdir(parents=True, exist_ok=True)
-
-        runtime_sources = [
-            (self.project_root / "src" / "backend", payload_root / "backend"),
-            (self.project_root / "src" / "shared", payload_root / "shared"),
-            (self.project_root / "src" / "frontend" / "dist", payload_root / "frontend" / "dist"),
-            (self.project_root / "src" / "frontend" / "electron", payload_root / "frontend" / "electron"),
-        ]
-
-        copied_any = False
-        ignore_patterns = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "node_modules")
-
-        for source_path, target_path in runtime_sources:
-            if source_path.exists():
-                shutil.copytree(source_path, target_path, dirs_exist_ok=True, ignore=ignore_patterns)
-                copied_any = True
-
-        frontend_package = self.project_root / "src" / "frontend" / "package.json"
-        if frontend_package.exists():
-            (payload_root / "frontend").mkdir(parents=True, exist_ok=True)
-            shutil.copy2(frontend_package, payload_root / "frontend" / "package.json")
-            copied_any = True
-
-        if not copied_any:
-            raise FileNotFoundError("No installer runtime payload was found to integrate into WIM")
-
-        return payload_root
 
     def _handle_deployment_list_wim_images(self, params: dict[str, Any]) -> dict[str, Any]:
         """读取模板 ISO 中的 install.wim/install.esd 映像列表"""
@@ -1359,6 +1329,8 @@ class BackendServer:
 
     def _handle_deployment_build_start(self, params: dict[str, Any]) -> dict[str, str]:
         """集成与部署：构建带 WIM 修改和 autounattend 注入的新 ISO"""
+        from deployment_build import apply_iso_plan, apply_wim_plan, build_deployment_plan
+
         template_iso = params.get("template_iso")
         export_dir = params.get("export_dir")
         output_name = params.get("output_name")
@@ -1393,7 +1365,7 @@ class BackendServer:
         xml_bytes = self.unattend_generator.generate_xml(config)
         validated_mappings = self._validate_file_mappings(file_mappings)
 
-        def _build_job(source_path, target_path, xml_data, mappings, should_integrate_installer, selected_image_index, full_config, task_updater=None):
+        def _build_job(source_path, target_path, xml_data, mappings, should_integrate_installer, selected_image_index, resolved_config, task_updater=None):
             from iso_modifier import ISOModifier
             from wim_handler import WIMHandler
 
@@ -1405,17 +1377,12 @@ class BackendServer:
                         "percent": percent,
                     })
 
-            report("validate", "正在校验构建参数", 5)
-
             work_dir = Path(tempfile.mkdtemp(prefix="deployment_build_"))
+            report("validate", "正在校验构建参数", 5)
             install_image_iso_path = self._find_install_image_iso_path(source_path)
             wim_file_name = Path(install_image_iso_path).name
             original_wim_path = work_dir / wim_file_name
             updated_wim_path = work_dir / f"updated_{wim_file_name}"
-
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".xml") as temp_xml:
-                temp_xml.write(xml_data)
-                temp_xml_path = temp_xml.name
 
             try:
                 report("extract_wim", f"正在提取 {wim_file_name}", 15)
@@ -1425,20 +1392,25 @@ class BackendServer:
                 target_image_index = self._resolve_wim_image_index(
                     str(original_wim_path),
                     selected_image_index,
-                    full_config,
                 )
 
-                add_files = list(mappings)
+                report("prepare_assets", "正在准备部署资产", 40)
+                plan = build_deployment_plan(
+                    source_path,
+                    resolved_config,
+                    mappings,
+                    should_integrate_installer,
+                    work_dir,
+                    self.project_root,
+                    xml_data,
+                    install_image_iso_path,
+                    updated_wim_path,
+                )
 
-                if should_integrate_installer:
-                    report("integrate_installer", "正在准备 Windows Auto Installer 运行文件", 40)
-                    payload_root = self._build_installer_payload(work_dir)
-                    add_files.append((str(payload_root), "\\Windows\\Setup\\Scripts\\WindowsAutoInstaller"))
-
-                if add_files:
-                    report("apply_mappings", f"正在写入 {len(add_files)} 项 WIM 更新", 55)
+                if plan.wim_additions:
+                    report("apply_wim_plan", f"正在写入 {len(plan.wim_additions)} 项 WIM 更新", 55)
                     with WIMHandler(str(original_wim_path), write_access=True) as handler:
-                        handler.update_image(target_image_index, add_files=add_files)
+                        apply_wim_plan(handler, target_image_index, plan)
                         report("write_wim", "正在写出更新后的 WIM 文件", 70)
                         handler.write_wim(str(updated_wim_path))
                 else:
@@ -1446,14 +1418,8 @@ class BackendServer:
 
                 modifier = ISOModifier(source_path)
                 writer = modifier.create_writer()
-                report("replace_wim_in_iso", "正在将新的 WIM 写回 ISO", 80)
-                writer.replace_file(install_image_iso_path, str(updated_wim_path))
-
-                report("inject_unattend", "正在写入 autounattend.xml", 90)
-                if modifier.file_exists('/autounattend.xml'):
-                    writer.replace_file('/autounattend.xml', temp_xml_path)
-                else:
-                    writer.add_file(temp_xml_path, '/autounattend.xml')
+                report("apply_iso_plan", f"正在写入 {len(plan.iso_replacements) + len(plan.iso_additions)} 项 ISO 更新", 85)
+                apply_iso_plan(writer, plan)
 
                 report("finalize", "正在生成最终 ISO", 95)
                 result = writer.write(target_path)
@@ -1467,11 +1433,6 @@ class BackendServer:
                 report("done", "构建完成", 100)
                 return result
             finally:
-                if os.path.exists(temp_xml_path):
-                    try:
-                        os.remove(temp_xml_path)
-                    except Exception as e:
-                        logger.warning(f"Failed to remove temp xml file {temp_xml_path}: {e}")
                 if work_dir.exists():
                     try:
                         shutil.rmtree(work_dir)
@@ -1487,7 +1448,7 @@ class BackendServer:
             validated_mappings,
             integrate_installer,
             selected_wim_image_index,
-            config_dict,
+            config,
         )
         return {"task_id": task_id}
 

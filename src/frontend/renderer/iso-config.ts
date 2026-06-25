@@ -105,6 +105,7 @@ interface PESettings {
   pauseBeforeReboot?: boolean
   compactOs?: boolean
   disableDefender?: boolean
+  injectVirtioStorageDrivers?: boolean
 }
 
 // 用户账户设置
@@ -458,7 +459,8 @@ function createDefaultConfig(): UnattendConfig {
     peSettings: {
       mode: 'default',
       compactOs: false,
-      disableDefender: false
+      disableDefender: false,
+      injectVirtioStorageDrivers: false
     },
     accountSettings: {
       mode: 'interactive-local',
@@ -664,6 +666,7 @@ class UnattendConfigManager {
     merged.appLocker.mode = merged.appLocker.mode || 'skip'
 
     merged.peSettings.compactOs = Boolean(merged.peSettings.compactOs)
+    merged.peSettings.injectVirtioStorageDrivers = Boolean(merged.peSettings.injectVirtioStorageDrivers)
 
     merged.accountSettings.accounts = Array.isArray(merged.accountSettings.accounts)
       ? merged.accountSettings.accounts.map(account => this.normalizeAccount(account))
@@ -3640,10 +3643,10 @@ class UnattendConfigManager {
       description: t('isoConfig.advancedSettings.vmSupportDesc'),
       icon: 'box',
       nestedCards: [
-        { id: 'vm-support-vbox', title: '', controlType: 'checkbox', value: false, borderless: true },
-        { id: 'vm-support-vmware', title: '', controlType: 'checkbox', value: false, borderless: true },
-        { id: 'vm-support-virtio', title: '', controlType: 'checkbox', value: false, borderless: true },
-        { id: 'vm-support-parallels', title: '', controlType: 'checkbox', value: false, borderless: true }
+        { id: 'vm-support-vbox', field: 'vbox', title: '', controlType: 'checkbox', value: vm.vBoxGuestAdditions || false, borderless: true },
+        { id: 'vm-support-vmware', field: 'vmware', title: '', controlType: 'checkbox', value: vm.vmwareTools || false, borderless: true },
+        { id: 'vm-support-virtio', field: 'virtio', title: '', controlType: 'checkbox', value: vm.virtIoGuestTools || false, borderless: true },
+        { id: 'vm-support-parallels', field: 'parallels', title: '', controlType: 'checkbox', value: vm.parallelsTools || false, borderless: true }
       ]
     })
 
@@ -3723,6 +3726,15 @@ class UnattendConfigManager {
             description: t('isoConfig.peMode.disableDefenderDesc'),
             controlType: 'checkbox',
             value: pe.disableDefender || false,
+            borderless: true
+          },
+          {
+            id: 'config-pe-inject-virtio-storage-drivers-card',
+            field: 'injectVirtioStorageDrivers',
+            title: t('isoConfig.peMode.injectVirtioStorageDrivers'),
+            description: t('isoConfig.peMode.injectVirtioStorageDriversDesc'),
+            controlType: 'checkbox',
+            value: pe.injectVirtioStorageDrivers || false,
             borderless: true
           },
           {
@@ -3810,7 +3822,8 @@ pause`,
           disable8Dot3Names: Boolean(values.disable8Dot3Names),
           pauseBeforeFormatting: Boolean(values.pauseBeforeFormatting),
           pauseBeforeReboot: Boolean(values.pauseBeforeReboot),
-          disableDefender: Boolean(values.disableDefender)
+          disableDefender: Boolean(values.disableDefender),
+          injectVirtioStorageDrivers: Boolean(values.injectVirtioStorageDrivers)
         })
       }, true, {
         id: 'pe-generated-options-container',
@@ -3819,11 +3832,12 @@ pause`,
         description: '',
         icon: 'settings-2',
         nestedCards: [
-          { id: 'config-pe-disable-defender-card', field: 'disableDefender', title: '', controlType: 'checkbox', value: false, borderless: true },
-          { id: 'config-pe-compact-os-card', field: 'compactOs', title: '', controlType: 'checkbox', value: false, borderless: true },
-          { id: 'config-pe-disable-8dot3-card', field: 'disable8Dot3Names', title: '', controlType: 'checkbox', value: false, borderless: true },
-          { id: 'config-pe-pause-formatting-card', field: 'pauseBeforeFormatting', title: '', controlType: 'checkbox', value: false, borderless: true },
-          { id: 'config-pe-pause-reboot-card', field: 'pauseBeforeReboot', title: '', controlType: 'checkbox', value: false, borderless: true }
+          { id: 'config-pe-disable-defender-card', field: 'disableDefender', title: '', controlType: 'checkbox', value: pe.disableDefender || false, borderless: true },
+          { id: 'config-pe-inject-virtio-storage-drivers-card', field: 'injectVirtioStorageDrivers', title: '', controlType: 'checkbox', value: pe.injectVirtioStorageDrivers || false, borderless: true },
+          { id: 'config-pe-compact-os-card', field: 'compactOs', title: '', controlType: 'checkbox', value: pe.compactOs || false, borderless: true },
+          { id: 'config-pe-disable-8dot3-card', field: 'disable8Dot3Names', title: '', controlType: 'checkbox', value: pe.disable8Dot3Names || false, borderless: true },
+          { id: 'config-pe-pause-formatting-card', field: 'pauseBeforeFormatting', title: '', controlType: 'checkbox', value: pe.pauseBeforeFormatting || false, borderless: true },
+          { id: 'config-pe-pause-reboot-card', field: 'pauseBeforeReboot', title: '', controlType: 'checkbox', value: pe.pauseBeforeReboot || false, borderless: true }
         ]
       })
     }
