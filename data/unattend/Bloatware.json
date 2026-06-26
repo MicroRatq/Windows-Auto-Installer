@@ -368,6 +368,12 @@
           "Windows 10",
           "Windows 11"
         ]
+      },
+      {
+        "$type": "Schneegans.Unattend.CustomBloatwareStep, UnattendGenerator",
+        "AppliesTo": [
+          "Windows 11"
+        ]
       }
     ]
   },
@@ -743,7 +749,8 @@
       {
         "$type": "Schneegans.Unattend.CustomBloatwareStep, UnattendGenerator",
         "AppliesTo": [
-          "Windows 11 23H2"
+          "Windows 11 23H2",
+          "Windows 11 25H2"
         ]
       },
       {
@@ -1016,6 +1023,12 @@
         "Selector": "Microsoft.MicrosoftPCManager",
         "AppliesTo": [
           "Windows 10",
+          "Windows 11"
+        ]
+      },
+      {
+        "$type": "Schneegans.Unattend.CustomBloatwareStep, UnattendGenerator",
+        "AppliesTo": [
           "Windows 11"
         ]
       }

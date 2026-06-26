@@ -1,4 +1,4 @@
-"""
+﻿"""
 Unattend XML Generator - Pure Python Implementation
 参考 ref/unattend-generator C# 项目实现
 """
@@ -2999,7 +2999,7 @@ class OptimizationsModifier(Modifier):
             self.context.specialize_script.append('\n'.join(commands))
     
     def _hide_navigation_pane_items(self, category_values: Dict[str, bool]):
-        """隐藏 Win11 导航窗格条目（ThisPCPolicy + Policies NonEnum + NameSpace 删除）。"""
+        """隐藏 Win11 导航窗格条目（ThisPCPolicy + Policies NonEnum + NameSpace 删除 + Quick Access 取消固定）。"""
         commands: List[str] = []
 
         # 1. 通过 ThisPCPolicy=Hide 隐藏 "此电脑" 下的已知文件夹
@@ -3032,7 +3032,122 @@ class OptimizationsModifier(Modifier):
                 for root in EXPLORER_NAVIGATION_PANE_ROOTS:
                     commands.append(f'reg.exe delete "{root}\\{guid}" /f;')
 
+        # 4. 通过 Shell.Application 调用 unpinfromhome 取消 Quick Access 固定项（Win11 25H2 兼容）
         if commands:
+            target_lines: List[str] = []
+            if category_values.get('hideDesktop'):
+                target_lines.append("  [Environment]::GetFolderPath('Desktop');")
+            if category_values.get('hideDocuments'):
+                target_lines.append("  [Environment]::GetFolderPath('MyDocuments');")
+            if category_values.get('hideDownloads'):
+                target_lines.append("  (Get-KnownFolderPath '374DE290-123F-4565-9164-39C4925E467B');")
+            if category_values.get('hideMusic'):
+                target_lines.append("  [Environment]::GetFolderPath('MyMusic');")
+            if category_values.get('hidePictures'):
+                target_lines.append("  [Environment]::GetFolderPath('MyPictures');")
+            if category_values.get('hideVideos'):
+                target_lines.append("  [Environment]::GetFolderPath('MyVideos');")
+            if category_values.get('hideGallery'):
+                target_lines.append("  'shell:::{E88865EA-0E1C-4E20-9AA6-EDCD0212C87C}';")
+            if category_values.get('hideHome'):
+                target_lines.append("  'shell:::{F874310E-B6B7-47DC-BC84-B9E6B38F5903}';")
+            if category_values.get('hideLibraries'):
+                target_lines.append("  'shell:::{031E4825-7B94-4DC3-B131-E946B44C8DD5}';")
+            if category_values.get('hideNetwork'):
+                target_lines.append("  'shell:::{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}';")
+            if category_values.get('hideUserProfile'):
+                target_lines.append("  $env:USERPROFILE;")
+
+            ps1_content = """$ErrorActionPreference = 'Stop';
+
+if (-not ('KnownFolder' -as [type])) {
+  Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class KnownFolder {
+  [DllImport(\"shell32.dll\")]
+  public static extern int SHGetKnownFolderPath(
+    [MarshalAs(UnmanagedType.LPStruct)] Guid rfid,
+    uint dwFlags,
+    IntPtr hToken,
+    out IntPtr ppszPath
+  );
+}
+"@;
+}
+
+function Get-KnownFolderPath {
+  param([string]$Guid)
+
+  $ptr = [IntPtr]::Zero;
+  $hr = [KnownFolder]::SHGetKnownFolderPath([Guid]$Guid, 0, [IntPtr]::Zero, [ref]$ptr);
+  if ($hr -ne 0 -or $ptr -eq [IntPtr]::Zero) {
+    return $null;
+  }
+  try {
+    return [Runtime.InteropServices.Marshal]::PtrToStringUni($ptr);
+  } finally {
+    [Runtime.InteropServices.Marshal]::FreeCoTaskMem($ptr);
+  }
+}
+
+function Get-ItemIdentity {
+  param($Item)
+
+  try {
+    if ($Item.Path) {
+      return $Item.Path;
+    }
+  } catch {}
+
+  try {
+    $value = $Item.ExtendedProperty('System.ParsingPath');
+    if ($value) {
+      return $value;
+    }
+  } catch {}
+
+  try {
+    $value = $Item.ExtendedProperty('System.ItemPathDisplay');
+    if ($value) {
+      return $value;
+    }
+  } catch {}
+
+  return $null;
+}
+
+$targets = @(
+{targets}
+) | Where-Object {
+  $_;
+};
+
+$shell = New-Object -ComObject Shell.Application;
+$quickAccess = $shell.Namespace('shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}');
+if (-not $quickAccess) {
+  exit 0;
+}
+
+foreach ($item in @($quickAccess.Items())) {
+  $identity = Get-ItemIdentity $item;
+  if (-not $identity) {
+    continue;
+  }
+  foreach ($target in $targets) {
+    if ($identity -ieq $target) {
+      $item.InvokeVerb('unpinfromhome');
+      break;
+    }
+  }
+}
+""".replace("{targets}", "\n".join(target_lines))
+            ps1_file = self.add_text_file("ClearQuickAccessPins.ps1", ps1_content)
+            self.context.default_user_script.append(
+                f'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce" '
+                f'/v "ClearQuickAccessPins" /t REG_SZ '
+                f'/d "powershell.exe -WindowStyle Hidden -NoProfile -File \\"{ps1_file}\\"" /f;'
+            )
             self.context.specialize_script.append('\n'.join(commands))
     
     def process(self):
@@ -3249,7 +3364,10 @@ reg.exe add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server" /v fDeny
         # Disable Widgets
         if self.configuration.disable_widgets:
             self.context.specialize_script.append(
-                'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f;'
+                '\n'.join([
+                    'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f;',
+                    'reg.exe add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Dsh" /v DisableWidgetsBoard /t REG_DWORD /d 1 /f;',
+                ])
             )
         
         # Turn Off System Sounds
@@ -3930,7 +4048,10 @@ reg.exe add "HKLM\\Software\\Policies\\Microsoft\\Edge\\Recommended" /v StartupB
         
         # disable_widgets
         for cmd_text in all_script_texts:
-            if self.generator._check_registry_command(cmd_text, r'HKLM\SOFTWARE\Policies\Microsoft\Dsh', 'AllowNewsAndInterests', '0'):
+            if (
+                self.generator._check_registry_command(cmd_text, r'HKLM\SOFTWARE\Policies\Microsoft\Dsh', 'AllowNewsAndInterests', '0')
+                or self.generator._check_registry_command(cmd_text, r'HKLM\SOFTWARE\Policies\Microsoft\Dsh', 'DisableWidgetsBoard', '1')
+            ):
                 self.configuration.disable_widgets = True
                 break
         
@@ -6504,6 +6625,76 @@ class ExpressSettingsModifier(Modifier):
 
 class BloatwareModifier(Modifier):
     """预装软件移除 Modifier（对应 C# 的 BloatwareModifier）"""
+
+    PLACEHOLDER_TILE_TARGETS: Dict[str, Dict[str, List[str]]] = {
+        "RemoveMicrosoftPCManager": {
+            "application_ids": ["Microsoft.MicrosoftPCManager_8wekyb3d8bbwe!App"],
+            "product_ids": ["9PM860492SZD"],
+        },
+        "RemoveSolitaire": {
+            "application_ids": ["Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe!App"],
+            "product_ids": ["9WZDNCRFHWD2"],
+        },
+        "RemoveOutlook": {
+            "application_ids": ["Microsoft.OutlookforWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows"],
+            "product_ids": ["9NRX63209R7B"],
+        },
+    }
+
+    def _append_placeholder_tile_cleanup(self, selected_ids: Set[str]):
+        targets: List[str] = []
+        for bloatware_id in sorted(selected_ids):
+            info = self.PLACEHOLDER_TILE_TARGETS.get(bloatware_id)
+            if not info:
+                continue
+            targets.extend(info["application_ids"])
+            targets.extend(info["product_ids"])
+
+        if not targets:
+            return
+
+        pattern_lines = "\n".join(f"  '{target}';" for target in sorted(set(targets)))
+        self.context.user_once_script.append(
+            """$patterns = @(
+{patterns}
+);
+
+function Test-UnattendPlaceholderMatch {
+  param([string]$Text)
+
+  foreach( $pattern in $patterns ) {
+    if( $Text -like "*$pattern*" ) {
+      return $true;
+    }
+  }
+  return $false;
+}
+
+$irisRoot = 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\IrisService\\Cache';
+if( Test-Path -LiteralPath $irisRoot ) {
+  foreach( $key in Get-ChildItem -LiteralPath $irisRoot -ErrorAction 'SilentlyContinue' ) {
+    try {
+      $raw = (Get-ItemProperty -LiteralPath $key.PSPath -Name 'RawJson' -ErrorAction 'Stop').RawJson;
+      if( $raw -and (Test-UnattendPlaceholderMatch $raw) ) {
+        Remove-Item -LiteralPath $key.PSPath -Recurse -Force -ErrorAction 'SilentlyContinue';
+      }
+    } catch {}
+  }
+}
+
+$cloudRoot = 'Registry::HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Store\\Cache\\DefaultAccount';
+if( Test-Path -LiteralPath $cloudRoot ) {
+  Get-ChildItem -LiteralPath $cloudRoot -ErrorAction 'SilentlyContinue' | Where-Object -FilterScript {
+    $_.PSChildName -like '*placeholdertilecollection*';
+  } | Remove-Item -Recurse -Force -ErrorAction 'SilentlyContinue';
+}
+
+Get-Process -Name 'StartMenuExperienceHost' -ErrorAction 'SilentlyContinue' | Stop-Process -Force -ErrorAction 'SilentlyContinue';
+Get-Process -Name 'ShellExperienceHost' -ErrorAction 'SilentlyContinue' | Stop-Process -Force -ErrorAction 'SilentlyContinue';
+Get-Process -Name 'explorer' -ErrorAction 'SilentlyContinue' | Stop-Process -Force -ErrorAction 'SilentlyContinue';
+Start-Sleep -Seconds 2;
+Start-Process explorer.exe -ErrorAction 'SilentlyContinue';""".replace("{patterns}", pattern_lines)
+        )
     
     def process(self):
         """处理预装软件移除设置"""
@@ -6513,12 +6704,15 @@ class BloatwareModifier(Modifier):
         package_remover = _PackageRemover()
         capability_remover = _CapabilityRemover()
         feature_remover = _FeatureRemover()
+        placeholder_tile_ids: Set[str] = set()
         
         # 按ID排序（对应 C# 的 OrderBy(bw => bw.Id)）
         if bloatwares:
             sorted_bloatwares = sorted(bloatwares, key=lambda bw: bw.id)
             
             for bloatware in sorted_bloatwares:
+                if bloatware.id in self.PLACEHOLDER_TILE_TARGETS:
+                    placeholder_tile_ids.add(bloatware.id)
                 for step in bloatware.steps:
                     if isinstance(step, PackageBloatwareStep):
                         package_remover.add(step)
@@ -6535,6 +6729,7 @@ class BloatwareModifier(Modifier):
         package_remover.save(self)
         capability_remover.save(self)
         feature_remover.save(self)
+        self._append_placeholder_tile_cleanup(placeholder_tile_ids)
 
     def parse(self):
         """解析预装软件移除设置"""
@@ -6717,6 +6912,26 @@ reg.exe add "HKCR\\txtfilelegacy" /ve /t REG_SZ /d "Text Document" /f;'''
             self.context.default_user_script.append(
                 'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Internet Explorer\\LowRegistry\\Audio\\PolicyConfig\\PropertyStore" /f;'
             )
+        elif bloatware_id == "RemoveSolitaire":
+            self.context.specialize_script.append(
+                "Remove-Item -LiteralPath 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Solitaire Collection.lnk', 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Games\\Microsoft Solitaire Collection.lnk', 'C:\\Users\\Default\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft Solitaire Collection.lnk' -ErrorAction 'SilentlyContinue';"
+            )
+            self.context.specialize_script.append(
+                "Get-ChildItem -LiteralPath 'Registry::HKLM\\Software\\Microsoft\\WindowsUpdate\\Orchestrator\\UScheduler_Oobe' -ErrorAction 'SilentlyContinue' | Where-Object { $_.PSChildName -like '*Solitaire*' } | Remove-Item -Force -ErrorAction 'SilentlyContinue';"
+            )
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" /v SilentInstalledAppsEnabled /t REG_DWORD /d 0 /f;'
+            )
+        elif bloatware_id == "RemoveMicrosoftPCManager":
+            self.context.specialize_script.append(
+                "Remove-Item -LiteralPath 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft PC Manager.lnk', 'C:\\Users\\Default\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Microsoft PC Manager.lnk' -ErrorAction 'SilentlyContinue';"
+            )
+            self.context.specialize_script.append(
+                "Get-ChildItem -LiteralPath 'Registry::HKLM\\Software\\Microsoft\\WindowsUpdate\\Orchestrator\\UScheduler_Oobe' -ErrorAction 'SilentlyContinue' | Where-Object { $_.PSChildName -like '*PCManager*' } | Remove-Item -Force -ErrorAction 'SilentlyContinue';"
+            )
+            self.context.default_user_script.append(
+                'reg.exe add "HKU\\DefaultUser\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager" /v PreInstalledAppsEnabled /t REG_DWORD /d 0 /f;'
+            )
         else:
             raise ValueError(f"Unsupported custom bloatware ID: {bloatware_id}")
 
@@ -6830,6 +7045,59 @@ class _PackageRemover(_Remover):
     
     def _get_type(self) -> str:
         return "Package"
+    
+    def save(self, parent: 'BloatwareModifier'):
+        if not self.selectors:
+            return
+        ps1_content = self._get_remove_command(parent)
+        ps1_file = parent.add_text_file(f"{self._get_base_name()}.ps1", ps1_content)
+        parent.context.first_logon_script.invoke_file(ps1_file)
+    
+    def _get_remove_command(self, parent: 'BloatwareModifier') -> str:
+        writer = []
+        writer.append("$selectors = @(")
+        for selector in self.selectors:
+            writer.append(f"\t'{selector}';")
+        writer.append(");")
+        writer.append(f"$getCommand = {self._get_get_command()};")
+        writer.append(f"$filterCommand = {self._get_filter_command()};")
+        writer.append(f"$removeCommand = {self._get_remove_command_inner()};")
+        writer.append(f"$type = '{self._get_type()}';")
+        base_name = self._get_base_name()
+        writer.append(f"$logfile = 'C:\\Windows\\Setup\\Scripts\\{base_name}.log';")
+        writer.append("""& {
+	$installed = & $getCommand;
+	foreach( $selector in $selectors ) {
+		$result = [ordered] @{
+			Selector = $selector;
+		};
+		$found = $installed | Where-Object -FilterScript $filterCommand;
+		if( $found ) {
+			$result.Output = $found | & $removeCommand;
+			if( $? ) {
+				$result.Message = "$type removed.";
+			} else {
+				$result.Message = "$type not removed.";
+				$result.Error = $Error[0];
+			}
+		} else {
+			$userPkgs = Get-AppxPackage -AllUsers | Where-Object { $_.Name -like "$selector*" };
+			if( $userPkgs ) {
+				$result.Output = $userPkgs | Remove-AppxPackage -AllUsers -ErrorAction 'Continue';
+				if( $? ) {
+					$result.Message = "$type removed (user package).";
+				} else {
+					$result.Message = "$type not removed.";
+					$result.Error = $Error[0];
+				}
+			} else {
+				$result.Message = "$type not installed.";
+			}
+		}
+		$result | ConvertTo-Json -Depth 3 -Compress;
+	}
+} *>&1 | Out-String -Width 1KB -Stream >> $logfile;""")
+        return '\n'.join(writer)
 
 
 class _CapabilityRemover(_Remover):
@@ -9483,7 +9751,6 @@ def config_dict_to_configuration(config_dict: Dict[str, Any], generator: Optiona
             config.disable_fast_startup = st.get('disableFastStartup', False)
             config.turn_off_system_sounds = st.get('turnOffSystemSounds', False)
             config.disable_app_suggestions = st.get('disableAppSuggestions', False)
-            config.disable_widgets = st.get('disableWidgets', False)
             config.prevent_device_encryption = st.get('preventDeviceEncryption', False)
             # classic_context_menu 已移到 fileExplorer，如果 fileExplorer 不存在则从 systemTweaks 读取（向后兼容）
             if 'fileExplorer' not in config_dict:

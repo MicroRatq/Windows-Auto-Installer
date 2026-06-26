@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 自定义配置工作区
  * 实现 autounattend.xml 配置功能
  */
@@ -198,7 +198,6 @@ interface SystemTweaks {
   disableFastStartup: boolean
   turnOffSystemSounds: boolean
   disableAppSuggestions: boolean
-  disableWidgets: boolean
   preventDeviceEncryption: boolean
   disableWindowsUpdate: boolean
   disablePointerPrecision: boolean
@@ -542,7 +541,6 @@ function createDefaultConfig(): UnattendConfig {
       disableFastStartup: false,
       turnOffSystemSounds: false,
       disableAppSuggestions: false,
-      disableWidgets: false,
       preventDeviceEncryption: false,
       disableWindowsUpdate: false,
       disablePointerPrecision: false,
@@ -704,6 +702,11 @@ class UnattendConfigManager {
     merged.xmlMarkup.components = Array.isArray(merged.xmlMarkup.components)
       ? merged.xmlMarkup.components.map(component => this.normalizeXmlMarkupComponent(component as XmlMarkupComponent & { xml?: string }))
       : []
+
+    // 同步 disableWidgets: startMenuTaskbar 和 systemTweaks 表示同一设置
+    // 使用 OR 逻辑：任一模块设为 true 即视为用户希望禁用小部件
+    merged.systemTweaks.disableWidgets = merged.startMenuTaskbar.disableWidgets || merged.systemTweaks.disableWidgets
+    merged.startMenuTaskbar.disableWidgets = merged.systemTweaks.disableWidgets
 
     return merged
   }
@@ -3644,7 +3647,6 @@ class UnattendConfigManager {
         { value: 'disableFastStartup', label: t('isoConfig.systemOptimization.disableFastStartup') },
         { value: 'turnOffSystemSounds', label: t('isoConfig.systemOptimization.turnOffSystemSounds') },
         { value: 'disableAppSuggestions', label: t('isoConfig.systemOptimization.disableAppSuggestions') },
-        { value: 'disableWidgets', label: t('isoConfig.systemOptimization.disableWidgets') },
         { value: 'preventDeviceEncryption', label: t('isoConfig.systemOptimization.preventDeviceEncryption') },
         { value: 'disableWindowsUpdate', label: t('isoConfig.systemOptimization.disableWindowsUpdate') },
         { value: 'disablePointerPrecision', label: t('isoConfig.systemOptimization.disablePointerPrecision') },
@@ -3666,7 +3668,6 @@ class UnattendConfigManager {
         disableFastStartup: tweaks.disableFastStartup || false,
         turnOffSystemSounds: tweaks.turnOffSystemSounds || false,
         disableAppSuggestions: tweaks.disableAppSuggestions || false,
-        disableWidgets: tweaks.disableWidgets || false,
         preventDeviceEncryption: tweaks.preventDeviceEncryption || false,
         disableWindowsUpdate: tweaks.disableWindowsUpdate || false,
         disablePointerPrecision: tweaks.disablePointerPrecision || false,
